@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 001 of 320 — foundation only
+## Current status: Phase 001 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >

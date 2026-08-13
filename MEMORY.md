@@ -26,8 +26,9 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Fact | Value |
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
-| Current phase | **001 — Repository Foundation and Engineering Contract** |
-| Completed phases | *(none yet — Phase 001 is marked complete only after its validation passes and its commit is pushed to `origin/master`)* |
+| Completed phases | **001** |
+| Last completed | **001 — Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
+| Next phase | **002 — Documentation System and Style Guide.** Not started. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
 
 **Phase 1 does not implement trading.** No exchange connection, no credentials,
