@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 002 of 320 complete — foundation only
+## Current status: Phase 003 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -23,11 +23,12 @@ Binance Global, built over a fixed programme of 320 phases.
 |---|---|
 | Repository, branch policy, engineering contract | Implemented |
 | 320-phase roadmap, every phase named | Implemented |
-| Architecture decision records (11) | Implemented |
+| Architecture decision records (15) | Implemented |
 | Research source ledgers with primary sources | Implemented |
 | Engineering contracts: done-criteria, authority order, layout, doc standard | Implemented |
 | Change templates for pull requests and issues | Implemented |
-| `globin` package — project contract constants only | Implemented |
+| Architecture: five layers, inward dependency contract, C4 system and container views | Implemented |
+| `globin` package — project contract constants and the architecture review | Implemented |
 | Contract test suite and verification gate | Implemented |
 | Everything else | Not started |
 
@@ -120,12 +121,13 @@ GLOBIN/
 │   ├── TESTING_STRATEGY.md       What is tested and why
 │   ├── GIT_WORKFLOW.md           Branch, commit and push procedure
 │   ├── GLOSSARY.md               Shared vocabulary
+│   ├── architecture/             System views and the dependency contract
 │   ├── engineering/              How work is done: contracts and standards
 │   ├── adr/                      Architecture Decision Records
 │   └── research/                 Per-phase source ledgers
 ├── scripts/verify.ps1     The single verification gate
-├── src/globin/            The Python package
-└── tests/                 Contract tests
+├── src/globin/            The Python package, in five architectural layers
+└── tests/                 Contract and architecture tests
 ```
 
 Placement rules are in
@@ -156,6 +158,8 @@ the charter, principles and decision records.
 
 | Question | Document |
 |---|---|
+| How is the system structured? | [`docs/architecture/README.md`](docs/architecture/README.md) |
+| Which layer may import which? | [`dependency-rules.toml`](docs/architecture/dependency-rules.toml) |
 | What must all code satisfy? | [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) |
 | When is a change finished? | [`DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md) |
 | Which document wins a conflict? | [`SOURCE_OF_TRUTH.md`](docs/engineering/SOURCE_OF_TRUTH.md) |

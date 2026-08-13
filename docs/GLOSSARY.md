@@ -155,3 +155,40 @@ before the next band builds on top of it.
 
 **Contract test** — a test asserting a project rule rather than behaviour, so
 that policy is enforced rather than merely documented.
+
+---
+
+## Architecture
+
+Full descriptions live in [`architecture/README.md`](architecture/README.md);
+these are the one-line definitions.
+
+**Layer** — one of the five ordered divisions of the `globin` package: domain,
+ports, application, adapters, runtime. Which may import which is fixed by
+[`architecture/dependency-rules.toml`](architecture/dependency-rules.toml).
+
+**Domain** — the innermost layer. Pure concepts, values and rules, describable
+without naming any technology.
+
+**Port** — an abstract contract saying what the core needs from the outside
+world, without saying who provides it. Declared as a `typing.Protocol`.
+
+**Adapter** — a concrete implementation of a port. The only layer permitted to
+touch the filesystem, the network or the environment.
+
+**Composition root** — the single place, `globin.runtime`, where concrete
+implementations are chosen and objects are wired together.
+
+**Inward dependency** — a dependency from an outer layer on an inner one. The
+only permitted direction; the reverse is a layering violation.
+
+**Modular monolith** ⚠ *commonly confused* — one repository, one distribution
+and one process, with boundaries enforced between packages rather than across a
+network. Not a microservice system, and not an unstructured one.
+
+**Container** ⚠ *commonly confused* — in the C4 model, an application or data
+store that must be running or must exist for the system to work. **Not** a
+Docker container; GLOBIN uses no containerisation.
+
+**Import-time side effect** — work performed merely by importing a module.
+Prohibited in every layer: importing must declare, never act.

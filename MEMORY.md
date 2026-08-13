@@ -26,11 +26,19 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Fact | Value |
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
-| Completed phases | **001-002** |
+| Completed phases | **001-003** |
 | Phase 001 | **Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
-| Last completed | **002 — Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Delivered under the standard procedure: gate green, single commit on `master`, pushed to `origin/master`, tree clean. |
-| Next phase | **003 — Coding Standards and Static Analysis Baseline.** Not started. |
+| Phase 002 | **Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Commit `9c46313`, pushed. |
+| Last completed | **003 — Architecture Boundaries and Dependency Direction.** Five layers under `src/globin/`, the inward dependency contract in `docs/architecture/dependency-rules.toml`, C4 system context and container views, the ADR lifecycle with supersession rules, and `tests/test_architecture_contract.py` enforcing all of it. Delivered under the standard procedure: gate green, single commit on `master`, pushed to `origin/master`, tree clean. |
+| Next phase | **004 — Test Architecture and Fixture Conventions.** Not started. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
+
+**Phase 003 amended the roadmap, and this is the only such amendment.** Phase 003
+originally read *Coding Standards and Static Analysis Baseline*; that scope moved
+into Phase 013, which now reads *Coding Standards, Static Analysis and Quality
+Gates*. Band ranges, phase numbers and band width are unchanged. Reasoning in
+[ADR-0012](docs/adr/0012-phase-003-delivers-architecture-boundaries.md); amending
+phase scope requires an ADR.
 
 **Nothing so far implements trading.** No exchange connection, no credentials,
 no market data, no strategy, no models. Anything claiming otherwise is wrong.
@@ -82,6 +90,12 @@ no market data, no strategy, no models. Anything claiming otherwise is wrong.
    because it *improves* apparent results, so it must be impossible by
    construction rather than caught by review.
 5. **Rules are enforced by tests**, not merely written down.
+6. **Dependencies point inward.** `runtime` → `adapters` → `application` →
+   `ports` → `domain`, never the reverse. `domain`, `ports` and `application`
+   reach no I/O-capable module, importing any layer performs no work, and
+   concrete implementations are constructed only in `globin.runtime`. The
+   permitted directions live in `docs/architecture/dependency-rules.toml` — the
+   canonical matrix, with no second copy. (ADR-0013, ADR-0014, ADR-0015)
 
 ---
 

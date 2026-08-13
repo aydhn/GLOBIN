@@ -27,14 +27,21 @@ arrive with the API layer (Phases 033-048), must be explicitly marked and
 skipped by default, and must never run against production or with live
 credentials.
 
-## What Phase 1 tests, and why
+## What the suite enforces, and why
 
 | File | Enforces |
 |---|---|
 | `test_project_contract.py` | Identity is GLOBIN/`globin`; branch is `master`; 320 phases; Binance Global is the only venue; paid runtime services and scraping are prohibited; the contract object is immutable; no trading surface is exposed |
 | `test_roadmap_contract.py` | Twenty contiguous 16-phase bands matching the charter; every phase 001-320 present exactly once in ascending order with a unique title and real purpose; no future phase marked complete |
-| `test_documentation_contract.py` | Required documents exist, are substantive, open with a heading, state the policies they own, carry no placeholder debt; ADRs are contiguous, well-formed and indexed; the research ledger is properly structured; no branch instruction contradicts master-only |
+| `test_documentation_contract.py` | Required documents exist, are substantive, open with a heading, state the policies they own, carry no placeholder debt; ADRs are contiguous, well-formed, indexed, carry a known status and a consistent supersession record; the research ledger is properly structured; no branch instruction contradicts master-only |
+| `test_repository_contract.py` | The engineering contracts exist and are committable; every repository-relative Markdown link resolves; change templates ask the right questions; no credential-shaped file would be committed; tool configuration is not duplicated outside `pyproject.toml` |
 | `test_packaging_contract.py` | Distribution name matches the package; **runtime dependencies are empty**; the interpreter floor is evidence-based; version is single-sourced; no licence is invented |
+| `test_architecture_contract.py` | The declared layers exist; no import crosses a boundary outward; the inner layers reach no I/O-capable module; importing a layer performs no work; there is no import cycle; the shared policy modules import no layer |
+
+The architecture tests are contract-level despite reading source files, because
+they assert a project invariant rather than a behaviour. They parse the syntax
+tree rather than importing the modules — importing would execute them, and one
+of the rules under test is that importing executes nothing.
 
 The zero-dependency assertion deserves a note. The zero-budget rule (ADR-0003)
 is easy to state and easy to erode — one convenient library at a time. Parsing

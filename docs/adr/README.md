@@ -15,12 +15,15 @@ still applies.
    updated, so the reasoning history survives.
 3. **Every ADR has four sections**, in this order: `## Status`, `## Context`,
    `## Decision`, `## Consequences`. This is checked by
-   `tests/test_documentation_contract.py`. New records add
-   `## Alternatives Considered`; records 0001-0010 predate
-   [`TEMPLATE.md`](TEMPLATE.md) and are immutable, so they are not retrofitted.
-4. **Every ADR is listed in this index.** Also checked by test.
-5. Status is one of: `Proposed`, `Accepted`, `Superseded by ADR-NNNN`,
-   `Deprecated`.
+   `tests/test_documentation_contract.py`. Records from 0012 onwards additionally
+   carry `## Alternatives Considered`, `## Risks and Trade-offs`,
+   `## References`, `## Supersedes` and `## Superseded By`, and that is checked
+   too. Earlier records predate those sections and are immutable, so they are
+   not retrofitted — see [`TEMPLATE.md`](TEMPLATE.md).
+4. **Every ADR is listed in this index**, with the same status the record itself
+   states. Both are checked by test.
+5. Status is one of: `Proposed`, `Accepted`, `Rejected`, `Deprecated`, or
+   `Superseded by ADR-NNNN`.
 
 ## When to write one
 
@@ -28,6 +31,35 @@ Write an ADR when a choice constrains future work, is expensive to reverse, or
 would otherwise be re-litigated by someone who does not know why it was made.
 Do not write one for routine implementation detail — that belongs in code and
 its docstrings.
+
+The categories that reliably qualify are structure, non-functional requirements,
+dependencies between components, published interfaces, and construction
+techniques such as a library or tool the project commits to. See
+[`../research/phase_003_sources.md`](../research/phase_003_sources.md) entries
+S-04 and S-05.
+
+## Changing a decision
+
+A record is immutable once it is `Accepted` **or** `Rejected`. A rejected record
+is kept rather than deleted: it records that the question was asked and
+answered, which is what stops the same debate recurring a year later.
+
+To change a decision:
+
+1. Write a **new** ADR with the next contiguous number.
+2. Name the record it replaces under its `## Supersedes` heading.
+3. In the same commit, set the old record's `## Status` to
+   `Superseded by ADR-NNNN` and fill in its `## Superseded By` heading. That
+   status edit is the only change an immutable record accepts.
+4. Update the status column for both records in the index below.
+
+Doing this in one commit is not tidiness. A test asserts that the two records
+point at each other and that the index agrees with both, so a half-finished
+supersession fails the build rather than leaving the log quietly inconsistent.
+
+Never edit the reasoning of an accepted record to match a newer view. The value
+of the log is that it shows what was believed at the time, which is the only way
+a future reader can judge whether the reason still holds.
 
 ## Index
 
@@ -44,6 +76,10 @@ its docstrings.
 | [0009](0009-windows-bat-launchers-as-entry-points.md) | Two Windows BAT launchers are the final user entry points | Accepted |
 | [0010](0010-living-documentation-responsibilities.md) | Documentation is a deliverable, kept live by tests | Accepted |
 | [0011](0011-documentation-authority-hierarchy.md) | Documentation has an explicit authority order, with code at the top | Accepted |
+| [0012](0012-phase-003-delivers-architecture-boundaries.md) | Phase 003 delivers architecture boundaries; static analysis moves to Phase 013 | Accepted |
+| [0013](0013-modular-monolith-as-the-initial-architecture.md) | GLOBIN is a modular monolith in a single Python distribution | Accepted |
+| [0014](0014-layered-ports-and-adapters-and-inward-dependencies.md) | Five layers with dependencies pointing inward, enforced by a machine-readable contract | Accepted |
+| [0015](0015-single-composition-root-and-no-import-time-side-effects.md) | Dependencies are wired in one composition root, and importing performs no work | Accepted |
 
 ## Relationship to other documents
 

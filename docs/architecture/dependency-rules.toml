@@ -1,0 +1,122 @@
+# ---------------------------------------------------------------------------
+# GLOBIN architecture dependency contract.
+#
+# This file is the CANONICAL statement of which layer may import which.
+#
+#   docs/architecture/README.md      explains the layers in prose
+#   tests/test_architecture_contract.py  enforces this file against the real
+#                                        import graph
+#   src/globin/domain/architecture.py    models the rules as pure types
+#
+# None of those restates the matrix below. A second copy of a rule is drift
+# rather than a tripwire unless a test compares the copies and fails when they
+# diverge — see docs/engineering/SOURCE_OF_TRUTH.md. The one deliberate copy is
+# the `Layer` enumeration in the domain module, and a test compares it against
+# the layer names declared here.
+#
+# Editing a `may_import` list changes what the codebase is permitted to do.
+# Do it in the phase that decided it, and record the decision as an ADR.
+# ---------------------------------------------------------------------------
+
+[meta]
+root_package = "globin"
+established_in_phase = 3
+
+# ---------------------------------------------------------------------------
+# Modules that sit above the layer stack.
+#
+# These hold project identity and roadmap policy as constants. Every layer may
+# read them, because a policy constant is not a dependency on a layer. They
+# must import no layer themselves, which keeps the relationship one-way and is
+# asserted separately.
+# ---------------------------------------------------------------------------
+[shared]
+modules = ["globin.project_contract", "globin.roadmap"]
+
+# ---------------------------------------------------------------------------
+# Standard library packages that give a module the ability to reach outside its
+# own process: the filesystem, the network, the environment, other processes,
+# other threads, or the logging subsystem.
+#
+# Importing one of these is the observable signal that a layer has grown an I/O
+# capability. It is a proxy rather than a proof — a layer could still be handed
+# an open socket — but it is a deterministic one, and it catches the way the
+# boundary is realistically eroded: someone reaches for `os` or `pathlib`
+# because it was convenient.
+# ---------------------------------------------------------------------------
+[io]
+capable_modules = [
+    "asyncio",
+    "concurrent",
+    "ctypes",
+    "ftplib",
+    "http",
+    "imaplib",
+    "io",
+    "logging",
+    "mmap",
+    "multiprocessing",
+    "os",
+    "pathlib",
+    "pickle",
+    "poplib",
+    "selectors",
+    "shutil",
+    "signal",
+    "smtplib",
+    "socket",
+    "socketserver",
+    "sqlite3",
+    "ssl",
+    "subprocess",
+    "sys",
+    "telnetlib",
+    "tempfile",
+    "threading",
+    "tomllib",
+    "urllib",
+    "webbrowser",
+    "xmlrpc",
+]
+
+# ---------------------------------------------------------------------------
+# The layers, innermost first.
+#
+#   may_import       other layers this one may depend on, by layer name
+#   may_perform_io   whether the layer may import an I/O-capable module
+#
+# The permitted direction is inward only. Nothing in this file grants an inner
+# layer knowledge of an outer one, and that absence is the whole contract:
+# domain must remain describable without mentioning Binance, HTTP, Windows or
+# any storage engine.
+# ---------------------------------------------------------------------------
+
+[layers.domain]
+package = "globin.domain"
+responsibility = "Pure concepts, values and rules. Knows nothing outside itself."
+may_import = []
+may_perform_io = false
+
+[layers.ports]
+package = "globin.ports"
+responsibility = "Abstract contracts for talking to the outside world."
+may_import = ["domain"]
+may_perform_io = false
+
+[layers.application]
+package = "globin.application"
+responsibility = "Use cases that coordinate domain objects through ports."
+may_import = ["domain", "ports"]
+may_perform_io = false
+
+[layers.adapters]
+package = "globin.adapters"
+responsibility = "Concrete implementations of ports. The only layer that touches the world."
+may_import = ["domain", "ports", "application"]
+may_perform_io = true
+
+[layers.runtime]
+package = "globin.runtime"
+responsibility = "The composition root. Builds objects and wires dependencies."
+may_import = ["domain", "ports", "application", "adapters"]
+may_perform_io = true

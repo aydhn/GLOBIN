@@ -10,7 +10,7 @@ navigate and duplicate homes for the same kind of file.
 
 ## The tree
 
-As of Phase 002. Every directory listed here holds real content.
+As of Phase 003. Every directory listed here holds real content.
 
 ```text
 GLOBIN/
@@ -35,14 +35,27 @@ GLOBIN/
 │   ├── GIT_WORKFLOW.md
 │   ├── GLOSSARY.md
 │   ├── adr/                    Architecture Decision Records + TEMPLATE.md
+│   ├── architecture/           System views and the dependency contract
 │   ├── engineering/            Process contracts — how work is done
 │   └── research/               Per-phase source ledgers
 ├── scripts/
 │   └── verify.ps1              The single verification gate
 ├── src/
 │   └── globin/                 The Python package
-└── tests/                      Contract tests
+│       ├── domain/             Pure concepts, values and rules
+│       ├── ports/              Abstract contracts for the outside world
+│       ├── application/        Use cases coordinating domain through ports
+│       ├── adapters/           Concrete implementations of ports
+│       └── runtime/            Composition root
+└── tests/                      Contract and architecture tests
 ```
+
+The five packages under `src/globin/` are architectural layers, and which of
+them may import which is fixed by
+[`../architecture/dependency-rules.toml`](../architecture/dependency-rules.toml)
+rather than by convention. Placing a new module is therefore a lookup too: see
+[`../architecture/README.md`](../architecture/README.md) for the layer
+responsibilities and the test that enforces them.
 
 ---
 
@@ -51,9 +64,11 @@ GLOBIN/
 | Path | Holds | Does not hold |
 |---|---|---|
 | `src/globin/` | All production Python | Tests, scripts, generated code |
+| `src/globin/<layer>/` | Only what that layer's responsibility permits | Anything an outer layer owns; see the dependency contract |
 | `tests/` | All automated tests and their fixtures | Production code, test *data* of meaningful size |
 | `docs/` | Project-level documentation: what GLOBIN is and why | Process rules, decision records |
-| `docs/adr/` | One decision per file, numbered, immutable once Accepted | Ongoing reasoning that is not a decision |
+| `docs/adr/` | One decision per file, numbered, immutable once Accepted or Rejected | Ongoing reasoning that is not a decision |
+| `docs/architecture/` | System views and the machine-readable dependency contract | Decisions and their rationale, which belong in `docs/adr/` |
 | `docs/engineering/` | Process contracts: how work is done | Domain reasoning, decisions |
 | `docs/research/` | One source ledger per phase, `phase_NNN_sources.md` | Copied vendor documentation |
 | `scripts/` | Maintenance and development helpers that genuinely earn their place | Anything importable by the package |
@@ -128,6 +143,12 @@ regenerable from committed code plus recorded inputs
 | ADRs | `NNNN-kebab-case-title.md`, contiguous from `0001` | `0005-master-only-git-workflow.md` |
 | Research ledgers | `phase_NNN_sources.md`, zero-padded | `phase_002_sources.md` |
 | Documents | `SCREAMING_SNAKE_CASE.md` | `SOURCE_OF_TRUTH.md` |
+| Machine-readable contracts | `lower-kebab-case` with the format's extension | `dependency-rules.toml` |
+
+The last row exists because a file that tools parse is not a document. Naming it
+like one invites a reader to edit it as prose, and the difference matters: a
+document may be improved freely, while a contract file changes what the tests
+enforce.
 
 Root-level documents keep their conventional names (`README.md`, `AGENTS.md`,
 `CONTRIBUTING.md`) because tools and platforms recognise them.

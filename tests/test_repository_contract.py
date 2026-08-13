@@ -54,14 +54,20 @@ GITHUB_TEMPLATES: tuple[str, ...] = (
 ADR_TEMPLATE = "docs/adr/TEMPLATE.md"
 
 #: Sections a new ADR must offer. The first four are also asserted on every
-#: numbered ADR by ``test_documentation_contract.py``; the fifth is required of
-#: the template alone, because records 0001-0010 predate it and are immutable.
+#: numbered ADR by ``test_documentation_contract.py``; the rest are asserted
+#: only from ADR-0012 onwards, because earlier records predate them and are
+#: immutable. The template must offer all of them regardless, since it is what
+#: the next record is copied from.
 ADR_TEMPLATE_SECTIONS: tuple[str, ...] = (
     "## Status",
     "## Context",
     "## Decision",
     "## Consequences",
     "## Alternatives Considered",
+    "## Risks and Trade-offs",
+    "## References",
+    "## Supersedes",
+    "## Superseded By",
 )
 
 

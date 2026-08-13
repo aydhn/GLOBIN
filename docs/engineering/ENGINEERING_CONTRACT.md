@@ -105,6 +105,11 @@ depend on history and on import order. Where shared state is genuinely required,
 it is passed explicitly. Import must not perform I/O, open connections, read
 configuration or start work.
 
+Since Phase 003 this is checked rather than trusted: dependencies are wired in a
+single composition root and the syntax tree of every layer module is inspected
+for work that would run at import
+([ADR-0015](../adr/0015-single-composition-root-and-no-import-time-side-effects.md)).
+
 ---
 
 ## Structure
@@ -117,11 +122,21 @@ domain testable without a network and what stops a vendor change from becoming a
 rewrite. It is not multi-exchange support, which is an explicit non-goal
 ([ADR-0002](../adr/0002-binance-global-only-exchange-scope.md)).
 
+The layers this separation is expressed in, and their responsibilities, are
+described in [`../architecture/README.md`](../architecture/README.md).
+
 ### 19. Dependency direction
 
 Dependencies point inward: adapters depend on the domain, never the reverse. A
 domain module importing an HTTP client, a database driver or a vendor SDK is a
 layering violation regardless of how convenient it is.
+
+Which layers exist and which may import which is declared in
+[`../architecture/dependency-rules.toml`](../architecture/dependency-rules.toml)
+and enforced by test
+([ADR-0014](../adr/0014-layered-ports-and-adapters-and-inward-dependencies.md)).
+That file is the canonical matrix; this invariant states the principle and does
+not restate the rules.
 
 ### 8. Typed boundaries
 

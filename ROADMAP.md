@@ -33,10 +33,18 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-002 are complete. Phase 003 is next and has not started.**
-> Nothing beyond Phase 002 is implemented. GLOBIN does not trade, does not
+> **Phases 001-003 are complete. Phase 004 is next and has not started.**
+> Nothing beyond Phase 003 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
+
+> **Scope amendment.** Phase 003 originally read *Coding Standards and Static
+> Analysis Baseline*, and Phase 013 read *Continuous Verification Script and
+> Quality Gates*. Phase 003 now delivers architecture boundaries, and the
+> coding-standards scope has moved into Phase 013. Band ranges, phase numbers
+> and the sixteen-phase band width are unchanged. The reasoning is recorded in
+> [ADR-0012](docs/adr/0012-phase-003-delivers-architecture-boundaries.md);
+> amending phase scope requires an ADR, and this is the only such amendment.
 
 ---
 
@@ -50,7 +58,7 @@ written down.
 |:-----:|-------|---------|:------:|
 | 001 | Repository Foundation and Engineering Contract | Create the repository, master-only workflow, living documentation, ADR set, project contract module and invariant test suite. | Complete |
 | 002 | Documentation System and Style Guide | Define document types, ownership, review cadence and the writing conventions all later documentation follows. | Complete |
-| 003 | Coding Standards and Static Analysis Baseline | Fix naming, structure, docstring and typing conventions, and tighten the lint and type configuration to match. | Planned |
+| 003 | Architecture Boundaries and Dependency Direction | Establish the layer contract, the inward dependency direction, the ports and adapters boundary, the composition root, the C4 system and container views, and the ADR lifecycle. | Complete |
 | 004 | Test Architecture and Fixture Conventions | Define test layers, directory structure, fixture scope rules, naming and the boundary between unit, contract and integration tests. | Planned |
 | 005 | Error Taxonomy and Exception Hierarchy | Design the project-wide exception hierarchy separating configuration, transport, exchange, validation and internal faults. | Planned |
 | 006 | Structured Logging Foundation | Establish structured, correlation-aware logging with severity policy and redaction of sensitive fields. | Planned |
@@ -60,7 +68,7 @@ written down.
 | 010 | Decimal and Numeric Precision Policy | Decide where decimal arithmetic is mandatory versus floating point, and define rounding and tick-size behaviour. | Planned |
 | 011 | Identifier and Naming Registry | Define canonical identifiers for symbols, products, environments, runs, models and orders across the system. | Planned |
 | 012 | Serialization and Persistence Contracts | Establish schema evolution rules and forward and backward compatibility guarantees for persisted structures. | Planned |
-| 013 | Continuous Verification Script and Quality Gates | Consolidate the local verification pathway into a single authoritative gate with explicit pass criteria. | Planned |
+| 013 | Coding Standards, Static Analysis and Quality Gates | Fix naming, structure, docstring and typing conventions, tighten the lint and type configuration to match, and consolidate the local verification pathway into a single authoritative gate with explicit pass criteria. | Planned |
 | 014 | Dependency Review and Licence Audit Process | Define how a candidate dependency is reviewed for cost, licence, maintenance health and supply-chain risk. | Planned |
 | 015 | Security Baseline and Secret Handling Rules | Specify secret storage, redaction, least-privilege API key usage and the prohibition on committing credentials. | Planned |
 | 016 | Foundation Consolidation and Phase Gate Review | Reconcile the foundation band, resolve inconsistencies and certify readiness for environment work. | Planned |

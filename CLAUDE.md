@@ -33,6 +33,8 @@ phase before assuming any capability exists.
 | Which document wins a conflict? | [`docs/engineering/SOURCE_OF_TRUTH.md`](docs/engineering/SOURCE_OF_TRUTH.md) |
 | Where does this file go? | [`docs/engineering/REPOSITORY_LAYOUT.md`](docs/engineering/REPOSITORY_LAYOUT.md) |
 | How do I write documentation? | [`docs/engineering/DOCUMENTATION_STANDARD.md`](docs/engineering/DOCUMENTATION_STANDARD.md) |
+| How is the system structured? | [`docs/architecture/README.md`](docs/architecture/README.md) |
+| Which layer may import which? | [`docs/architecture/dependency-rules.toml`](docs/architecture/dependency-rules.toml) |
 | Why is the architecture like this? | [`docs/ARCHITECTURE_PRINCIPLES.md`](docs/ARCHITECTURE_PRINCIPLES.md) |
 | Why was X decided? | [`docs/adr/README.md`](docs/adr/README.md) |
 | What sources may I trust? | [`docs/SOURCE_POLICY.md`](docs/SOURCE_POLICY.md) |
@@ -46,17 +48,29 @@ phase before assuming any capability exists.
 
 ```text
 GLOBIN/
-├── src/globin/          Python package. Project contract constants only so far.
+├── src/globin/          Python package, in five architectural layers.
 │   ├── project_contract.py   Identity and policy invariants
-│   └── roadmap.py            The 20 immutable phase bands
-├── tests/               Contract tests enforcing the rules
+│   ├── roadmap.py            The 20 immutable phase bands
+│   ├── domain/               Pure concepts, values and rules
+│   ├── ports/                Abstract contracts, as typing.Protocol
+│   ├── application/          Use cases, coordinating domain through ports
+│   ├── adapters/             Concrete implementations; the only I/O
+│   └── runtime/              Composition root
+├── tests/               Contract and architecture tests enforcing the rules
 ├── docs/
+│   ├── architecture/    Layer contract, C4 system context and container views
 │   ├── engineering/     How work is done: contracts and standards
 │   ├── adr/             Architecture Decision Records + TEMPLATE.md
 │   └── research/        Per-phase source ledgers
 ├── .github/             Pull request and issue templates
 └── scripts/verify.ps1   The single verification gate
 ```
+
+Dependencies point **inward only**: `runtime` → `adapters` → `application` →
+`ports` → `domain`. The permitted directions are declared in
+[`docs/architecture/dependency-rules.toml`](docs/architecture/dependency-rules.toml)
+and enforced by `tests/test_architecture_contract.py`. Do not add a second copy
+of that matrix anywhere.
 
 There is deliberately no scaffolding for future components. Directories appear
 when they hold real content. Full placement rules:
