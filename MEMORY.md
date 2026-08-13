@@ -103,6 +103,10 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
 - **Every completed phase** ends with tests passing, documentation synchronized,
   a commit on `master`, a successful push, matching local and remote hashes, and
   an empty `git status --porcelain`.
+- **Commit and push at phase end are pre-authorized by the owner.** Do not ask
+  for permission to deliver a completed, verified phase — just do it. The
+  authorization covers delivery only; verifying that the phase really is
+  complete and clean beforehand is still required.
 - **Never** commit credentials. **Never** report a check as passing without
   running it. **Never** implement a later phase early. **Never** delete working
   functionality to simplify a task.

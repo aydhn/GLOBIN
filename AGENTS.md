@@ -134,6 +134,19 @@ Then follow [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) exactly:
 reasons such as authentication, report it as an unresolved blocker rather than
 describing the phase as complete.
 
+### Standing authorization
+
+The owner has **pre-authorized commit and push at the end of every phase**. Do
+not pause to ask for permission: when the verification gate passes and the
+staged diff is clean, commit and push.
+
+This authorization covers the delivery step only. It is not permission to skip
+verification, to push work you have not validated, or to proceed past a genuine
+blocker. If a check fails, if the staged diff contains something that should not
+be committed, or if the phase is incomplete, stop and report — the standing
+authorization assumes everything is in order, so establishing that it *is* in
+order remains your responsibility.
+
 ---
 
 ## 8. Reporting
