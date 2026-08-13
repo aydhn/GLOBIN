@@ -119,16 +119,15 @@ file is untracked and unignored.
 
 ## Definition of done
 
-A phase is complete only when **all** of the following hold:
+The Git-facing half of "done" is steps 1-7 above: verified, committed on
+`master`, pushed, local and remote agreeing, working tree clean.
 
-1. Phase-specific tests pass.
-2. Required regression checks pass.
-3. No secrets or generated artefacts are committed.
-4. Documentation matches the implementation.
-5. A meaningful commit exists on `master`.
-6. The commit is pushed to `origin/master`.
-7. Local `master` and `origin/master` are the same commit.
-8. `git status --porcelain` is empty.
+That is not the whole definition. The canonical checklist — scope, tests,
+documentation, the diff review and the reporting obligation — is
+[`engineering/DEFINITION_OF_DONE.md`](engineering/DEFINITION_OF_DONE.md), and it
+is the only copy. This document previously carried its own list; two copies of
+one rule diverge, which is the defect
+[ADR-0011](adr/0011-documentation-authority-hierarchy.md) exists to remove.
 
 If a push fails for external reasons such as authentication, report that
 plainly as an unresolved blocker. Never describe a phase as complete when its

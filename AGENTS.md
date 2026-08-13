@@ -27,6 +27,8 @@ the programme.
 2. **Read the relevant documentation.** At minimum
    [`ROADMAP.md`](ROADMAP.md) for the current phase,
    [`MEMORY.md`](MEMORY.md) for durable facts,
+   [`docs/engineering/ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md)
+   for the invariants your code must satisfy,
    [`docs/ARCHITECTURE_PRINCIPLES.md`](docs/ARCHITECTURE_PRINCIPLES.md), and any
    ADR touching your area.
 3. **Confirm the phase you are working on.** Work belongs to a phase. If a task
@@ -134,6 +136,12 @@ Then follow [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) exactly:
 reasons such as authentication, report it as an unresolved blocker rather than
 describing the phase as complete.
 
+The full criteria — scope, tests, documentation, diff review, delivery and
+reporting — are
+[`docs/engineering/DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md).
+Work through it before claiming a phase is finished; the steps above are only
+its delivery portion.
+
 ### Standing authorization
 
 The owner has **pre-authorized commit and push at the end of every phase**. Do
@@ -168,3 +176,9 @@ This file and the active phase specification define the rules for all agents.
 [`CLAUDE.md`](CLAUDE.md) is a convenience layer for one family of tools and is
 **not** an alternate source of truth; where it appears to disagree with this
 file, this file wins and the discrepancy is a bug to fix.
+
+For conflicts between any two artefacts in the repository — including code
+against documentation — the precedence order is
+[`docs/engineering/SOURCE_OF_TRUTH.md`](docs/engineering/SOURCE_OF_TRUTH.md).
+It resolves what to believe *while you fix the contradiction*; it never licenses
+leaving one in place.

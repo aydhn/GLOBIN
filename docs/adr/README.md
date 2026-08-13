@@ -9,13 +9,15 @@ still applies.
 ## Rules
 
 1. **Numbering is contiguous from `0001` and never reused.** Filenames follow
-   `NNNN-kebab-case-title.md`.
+   `NNNN-kebab-case-title.md`. Start from [`TEMPLATE.md`](TEMPLATE.md).
 2. **Accepted ADRs are immutable.** A changed decision is written as a *new*
    ADR that supersedes the old one. The superseded record stays, with its status
    updated, so the reasoning history survives.
 3. **Every ADR has four sections**, in this order: `## Status`, `## Context`,
    `## Decision`, `## Consequences`. This is checked by
-   `tests/test_documentation_contract.py`.
+   `tests/test_documentation_contract.py`. New records add
+   `## Alternatives Considered`; records 0001-0010 predate
+   [`TEMPLATE.md`](TEMPLATE.md) and are immutable, so they are not retrofitted.
 4. **Every ADR is listed in this index.** Also checked by test.
 5. Status is one of: `Proposed`, `Accepted`, `Superseded by ADR-NNNN`,
    `Deprecated`.
@@ -41,10 +43,16 @@ its docstrings.
 | [0008](0008-immutable-upper-risk-constraints.md) | Upper risk bounds are immutable and outside the search space | Accepted |
 | [0009](0009-windows-bat-launchers-as-entry-points.md) | Two Windows BAT launchers are the final user entry points | Accepted |
 | [0010](0010-living-documentation-responsibilities.md) | Documentation is a deliverable, kept live by tests | Accepted |
+| [0011](0011-documentation-authority-hierarchy.md) | Documentation has an explicit authority order, with code at the top | Accepted |
 
 ## Relationship to other documents
 
 ADRs record *decisions*. Durable technical reasoning that is not a single
 decision belongs in [`../ARCHITECTURE_PRINCIPLES.md`](../ARCHITECTURE_PRINCIPLES.md).
-Evidence supporting a decision belongs in [`../research/`](../research/), cited
-from the ADR rather than restated inside it.
+Rules about how work is carried out belong in
+[`../engineering/`](../engineering/ENGINEERING_CONTRACT.md). Evidence supporting
+a decision belongs in [`../research/`](../research/), cited from the ADR rather
+than restated inside it.
+
+Where an ADR and another document appear to disagree, the precedence order in
+[`../engineering/SOURCE_OF_TRUTH.md`](../engineering/SOURCE_OF_TRUTH.md) applies.

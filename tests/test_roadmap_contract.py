@@ -121,17 +121,46 @@ def test_roadmap_band_headings_match_the_code_skeleton(roadmap_text: str) -> Non
         assert heading in roadmap_text, f"missing or altered band heading: {heading!r}"
 
 
+#: The last phase that has actually been delivered — verified, committed and
+#: pushed to ``origin/master``.
+#:
+#: This is a tripwire, and bumping it is meant to be a deliberate act. Marking a
+#: phase ``Complete`` in ``ROADMAP.md`` is cheap; editing this constant forces
+#: the claim to be made in code, in the same commit, where it is visible in the
+#: diff. Raise it only when the phase genuinely satisfies
+#: ``docs/engineering/DEFINITION_OF_DONE.md`` — never in advance, and never to
+#: make a failing test pass.
+LAST_COMPLETED_PHASE: int = 2
+
+
 def test_no_future_phase_is_marked_complete(roadmap_rows: list[RoadmapRow]) -> None:
-    """Only Phase 1 may ever be Active or Complete at this point in the programme."""
+    """No phase beyond the delivered frontier may claim to be finished.
+
+    Guards against the failure that matters most in a fixed programme: work
+    described as done before it exists. Every later phase builds on the claim,
+    so a false ``Complete`` is not a bookkeeping error — it silently invalidates
+    everything that follows.
+    """
     for row in roadmap_rows:
-        if row.phase == 1:
+        if row.phase < LAST_COMPLETED_PHASE:
+            assert row.status == "Complete", (
+                f"phase {row.phase:03d} precedes the delivered frontier "
+                f"({LAST_COMPLETED_PHASE:03d}) but is {row.status!r}"
+            )
+        elif row.phase == LAST_COMPLETED_PHASE:
             assert row.status in {"Active", "Complete"}, (
-                f"phase 001 has unexpected status {row.status!r}"
+                f"phase {row.phase:03d} has unexpected status {row.status!r}"
             )
         else:
             assert row.status == "Planned", (
-                f"phase {row.phase:03d} must be Planned, found {row.status!r}"
+                f"phase {row.phase:03d} is beyond the delivered frontier "
+                f"({LAST_COMPLETED_PHASE:03d}) and must be Planned, found {row.status!r}"
             )
+
+
+def test_completed_frontier_is_within_the_programme() -> None:
+    """A frontier outside 1..320 would silently disable the check above."""
+    assert 1 <= LAST_COMPLETED_PHASE <= ROADMAP_TOTAL_PHASES
 
 
 def test_roadmap_statuses_are_from_the_known_vocabulary(roadmap_rows: list[RoadmapRow]) -> None:

@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 001 of 320 complete — foundation only
+## Current status: Phase 002 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -13,9 +13,9 @@ Binance Global, built over a fixed programme of 320 phases.
 > strategy, no backtesting and no machine learning in this repository. There are
 > no credentials, and no code capable of using any.
 >
-> This is deliberate. Phase 1 builds the engineering foundation: the rules every
-> later phase must follow, the documentation that carries them, and the tests
-> that enforce them.
+> This is deliberate. The opening phases build the engineering foundation: the
+> rules every later phase must follow, the documentation that carries them, and
+> the tests that enforce them.
 
 ### What exists right now
 
@@ -23,8 +23,10 @@ Binance Global, built over a fixed programme of 320 phases.
 |---|---|
 | Repository, branch policy, engineering contract | Implemented |
 | 320-phase roadmap, every phase named | Implemented |
-| Architecture decision records (10) | Implemented |
-| Research source ledger with primary sources | Implemented |
+| Architecture decision records (11) | Implemented |
+| Research source ledgers with primary sources | Implemented |
+| Engineering contracts: done-criteria, authority order, layout, doc standard | Implemented |
+| Change templates for pull requests and issues | Implemented |
 | `globin` package — project contract constants only | Implemented |
 | Contract test suite and verification gate | Implemented |
 | Everything else | Not started |
@@ -101,7 +103,7 @@ Full index: [`ROADMAP.md`](ROADMAP.md).
 
 ## Repository structure
 
-```
+```text
 GLOBIN/
 ├── README.md              This file
 ├── AGENTS.md              Binding instruction contract for coding agents
@@ -110,6 +112,7 @@ GLOBIN/
 ├── ROADMAP.md             The fixed 320-phase programme
 ├── CONTRIBUTING.md        How to work in this repository
 ├── pyproject.toml         Project metadata and tool configuration
+├── .github/               Pull request and issue templates
 ├── docs/
 │   ├── PROJECT_CHARTER.md        Mission, scope, non-goals
 │   ├── ARCHITECTURE_PRINCIPLES.md Durable technical reasoning
@@ -117,12 +120,16 @@ GLOBIN/
 │   ├── TESTING_STRATEGY.md       What is tested and why
 │   ├── GIT_WORKFLOW.md           Branch, commit and push procedure
 │   ├── GLOSSARY.md               Shared vocabulary
+│   ├── engineering/              How work is done: contracts and standards
 │   ├── adr/                      Architecture Decision Records
 │   └── research/                 Per-phase source ledgers
 ├── scripts/verify.ps1     The single verification gate
 ├── src/globin/            The Python package
 └── tests/                 Contract tests
 ```
+
+Placement rules are in
+[`docs/engineering/REPOSITORY_LAYOUT.md`](docs/engineering/REPOSITORY_LAYOUT.md).
 
 ---
 
@@ -146,6 +153,18 @@ install step is needed.
 Start with [`AGENTS.md`](AGENTS.md) if you are an automated contributor, or
 [`CONTRIBUTING.md`](CONTRIBUTING.md) if you are a person. Both point onward to
 the charter, principles and decision records.
+
+| Question | Document |
+|---|---|
+| What must all code satisfy? | [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) |
+| When is a change finished? | [`DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md) |
+| Which document wins a conflict? | [`SOURCE_OF_TRUTH.md`](docs/engineering/SOURCE_OF_TRUTH.md) |
+| Where does a new file go? | [`REPOSITORY_LAYOUT.md`](docs/engineering/REPOSITORY_LAYOUT.md) |
+| How is documentation written? | [`DOCUMENTATION_STANDARD.md`](docs/engineering/DOCUMENTATION_STANDARD.md) |
+
+This file is orientation only. It links to policy rather than restating it, so
+that a rule has exactly one home — see
+[ADR-0011](docs/adr/0011-documentation-authority-hierarchy.md).
 
 ---
 

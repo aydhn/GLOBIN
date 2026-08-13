@@ -91,14 +91,16 @@ it bypasses the design work the later phase was created to do.
 
 ## Definition of a completed phase
 
-1. Phase-specific tests pass.
-2. Required regression checks pass.
-3. No secrets or generated artefacts are committed.
-4. Documentation matches the implementation.
-5. A meaningful commit exists on `master`.
-6. It is pushed to `origin/master`.
-7. Local and remote are synchronized.
-8. The working tree is clean.
+A phase is complete only when its tests pass, its documentation matches its
+code, no secrets or generated artefacts are committed, and a meaningful commit
+is on `master`, pushed to `origin/master`, with local and remote synchronized
+and the working tree clean.
+
+The binding checklist is
+[`engineering/DEFINITION_OF_DONE.md`](engineering/DEFINITION_OF_DONE.md).
+The charter states that a bar exists and why the programme needs one; it does
+not keep a second copy of the bar itself
+([ADR-0011](adr/0011-documentation-authority-hierarchy.md)).
 
 ## Success criteria for the programme
 

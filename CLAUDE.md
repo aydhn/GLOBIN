@@ -28,8 +28,13 @@ phase before assuming any capability exists.
 | What are the binding rules? | [`AGENTS.md`](AGENTS.md) |
 | What phase are we in? | [`ROADMAP.md`](ROADMAP.md), [`MEMORY.md`](MEMORY.md) |
 | What is durable project truth? | [`MEMORY.md`](MEMORY.md) |
+| What must all code satisfy? | [`docs/engineering/ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) |
+| When am I finished? | [`docs/engineering/DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md) |
+| Which document wins a conflict? | [`docs/engineering/SOURCE_OF_TRUTH.md`](docs/engineering/SOURCE_OF_TRUTH.md) |
+| Where does this file go? | [`docs/engineering/REPOSITORY_LAYOUT.md`](docs/engineering/REPOSITORY_LAYOUT.md) |
+| How do I write documentation? | [`docs/engineering/DOCUMENTATION_STANDARD.md`](docs/engineering/DOCUMENTATION_STANDARD.md) |
 | Why is the architecture like this? | [`docs/ARCHITECTURE_PRINCIPLES.md`](docs/ARCHITECTURE_PRINCIPLES.md) |
-| Why was X decided? | [`docs/adr/`](docs/adr/) |
+| Why was X decided? | [`docs/adr/README.md`](docs/adr/README.md) |
 | What sources may I trust? | [`docs/SOURCE_POLICY.md`](docs/SOURCE_POLICY.md) |
 | How do I test? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 | How do I commit? | [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) |
@@ -39,20 +44,23 @@ phase before assuming any capability exists.
 
 ## Repository navigation
 
-```
+```text
 GLOBIN/
-├── src/globin/          Python package. Phase 1: project contract only.
+├── src/globin/          Python package. Project contract constants only so far.
 │   ├── project_contract.py   Identity and policy invariants
 │   └── roadmap.py            The 20 immutable phase bands
 ├── tests/               Contract tests enforcing the rules
 ├── docs/
-│   ├── adr/             Architecture Decision Records
+│   ├── engineering/     How work is done: contracts and standards
+│   ├── adr/             Architecture Decision Records + TEMPLATE.md
 │   └── research/        Per-phase source ledgers
+├── .github/             Pull request and issue templates
 └── scripts/verify.ps1   The single verification gate
 ```
 
 There is deliberately no scaffolding for future components. Directories appear
-when they hold real content.
+when they hold real content. Full placement rules:
+[`docs/engineering/REPOSITORY_LAYOUT.md`](docs/engineering/REPOSITORY_LAYOUT.md).
 
 ---
 
@@ -92,10 +100,12 @@ Write tests alongside behaviour, never afterwards. Test meaningful invariants,
 not whole-file snapshots — a test that fails on every editorial improvement
 trains people to update expectations without reading them.
 
-The Phase 1 suite exists to make policy enforceable: it asserts project
-identity, the master-only branch rule, the 320-phase structure, the absence of
-runtime dependencies, and the presence and consistency of required
-documentation.
+The suite exists to make policy enforceable. It asserts project identity, the
+master-only branch rule, the 320-phase structure, the absence of runtime
+dependencies, the presence and consistency of required documentation, that
+every repository-relative Markdown link resolves, that no credential-shaped
+file would be committed, and that tool configuration is not duplicated outside
+`pyproject.toml`.
 
 ---
 

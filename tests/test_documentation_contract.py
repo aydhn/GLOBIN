@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import REPO_ROOT, markdown_prose
+
 #: Documents that must exist for the engineering contract to be coherent.
 REQUIRED_DOCS: tuple[str, ...] = (
     "README.md",
@@ -26,8 +28,15 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/TESTING_STRATEGY.md",
     "docs/GIT_WORKFLOW.md",
     "docs/GLOSSARY.md",
+    "docs/engineering/ENGINEERING_CONTRACT.md",
+    "docs/engineering/DEFINITION_OF_DONE.md",
+    "docs/engineering/SOURCE_OF_TRUTH.md",
+    "docs/engineering/REPOSITORY_LAYOUT.md",
+    "docs/engineering/DOCUMENTATION_STANDARD.md",
     "docs/adr/README.md",
+    "docs/adr/TEMPLATE.md",
     "docs/research/phase_001_sources.md",
+    "docs/research/phase_002_sources.md",
 )
 
 #: Minimum byte length for a document to count as substantive rather than a
@@ -55,6 +64,47 @@ REQUIRED_CONCEPTS: dict[str, tuple[str, ...]] = {
     "docs/SOURCE_POLICY.md": ("scrap", "official", "Binance", "authoritative"),
     "docs/TESTING_STRATEGY.md": ("pytest", "invariant", "leakage"),
     "docs/GIT_WORKFLOW.md": ("master", "origin/master", "clean", "push"),
+    "docs/engineering/ENGINEERING_CONTRACT.md": (
+        "fail closed",
+        "determinism",
+        "idempot",
+        "leakage",
+        "timezone",
+        "secret",
+    ),
+    "docs/engineering/DEFINITION_OF_DONE.md": (
+        "master",
+        "origin/master",
+        "porcelain",
+        "credential",
+        "placeholder",
+    ),
+    "docs/engineering/SOURCE_OF_TRUTH.md": (
+        "authority",
+        "conflict",
+        "pyproject.toml",
+        "adr",
+    ),
+    "docs/engineering/REPOSITORY_LAYOUT.md": (
+        "src/globin",
+        "docs/adr",
+        "docs/research",
+        ".gitignore",
+    ),
+    "docs/engineering/DOCUMENTATION_STANDARD.md": (
+        "review",
+        "british",
+        "guarantee",
+        "adr",
+        "relative link",
+    ),
+    "docs/adr/TEMPLATE.md": (
+        "## status",
+        "## context",
+        "## decision",
+        "## consequences",
+        "## alternatives considered",
+    ),
 }
 
 #: Command-shaped references to a branch that would contradict the master-only
@@ -120,12 +170,17 @@ def test_document_states_its_required_concepts(
 
 
 def test_no_placeholder_debt_in_required_docs(repo_root: Path) -> None:
-    """No TODO/TBD/FIXME spam. Unverified facts must name their owning phase."""
+    """No TODO/TBD/FIXME spam. Unverified facts must name their owning phase.
+
+    Prose only. Several of these documents *prohibit* placeholder markers and
+    therefore have to name them; a marker quoted in backticks is the opposite of
+    one left behind.
+    """
     offenders: list[str] = []
     for relative in REQUIRED_DOCS:
-        text = _read(repo_root, relative)
+        prose = markdown_prose(_read(repo_root, relative))
         for marker in ("TODO", "TBD", "FIXME", "XXX", "Lorem ipsum"):
-            if marker in text:
+            if marker in prose:
                 offenders.append(f"{relative}: {marker}")
     assert not offenders, f"placeholder debt found: {offenders}"
 
@@ -190,21 +245,52 @@ def test_adr_index_references_every_adr(repo_root: Path) -> None:
 
 SOURCE_HEADING_RE = re.compile(r"^### S-(\d{2}) — .+$", re.MULTILINE)
 
+#: Every per-phase ledger present in the repository, discovered rather than
+#: listed, so a new phase's ledger is checked the moment it is written.
+RESEARCH_LEDGERS: tuple[str, ...] = tuple(
+    sorted(f"docs/research/{path.name}" for path in (REPO_ROOT / "docs" / "research").glob("*.md"))
+)
 
-def test_research_ledger_has_structured_entries(repo_root: Path) -> None:
-    text = _read(repo_root, "docs/research/phase_001_sources.md")
+
+def test_research_ledgers_are_discovered() -> None:
+    """Guard the discovery above: an empty glob would make the checks below vacuous."""
+    assert len(RESEARCH_LEDGERS) >= 2, (
+        f"expected a ledger per completed phase, found {RESEARCH_LEDGERS}"
+    )
+
+
+@pytest.mark.parametrize("relative", RESEARCH_LEDGERS)
+def test_research_ledger_entries_are_well_formed(repo_root: Path, relative: str) -> None:
+    """Every source entry carries a location, an access date and an authority assessment.
+
+    Structure is asserted per entry; the *number* of entries is not. A
+    governance phase legitimately relies on fewer external facts than an
+    integration phase, and a minimum count would be satisfied by padding —
+    which turns the ledger into decoration.
+    """
+    text = _read(repo_root, relative)
     headings = SOURCE_HEADING_RE.findall(text)
-    assert len(headings) >= 12, f"expected at least 12 research sources, found {len(headings)}"
-    assert len(set(headings)) == len(headings), "duplicate source identifiers in research ledger"
+    assert headings, f"{relative} contains no `### S-NN — ...` entries"
+    assert len(set(headings)) == len(headings), f"duplicate source identifiers in {relative}"
 
     for field in ("**Canonical location:**", "**Accessed:**", "**Authority:**", "**Implication"):
         assert text.count(field) >= len(headings), (
-            f"every research entry must carry a {field} field"
+            f"every entry in {relative} must carry a {field} field"
         )
-    assert text.count("https://") >= len(headings), "every research entry needs a canonical URL"
+    assert text.count("https://") >= len(headings), f"every entry in {relative} needs a URL"
 
-
-def test_research_ledger_records_access_dates(repo_root: Path) -> None:
-    text = _read(repo_root, "docs/research/phase_001_sources.md")
     dates = re.findall(r"\*\*Accessed:\*\*\s*(\d{4}-\d{2}-\d{2})", text)
-    assert len(dates) >= 12, f"expected at least 12 dated accesses, found {len(dates)}"
+    assert len(dates) >= len(headings), (
+        f"{relative} has {len(headings)} entries but {len(dates)} ISO access dates"
+    )
+
+
+def test_phase_001_ledger_remains_comprehensive(repo_root: Path) -> None:
+    """Phase 001 established the architecture from twelve primary sources.
+
+    Specific to that ledger, not a general rule: it is the evidence base the
+    charter and the ADR set rest on, and thinning it would quietly weaken them.
+    """
+    text = _read(repo_root, "docs/research/phase_001_sources.md")
+    headings = SOURCE_HEADING_RE.findall(text)
+    assert len(headings) >= 12, f"expected at least 12 research sources, found {len(headings)}"

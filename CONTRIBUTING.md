@@ -10,11 +10,16 @@ Read, in order:
 1. [`README.md`](README.md) — what actually exists today
 2. [`ROADMAP.md`](ROADMAP.md) — the current phase
 3. [`docs/PROJECT_CHARTER.md`](docs/PROJECT_CHARTER.md) — scope and non-goals
-4. [`docs/ARCHITECTURE_PRINCIPLES.md`](docs/ARCHITECTURE_PRINCIPLES.md) — why things are the way they are
-5. Any [ADR](docs/adr/) touching your area
+4. [`docs/engineering/ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) — what all code must satisfy
+5. [`docs/ARCHITECTURE_PRINCIPLES.md`](docs/ARCHITECTURE_PRINCIPLES.md) — why things are the way they are
+6. Any [ADR](docs/adr/README.md) touching your area
 
 The single most common mistake in this repository is implementing something
 from a later phase. Check the roadmap first.
+
+If two documents appear to disagree, the precedence order is
+[`docs/engineering/SOURCE_OF_TRUTH.md`](docs/engineering/SOURCE_OF_TRUTH.md) —
+and the disagreement is a defect worth fixing, not just working around.
 
 ## Environment
 
@@ -93,9 +98,16 @@ Documentation is part of the change, not follow-up work. A phase whose
 documentation contradicts its code is incomplete
 ([ADR-0010](docs/adr/0010-living-documentation-responsibilities.md)).
 
-If you make a decision with lasting consequence, write an ADR. Accepted ADRs are
-immutable — a changed decision becomes a *new* ADR superseding the old one, so
-the reasoning history survives.
+Document types, ownership, review cadence and writing conventions — including
+the house spelling and the 100-column wrap — are in
+[`docs/engineering/DOCUMENTATION_STANDARD.md`](docs/engineering/DOCUMENTATION_STANDARD.md).
+Where a new file belongs is in
+[`docs/engineering/REPOSITORY_LAYOUT.md`](docs/engineering/REPOSITORY_LAYOUT.md).
+
+If you make a decision with lasting consequence, write an ADR from
+[`docs/adr/TEMPLATE.md`](docs/adr/TEMPLATE.md). Accepted ADRs are immutable — a
+changed decision becomes a *new* ADR superseding the old one, so the reasoning
+history survives.
 
 If you rely on external behaviour, record the source in
 `docs/research/phase_NNN_sources.md` with its canonical location, access date and
@@ -151,3 +163,10 @@ completed phase are in [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md).
 Report evidence rather than assurance: the exact commands you ran, their
 results, the commit hash, whether the push succeeded, and anything you could not
 verify or deliberately left out.
+
+## Before you call it done
+
+Work through
+[`docs/engineering/DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md).
+It is the canonical checklist and the only copy — scope, tests, documentation,
+the gate, the diff review, delivery and reporting.

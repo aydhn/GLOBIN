@@ -33,9 +33,10 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phase 001 is complete. Phase 002 is next and has not started.** Nothing
-> beyond Phase 001 is implemented. GLOBIN does not trade, does not connect to
-> any exchange, and has no credentials. See [`README.md`](README.md).
+> **Phases 001-002 are complete. Phase 003 is next and has not started.**
+> Nothing beyond Phase 002 is implemented. GLOBIN does not trade, does not
+> connect to any exchange, and has no credentials. See
+> [`README.md`](README.md).
 
 ---
 
@@ -48,7 +49,7 @@ written down.
 | Phase | Title | Purpose | Status |
 |:-----:|-------|---------|:------:|
 | 001 | Repository Foundation and Engineering Contract | Create the repository, master-only workflow, living documentation, ADR set, project contract module and invariant test suite. | Complete |
-| 002 | Documentation System and Style Guide | Define document types, ownership, review cadence and the writing conventions all later documentation follows. | Planned |
+| 002 | Documentation System and Style Guide | Define document types, ownership, review cadence and the writing conventions all later documentation follows. | Complete |
 | 003 | Coding Standards and Static Analysis Baseline | Fix naming, structure, docstring and typing conventions, and tighten the lint and type configuration to match. | Planned |
 | 004 | Test Architecture and Fixture Conventions | Define test layers, directory structure, fixture scope rules, naming and the boundary between unit, contract and integration tests. | Planned |
 | 005 | Error Taxonomy and Exception Hierarchy | Design the project-wide exception hierarchy separating configuration, transport, exchange, validation and internal faults. | Planned |

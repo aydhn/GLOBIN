@@ -26,12 +26,13 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Fact | Value |
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
-| Completed phases | **001** |
-| Last completed | **001 — Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
-| Next phase | **002 — Documentation System and Style Guide.** Not started. |
+| Completed phases | **001-002** |
+| Phase 001 | **Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
+| Last completed | **002 — Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Delivered under the standard procedure: gate green, single commit on `master`, pushed to `origin/master`, tree clean. |
+| Next phase | **003 — Coding Standards and Static Analysis Baseline.** Not started. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
 
-**Phase 1 does not implement trading.** No exchange connection, no credentials,
+**Nothing so far implements trading.** No exchange connection, no credentials,
 no market data, no strategy, no models. Anything claiming otherwise is wrong.
 
 ---
@@ -102,7 +103,15 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
   There is no reviewer on a master-only workflow, so this is the gate.
 - **Every completed phase** ends with tests passing, documentation synchronized,
   a commit on `master`, a successful push, matching local and remote hashes, and
-  an empty `git status --porcelain`.
+  an empty `git status --porcelain`. The canonical checklist is
+  [`docs/engineering/DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md).
+- **When two artefacts disagree**, apply
+  [`docs/engineering/SOURCE_OF_TRUTH.md`](docs/engineering/SOURCE_OF_TRUTH.md):
+  code and its tests rank highest for behaviour, ADRs for permission. A conflict
+  is a defect to fix, not merely to route around (ADR-0011).
+- **Marking a phase complete requires two edits**, deliberately: the status in
+  `ROADMAP.md` and `LAST_COMPLETED_PHASE` in `tests/test_roadmap_contract.py`.
+  The constant is a tripwire — raise it only for a phase genuinely delivered.
 - **Commit and push at phase end are pre-authorized by the owner.** Do not ask
   for permission to deliver a completed, verified phase — just do it. The
   authorization covers delivery only; verifying that the phase really is
