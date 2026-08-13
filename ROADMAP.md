@@ -1,0 +1,575 @@
+# GLOBIN Roadmap — 320 Phases
+
+This is the fixed development programme for GLOBIN. It is a contract, not a
+suggestion.
+
+## How to read this document
+
+The programme is divided into **twenty bands of exactly sixteen phases**. The
+band boundaries are immutable and are additionally encoded in
+[`src/globin/roadmap.py`](src/globin/roadmap.py) so that this document and the
+codebase cannot drift apart — `tests/test_roadmap_contract.py` checks one
+against the other.
+
+Every phase row is machine-parsed. The table shape below is therefore part of
+the contract:
+
+| Column | Meaning |
+|--------|---------|
+| Phase | Zero-padded three-digit phase number, unique across the programme |
+| Title | Short unique name for the phase |
+| Purpose | What the phase must deliver |
+| Status | `Planned`, `Active`, or `Complete` |
+
+### Rules
+
+1. The twenty band ranges must never change.
+2. Every phase number from 001 to 320 appears exactly once, in ascending order.
+3. Phase titles are unique across the whole programme.
+4. A phase is marked `Complete` only after its tests pass, its documentation is
+   synchronized, and its commit is pushed to `origin/master`.
+5. Later phases are not implemented early. Scope leakage is a defect — see
+   [`AGENTS.md`](AGENTS.md).
+6. Each band ends with a consolidation and gate-review phase. That phase exists
+   to pay down inconsistency before the next band builds on top of it.
+
+> **Current position: Phase 001.** Nothing beyond Phase 001 is implemented.
+> GLOBIN does not trade, does not connect to any exchange, and has no
+> credentials. See [`README.md`](README.md).
+
+---
+
+## Phases 001-016 — Repository Foundation and Engineering Contract
+
+Establishes the repository, the rules every later phase obeys, and the
+verification backbone that makes those rules enforceable rather than merely
+written down.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 001 | Repository Foundation and Engineering Contract | Create the repository, master-only workflow, living documentation, ADR set, project contract module and invariant test suite. | Active |
+| 002 | Documentation System and Style Guide | Define document types, ownership, review cadence and the writing conventions all later documentation follows. | Planned |
+| 003 | Coding Standards and Static Analysis Baseline | Fix naming, structure, docstring and typing conventions, and tighten the lint and type configuration to match. | Planned |
+| 004 | Test Architecture and Fixture Conventions | Define test layers, directory structure, fixture scope rules, naming and the boundary between unit, contract and integration tests. | Planned |
+| 005 | Error Taxonomy and Exception Hierarchy | Design the project-wide exception hierarchy separating configuration, transport, exchange, validation and internal faults. | Planned |
+| 006 | Structured Logging Foundation | Establish structured, correlation-aware logging with severity policy and redaction of sensitive fields. | Planned |
+| 007 | Configuration Model and Schema Contract | Define the typed configuration model, validation rules, defaults and layered override precedence. | Planned |
+| 008 | Domain Value Types and Units | Introduce explicit types for prices, quantities, symbols, sides and currencies to prevent unit confusion. | Planned |
+| 009 | Time, Clock and Timezone Discipline | Establish UTC-only internal time, millisecond conventions, monotonic clocks and an injectable clock abstraction. | Planned |
+| 010 | Decimal and Numeric Precision Policy | Decide where decimal arithmetic is mandatory versus floating point, and define rounding and tick-size behaviour. | Planned |
+| 011 | Identifier and Naming Registry | Define canonical identifiers for symbols, products, environments, runs, models and orders across the system. | Planned |
+| 012 | Serialization and Persistence Contracts | Establish schema evolution rules and forward and backward compatibility guarantees for persisted structures. | Planned |
+| 013 | Continuous Verification Script and Quality Gates | Consolidate the local verification pathway into a single authoritative gate with explicit pass criteria. | Planned |
+| 014 | Dependency Review and Licence Audit Process | Define how a candidate dependency is reviewed for cost, licence, maintenance health and supply-chain risk. | Planned |
+| 015 | Security Baseline and Secret Handling Rules | Specify secret storage, redaction, least-privilege API key usage and the prohibition on committing credentials. | Planned |
+| 016 | Foundation Consolidation and Phase Gate Review | Reconcile the foundation band, resolve inconsistencies and certify readiness for environment work. | Planned |
+
+---
+
+## Phases 017-032 — Windows Environment, Dependencies and Bootstrap
+
+Turns a bare Windows machine into a reproducible GLOBIN development and runtime
+host, including honest verification of GPU capability rather than assumption.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 017 | Windows Host Requirements Survey | Enumerate and verify the operating system, hardware, storage and network prerequisites for a GLOBIN host. | Planned |
+| 018 | Python Interpreter Selection and Pinning | Select and pin the runtime interpreter version after verifying wheel availability for the full planned stack. | Planned |
+| 019 | Virtual Environment Lifecycle Management | Define creation, validation, repair and recreation of the project virtual environment. | Planned |
+| 020 | Dependency Resolution and Lockfile Strategy | Choose the locking mechanism and define reproducible resolution, upgrade and audit procedures. | Planned |
+| 021 | Core Runtime Dependency Introduction | Introduce the first runtime dependencies under the zero-budget policy with explicit justification per package. | Planned |
+| 022 | Scientific Stack Installation and Verification | Install and verify the numerical and dataframe stack, confirming correctness rather than assuming it. | Planned |
+| 023 | NVIDIA Driver and CUDA Capability Detection | Detect GPU presence, driver version, compute capability and CUDA availability without assuming any of them. | Planned |
+| 024 | GPU Runtime Verification Harness | Build a harness that proves which workloads actually benefit from GPU execution on this host. | Planned |
+| 025 | TA-Lib Native Library Provisioning | Provision the native TA-Lib dependency required by the Python wrapper on Windows, with a documented fallback. | Planned |
+| 026 | Configuration File Layout and Profiles | Define on-disk configuration locations and the paper, demo, testnet and live profile structure. | Planned |
+| 027 | Environment Variable and Profile Resolution | Implement deterministic precedence between defaults, files, environment variables and launcher selection. | Planned |
+| 028 | Local Secret Storage Mechanism | Implement the approved local secret store so credentials never reach the repository or plain configuration. | Planned |
+| 029 | Credential Prompting and Validation Flow | Define interactive credential collection, format validation and permission verification before use. | Planned |
+| 030 | Bootstrap Health Check Suite | Implement the preflight checks that must pass before any long-running GLOBIN process starts. | Planned |
+| 031 | Offline and Degraded Installation Handling | Define behaviour when the network, GPU or optional native components are unavailable. | Planned |
+| 032 | Environment Consolidation and Phase Gate Review | Reconcile the environment band and certify a reproducible host before exchange integration begins. | Planned |
+
+---
+
+## Phases 033-048 — Binance API Reality Map and Capability Matrix
+
+Maps what Binance actually exposes per product and per environment, and builds
+the transport, authentication and rate-limit machinery on top of that reality.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 033 | Binance Product Family Inventory | Enumerate the officially documented product families and the surfaces each one exposes. | Planned |
+| 034 | Official Documentation Ingestion and Change Tracking | Establish a repeatable process for consuming official Binance documentation and detecting changes to it. | Planned |
+| 035 | Environment Classification Model | Model production, testnet, demo and internal simulation as distinct classes with distinct guarantees. | Planned |
+| 036 | Product and Environment Capability Matrix | Build the authoritative matrix of which products support which environments, driven by documented evidence. | Planned |
+| 037 | Base URL and Endpoint Registry | Centralise base URLs and endpoint definitions per product and environment with no hard-coded literals. | Planned |
+| 038 | Request Signing and Authentication | Implement the documented signing schemes and keep signing logic isolated and testable. | Planned |
+| 039 | API Key Permission Model and Validation | Verify key permissions and refuse operations the configured key is not entitled to perform. | Planned |
+| 040 | Server Time Synchronization and Drift Control | Implement server time synchronization, drift measurement and the response to excessive clock skew. | Planned |
+| 041 | Rate Limit Weight Registry | Record the documented request weights and order-count costs for every endpoint the system uses. | Planned |
+| 042 | Rate Limit Governor and Token Buckets | Implement proactive limiting that respects reported usage headers rather than reacting only to rejections. | Planned |
+| 043 | Retry, Backoff and Idempotency Policy | Define which failures are retryable, with what backoff, and which operations require idempotency keys. | Planned |
+| 044 | Error Code Mapping and Classification | Map documented exchange error codes to the internal taxonomy with explicit retryable and fatal classification. | Planned |
+| 045 | REST Transport Layer | Implement the REST client with timeouts, connection reuse, instrumentation and limit integration. | Planned |
+| 046 | WebSocket Transport and Stream Lifecycle | Implement connection lifecycle, keepalive, subscription management and backpressure for streams. | Planned |
+| 047 | FIX and SBE Interface Assessment | Evaluate whether the documented FIX and SBE interfaces provide material value for this system. | Planned |
+| 048 | API Layer Consolidation and Phase Gate Review | Reconcile the API band and certify the transport foundation before data acquisition begins. | Planned |
+
+---
+
+## Phases 049-064 — Market Data Acquisition and Instrument Registry
+
+Acquires complete, verifiable market data. Completeness is treated as a
+measured property, not an assumption.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 049 | Instrument Registry and Symbol Metadata | Build the registry of tradable instruments with their metadata, status and product association. | Planned |
+| 050 | Exchange Filter and Trading Rule Ingestion | Ingest lot size, notional, price and other filters so orders can be validated before submission. | Planned |
+| 051 | Kline Acquisition and Interval Handling | Acquire candlestick data across intervals with correct boundary and closure semantics. | Planned |
+| 052 | Historical Backfill from Binance Public Data | Bulk-load historical archives from the official public data resource without API keys. | Planned |
+| 053 | Archive Integrity and Checksum Verification | Verify downloaded archives against their published checksums before any data is trusted. | Planned |
+| 054 | Trade and Aggregate Trade Streams | Acquire individual and aggregated trade data with correct ordering and deduplication. | Planned |
+| 055 | Order Book Snapshot and Depth Diff Handling | Implement the documented snapshot plus differential update procedure correctly. | Planned |
+| 056 | Order Book Reconstruction and Validation | Maintain a correct local book with sequence validation and automatic resynchronization on divergence. | Planned |
+| 057 | Book Ticker and Best Quote Feeds | Acquire best bid and ask feeds for spread measurement and execution modelling. | Planned |
+| 058 | Mark Price, Index Price and Funding Feeds | Acquire derivatives-specific reference prices and funding information. | Planned |
+| 059 | Options Market Data Acquisition | Acquire options chains, quotes and any published greeks or implied volatility surfaces. | Planned |
+| 060 | Stream Multiplexing and Subscription Management | Manage many symbol and stream subscriptions within connection and rate constraints. | Planned |
+| 061 | Reconnection, Resubscription and Gap Detection | Detect disconnections and data gaps, then recover and backfill deterministically. | Planned |
+| 062 | Data Completeness Auditing | Continuously measure coverage and missing intervals rather than assuming feeds are complete. | Planned |
+| 063 | Market Data Normalization Layer | Normalise heterogeneous product feeds into consistent internal representations. | Planned |
+| 064 | Market Data Consolidation and Phase Gate Review | Reconcile the market data band and certify feed correctness before account integration. | Planned |
+
+---
+
+## Phases 065-080 — Account and Product Adapters
+
+Implements per-product account access, honouring the fact that each Binance
+product family has its own semantics, limits and availability.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 065 | Account Capability Discovery | Discover at runtime which products and permissions the configured account actually has. | Planned |
+| 066 | Spot Account Adapter | Implement spot account access including balances, trade history and account status. | Planned |
+| 067 | Spot Balance and Position View | Derive a consistent spot holdings view including locked and free balance semantics. | Planned |
+| 068 | Cross Margin Account Adapter | Implement cross margin account access, margin level and asset details. | Planned |
+| 069 | Isolated Margin Account Adapter | Implement isolated margin account access with per-pair isolation semantics. | Planned |
+| 070 | Margin Borrow and Interest Model | Model borrowing capacity, interest accrual and repayment obligations accurately. | Planned |
+| 071 | USDS-M Futures Account Adapter | Implement USDS-margined futures account access, balances and account configuration. | Planned |
+| 072 | USDS-M Position and Leverage Semantics | Model position mode, leverage, margin type and unrealised profit and loss correctly. | Planned |
+| 073 | COIN-M Futures Account Adapter | Implement coin-margined futures account access and balance semantics. | Planned |
+| 074 | COIN-M Contract and Delivery Semantics | Model contract multipliers, expiry and delivery behaviour for coin-margined products. | Planned |
+| 075 | Options Account Adapter | Implement options account access, positions and exercise-related information where documented. | Planned |
+| 076 | Portfolio Margin Account Adapter | Implement portfolio margin account access and unified margin semantics. | Planned |
+| 077 | Portfolio Margin Pro Assessment and Adapter | Verify actual availability and implement access only where genuinely supported. | Planned |
+| 078 | User Data Stream and Account Event Handling | Consume authenticated account event streams with correct listen key lifecycle handling. | Planned |
+| 079 | Unified Account Abstraction Layer | Provide a common account interface without hiding genuine product-specific differences. | Planned |
+| 080 | Account Adapter Consolidation and Phase Gate Review | Reconcile the account band and certify adapter correctness before execution work. | Planned |
+
+---
+
+## Phases 081-096 — Order Lifecycle and Execution Engine
+
+Builds order execution around the documented reality that a failed request does
+not prove a failed operation.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 081 | Order Domain Model and Types | Define the internal order model covering all supported types, sides and time-in-force values. | Planned |
+| 082 | Pre-Trade Validation Against Exchange Filters | Reject invalid orders locally before submission using the ingested exchange filters. | Planned |
+| 083 | Client Order Identifier and Idempotency Keys | Generate deterministic client order identifiers that make retries safe and traceable. | Planned |
+| 084 | Order State Machine | Model order states and legal transitions explicitly, including indeterminate states. | Planned |
+| 085 | Order Submission Pipeline | Implement submission with validation, limiting, timeout handling and structured auditing. | Planned |
+| 086 | Uncertain Execution State Resolution | Resolve timeouts and server errors by querying authoritative state rather than assuming failure. | Planned |
+| 087 | Order Cancellation and Replacement | Implement cancellation and cancel-replace semantics with correct race handling. | Planned |
+| 088 | Batch and Multi-Order Operations | Implement batch operations where documented, including partial failure handling. | Planned |
+| 089 | Conditional and Advanced Order Types | Support stop, trailing and other documented advanced order types per product. | Planned |
+| 090 | Algo Trading Interface Integration | Integrate the officially documented algorithmic order facilities where they add value. | Planned |
+| 091 | Margin Borrow and Repay Execution | Implement borrow and repay operations as first-class auditable actions. | Planned |
+| 092 | Leverage and Margin Mode Control | Implement safe, validated changes to leverage and margin mode with guard rails. | Planned |
+| 093 | Position Lifecycle Management | Track position opening, adjustment, reduction and closure across products. | Planned |
+| 094 | Fill and Execution Report Processing | Process fills and execution reports into accurate internal position and cost basis state. | Planned |
+| 095 | Order and Position Reconciliation Engine | Continuously reconcile local state against authoritative exchange state and repair divergence. | Planned |
+| 096 | Execution Consolidation and Phase Gate Review | Reconcile the execution band and certify order handling correctness. | Planned |
+
+---
+
+## Phases 097-112 — Point-in-Time Data Platform
+
+Guarantees that research can only ever see what was actually knowable at the
+time. This is the foundation that makes later validation trustworthy.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 097 | Storage Architecture Selection | Select the local storage engines and formats against the zero-budget and local-host constraints. | Planned |
+| 098 | Canonical Data Schemas | Define authoritative schemas for every dataset the system produces or consumes. | Planned |
+| 099 | Columnar Storage Layout and Partitioning | Define partitioning, file sizing and layout for efficient local analytical access. | Planned |
+| 100 | Dataset Catalog and Discovery | Build the catalogue that records what data exists, its coverage and its quality state. | Planned |
+| 101 | Point-in-Time Correctness Model | Define observation time versus event time and the rules that prevent lookahead. | Planned |
+| 102 | As-Of Join and Snapshot Semantics | Implement joins and snapshots that respect knowledge boundaries at every timestamp. | Planned |
+| 103 | Data Versioning and Immutability | Make datasets immutable and versioned so any research result can be re-derived exactly. | Planned |
+| 104 | Ingestion Pipeline Orchestration | Coordinate acquisition, validation and publication of datasets as an auditable pipeline. | Planned |
+| 105 | Data Quality Validation Rules | Encode schema, range, monotonicity and continuity checks as enforced quality gates. | Planned |
+| 106 | Outlier, Gap and Anomaly Detection | Detect suspicious data automatically instead of letting it silently enter research. | Planned |
+| 107 | Corporate Action and Symbol Change Handling | Handle delistings, renames and contract changes without corrupting historical series. | Planned |
+| 108 | Data Lineage and Provenance Tracking | Record where every dataset came from and how it was derived. | Planned |
+| 109 | Replay Engine for Historical Streams | Replay historical data in event order to drive deterministic simulation. | Planned |
+| 110 | Compression and Retention Policy | Define retention, compaction and archival so local storage stays bounded. | Planned |
+| 111 | Storage Performance Benchmarking | Measure read and write performance and tune layout against evidence. | Planned |
+| 112 | Data Platform Consolidation and Phase Gate Review | Reconcile the data band and certify point-in-time correctness before feature work. | Planned |
+
+---
+
+## Phases 113-128 — Technical Analysis and Feature Factory
+
+Produces the feature surface strategies and models consume, with multi-timeframe
+alignment handled as a correctness problem rather than a convenience.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 113 | Indicator Library Evaluation and Selection | Evaluate free indicator libraries for correctness, coverage, licence and Windows viability. | Planned |
+| 114 | TA-Lib Integration Layer | Wrap the native indicator library behind a typed interface with a pure-Python fallback path. | Planned |
+| 115 | Core Trend Indicator Set | Implement and validate moving average and trend-strength indicators against reference values. | Planned |
+| 116 | Momentum and Oscillator Indicator Set | Implement and validate momentum and oscillator indicators with correct warm-up handling. | Planned |
+| 117 | Volatility Indicator Set | Implement volatility measures used for sizing, stops and regime classification. | Planned |
+| 118 | Volume and Flow Indicator Set | Implement volume-derived and order-flow-derived indicators. | Planned |
+| 119 | Candlestick Pattern Recognition | Detect documented candlestick formations with explicit, testable definitions. | Planned |
+| 120 | Chart Pattern Detection | Detect larger structural formations with quantified rather than subjective criteria. | Planned |
+| 121 | Support, Resistance and Level Detection | Derive price levels algorithmically with reproducible parameters. | Planned |
+| 122 | Divergence Detection | Detect price and indicator divergences with precise, testable rules. | Planned |
+| 123 | Market Regime and Volatility State Features | Produce features describing trend, range and volatility regimes. | Planned |
+| 124 | Order Book Microstructure Features | Derive imbalance, depth and spread features from book and quote data. | Planned |
+| 125 | Derivatives-Specific Features | Derive basis, funding, open interest and term-structure features. | Planned |
+| 126 | Multi-Timeframe Feature Alignment | Align features across timeframes without leaking information backwards in time. | Planned |
+| 127 | Feature Registry and Metadata | Catalogue every feature with definition, parameters, warm-up cost and lineage. | Planned |
+| 128 | Feature Factory Consolidation and Phase Gate Review | Reconcile the feature band and certify leakage-free feature computation. | Planned |
+
+---
+
+## Phases 129-144 — Strategy Registry and Signal Composition
+
+Turns features into normalised, comparable signals and defines how multiple
+strategies combine without becoming an unauditable blend.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 129 | Strategy Interface Contract | Define the interface every strategy implements, including state and parameter handling. | Planned |
+| 130 | Strategy Registry and Discovery | Build registration, discovery and metadata for available strategies. | Planned |
+| 131 | Signal Representation and Normalization | Define a common signal representation so heterogeneous strategies are comparable. | Planned |
+| 132 | Baseline Trend-Following Strategy | Implement a reference trend strategy as a validation baseline for the framework. | Planned |
+| 133 | Baseline Mean-Reversion Strategy | Implement a reference mean-reversion strategy with explicit regime assumptions. | Planned |
+| 134 | Baseline Breakout Strategy | Implement a reference breakout strategy including false-breakout handling. | Planned |
+| 135 | Derivatives Basis and Funding Strategy | Implement a strategy exploiting documented derivatives-specific structure. | Planned |
+| 136 | Signal Confidence and Scoring Model | Attach calibrated confidence to signals rather than treating them as binary. | Planned |
+| 137 | Confluence and Ensemble Aggregation | Combine multiple signals with defined, auditable aggregation rules. | Planned |
+| 138 | Regime-Conditional Strategy Routing | Enable or suppress strategies based on detected market regime. | Planned |
+| 139 | Multi-Timeframe Signal Coordination | Coordinate signals across timeframes with explicit precedence and conflict resolution. | Planned |
+| 140 | Entry and Exit Rule Composition | Separate entry, exit, scaling and invalidation rules into composable units. | Planned |
+| 141 | Signal Filtering and Suppression | Apply liquidity, spread, session and event filters before signals reach execution. | Planned |
+| 142 | Strategy Parameter Schema | Define typed, validated parameter schemas that optimisation can safely search. | Planned |
+| 143 | Strategy Versioning and Provenance | Version strategies so any historical result maps to exact logic and parameters. | Planned |
+| 144 | Strategy Layer Consolidation and Phase Gate Review | Reconcile the strategy band and certify signal correctness before backtesting. | Planned |
+
+---
+
+## Phases 145-160 — Event-Driven Backtesting and Benchmarking
+
+Simulates trading with realistic costs. A backtest that ignores fees, spread,
+funding or liquidation is treated as a defect, not an approximation.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 145 | Backtest Engine Architecture | Design the event-driven engine and its strict separation from live execution. | Planned |
+| 146 | Event Loop and Clock Simulation | Implement deterministic event ordering and simulated time progression. | Planned |
+| 147 | Order Matching Simulation | Simulate fills against historical book and trade data with defensible assumptions. | Planned |
+| 148 | Fee Schedule Modeling | Model maker, taker and tier-dependent fees per product accurately. | Planned |
+| 149 | Spread and Slippage Modeling | Model spread cost and slippage from observed data rather than fixed guesses. | Planned |
+| 150 | Market Impact and Capacity Modeling | Estimate impact and the capital capacity beyond which results stop being achievable. | Planned |
+| 151 | Funding Rate Simulation | Apply historical funding payments to perpetual positions. | Planned |
+| 152 | Margin Interest and Borrow Cost Simulation | Apply borrowing and interest costs to margin positions. | Planned |
+| 153 | Liquidation Simulation | Simulate margin calls and liquidation using documented mechanics. | Planned |
+| 154 | Latency Modeling | Model decision, network and exchange latency and its effect on fills. | Planned |
+| 155 | Portfolio Accounting in Backtest | Maintain accurate multi-asset, multi-product accounting throughout simulation. | Planned |
+| 156 | Performance Metric Suite | Compute risk-adjusted return, drawdown, exposure and trade statistics consistently. | Planned |
+| 157 | Benchmark and Baseline Comparison | Compare every strategy against buy-and-hold and random baselines. | Planned |
+| 158 | Backtest Reproducibility and Seeding | Guarantee bit-identical reruns given identical inputs and seeds. | Planned |
+| 159 | Backtest Result Storage and Reporting | Persist results with full configuration and data lineage for later audit. | Planned |
+| 160 | Backtesting Consolidation and Phase Gate Review | Reconcile the backtesting band and certify simulation realism. | Planned |
+
+---
+
+## Phases 161-176 — Research Validation and Leakage Control
+
+Decides what counts as evidence. These phases define the gates that any
+candidate must pass before it is allowed to influence capital.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 161 | Leakage Taxonomy and Prevention Rules | Enumerate every leakage mechanism and the structural control that prevents each one. | Planned |
+| 162 | Train, Validation and Test Splitting Policy | Define chronological splitting rules that forbid shuffled splits on time series. | Planned |
+| 163 | Purged and Embargoed Cross-Validation | Implement purging and embargo so overlapping labels cannot leak across folds. | Planned |
+| 164 | Walk-Forward Evaluation Framework | Implement rolling and anchored walk-forward evaluation as the primary honesty test. | Planned |
+| 165 | Out-of-Sample Holdout Governance | Reserve and govern a final holdout, including limits on how often it may be consulted. | Planned |
+| 166 | Sample Size and Statistical Power Requirements | Define minimum trade and observation counts before a result may be believed. | Planned |
+| 167 | Multiple Testing and Selection Bias Control | Correct for the number of hypotheses tested during search and selection. | Planned |
+| 168 | Monte Carlo and Bootstrap Resampling | Estimate result distributions rather than trusting a single equity path. | Planned |
+| 169 | Parameter Sensitivity and Robustness Testing | Reject results that only survive on a knife-edge of parameter space. | Planned |
+| 170 | Stress Scenario Construction | Evaluate candidates against crashes, gaps, illiquidity and outage scenarios. | Planned |
+| 171 | Regime-Segmented Performance Analysis | Measure performance separately per regime instead of hiding it in an average. | Planned |
+| 172 | Transaction Cost Sensitivity Analysis | Determine the cost level at which an edge disappears entirely. | Planned |
+| 173 | Statistical Significance Testing Suite | Apply appropriate tests for time-series performance comparison. | Planned |
+| 174 | Research Result Reproducibility | Ensure every reported result can be regenerated from recorded inputs. | Planned |
+| 175 | Evidence Gate Definition | Codify the machine-checkable gates a candidate must pass to be promotable. | Planned |
+| 176 | Validation Consolidation and Phase Gate Review | Reconcile the validation band and certify the evidence standard before modelling. | Planned |
+
+---
+
+## Phases 177-192 — Supervised Machine Learning
+
+Applies supervised learning under the validation regime already established.
+Models are candidates for evidence, never sources of guarantees.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 177 | Prediction Problem Formulation | Define precisely what is predicted, over what horizon, and why it is tradable. | Planned |
+| 178 | Labeling Methodology | Implement labelling that reflects realistic exits and avoids lookahead. | Planned |
+| 179 | Dataset Assembly and Feature Matrices | Assemble point-in-time correct training datasets from the data platform. | Planned |
+| 180 | Feature Scaling and Encoding Pipelines | Fit transformations inside folds only, preventing preprocessing leakage. | Planned |
+| 181 | Baseline Linear and Tree Models | Establish simple baselines that complex models must actually beat. | Planned |
+| 182 | Gradient Boosting Model Integration | Integrate gradient boosting with honest CPU versus GPU capability assessment. | Planned |
+| 183 | Neural Network Model Integration | Integrate neural models where evidence justifies their additional complexity. | Planned |
+| 184 | Sequence Model Exploration | Evaluate sequence architectures against simpler alternatives on equal terms. | Planned |
+| 185 | Symbol-Specific Model Specialization | Determine when per-symbol models beat pooled models given available sample size. | Planned |
+| 186 | Regime-Specific Model Specialization | Determine when per-regime specialisation is justified by evidence. | Planned |
+| 187 | Probability Calibration | Calibrate predicted probabilities so they can be used for sizing decisions. | Planned |
+| 188 | Model Evaluation Metric Suite | Evaluate models on economically meaningful metrics, not accuracy alone. | Planned |
+| 189 | Feature Importance and Interpretability | Explain model behaviour well enough to detect spurious or leaked features. | Planned |
+| 190 | Model Serialization and Registry | Persist models with full metadata, training lineage and reproducibility information. | Planned |
+| 191 | Inference Pipeline and Latency Budget | Serve predictions within the latency the trading cadence allows. | Planned |
+| 192 | Supervised Learning Consolidation and Phase Gate Review | Reconcile the supervised band and certify model governance. | Planned |
+
+---
+
+## Phases 193-208 — Reinforcement Learning
+
+Explores reinforcement learning where it is justified, including the honest
+possibility that it is not.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 193 | Reinforcement Learning Applicability Assessment | Decide, with evidence, where reinforcement learning beats supervised alternatives. | Planned |
+| 194 | Gymnasium Trading Environment Design | Implement a standards-compliant trading environment with correct episode semantics. | Planned |
+| 195 | Observation Space Construction | Define observations that contain no future information and are properly scaled. | Planned |
+| 196 | Action Space Design | Define an action space that maps cleanly onto executable, valid orders. | Planned |
+| 197 | Reward Function Design | Design rewards reflecting risk-adjusted economics rather than raw profit. | Planned |
+| 198 | Risk and Constraint Penalties | Encode risk limits into the environment so violations are learned against. | Planned |
+| 199 | Environment Determinism and Seeding | Guarantee reproducible episodes under fixed seeds. | Planned |
+| 200 | Environment Validation and Sanity Checks | Verify the environment cannot be exploited through simulation artefacts. | Planned |
+| 201 | PPO Agent Integration | Integrate a policy-gradient agent with documented, versioned hyperparameters. | Planned |
+| 202 | Alternative Algorithm Evaluation | Compare alternative free algorithms on equal footing before committing. | Planned |
+| 203 | Training Loop and Checkpointing | Implement resumable training with checkpointing and run metadata. | Planned |
+| 204 | Vectorized Environment Scaling | Scale environment throughput within local hardware limits. | Planned |
+| 205 | CPU Versus GPU Training Benchmark | Measure which reinforcement learning workloads actually benefit from the GPU. | Planned |
+| 206 | Offline Policy Evaluation | Evaluate learned policies offline before any simulated capital is committed. | Planned |
+| 207 | Policy Robustness and Stress Testing | Test policies against regimes and shocks absent from training data. | Planned |
+| 208 | Reinforcement Learning Consolidation and Phase Gate Review | Reconcile the reinforcement band and certify policy governance. | Planned |
+
+---
+
+## Phases 209-224 — Optimization and Parameter Governance
+
+Searches parameter space without letting the search itself manufacture the
+result. Optimisation is treated as a primary source of overfitting risk.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 209 | Optimization Objective Definition | Define objectives that reward robustness rather than peak historical return. | Planned |
+| 210 | Search Space Specification | Specify typed, bounded search spaces derived from strategy parameter schemas. | Planned |
+| 211 | Optuna Study Infrastructure | Establish persistent studies with durable local storage and resumability. | Planned |
+| 212 | Sampler Selection and Configuration | Select samplers appropriate to the search space and evaluation cost. | Planned |
+| 213 | Pruning Strategy Configuration | Terminate hopeless trials early without prematurely discarding slow starters. | Planned |
+| 214 | Multi-Objective Optimization | Optimise return, risk and stability jointly rather than collapsing them too early. | Planned |
+| 215 | Overfitting Control in Optimization | Constrain search so results survive out-of-sample evaluation. | Planned |
+| 216 | Nested and Walk-Forward Optimization | Nest optimisation inside walk-forward so selection itself is validated. | Planned |
+| 217 | Distributed and Parallel Trial Execution | Run trials in parallel within local CPU, GPU and memory limits. | Planned |
+| 218 | Resource-Aware Trial Scheduling | Schedule trials against measured resource cost rather than assumed cost. | Planned |
+| 219 | Early Termination Rules | Define when an entire study should stop rather than continue burning resources. | Planned |
+| 220 | Optimization Result Analysis | Analyse result surfaces for plateaus and instability, not just best values. | Planned |
+| 221 | Parameter Set Versioning | Version parameter sets so any deployed configuration is traceable. | Planned |
+| 222 | Parameter Promotion Criteria | Define what a parameter set must prove before it may be used. | Planned |
+| 223 | Optimization Audit Trail | Record every study, trial and decision for later audit. | Planned |
+| 224 | Optimization Consolidation and Phase Gate Review | Reconcile the optimisation band and certify anti-overfitting controls. | Planned |
+
+---
+
+## Phases 225-240 — Continual and Autonomous Learning
+
+Lets the system adapt over time under governance. Adaptation must never mean
+"change anything until recent backtest profit increases".
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 225 | Model Registry and Lifecycle States | Define registered, candidate, shadow, champion, retired and rejected lifecycle states. | Planned |
+| 226 | Data Drift Detection | Detect distribution shift in inputs relative to training conditions. | Planned |
+| 227 | Concept Drift Detection | Detect decay in the relationship between features and outcomes. | Planned |
+| 228 | Performance Degradation Monitoring | Distinguish genuine degradation from ordinary variance before reacting. | Planned |
+| 229 | Retraining Trigger Policy | Define evidence-based triggers for retraining instead of blind periodic retraining. | Planned |
+| 230 | Scheduled Retraining Pipeline | Automate retraining end to end with full lineage capture. | Planned |
+| 231 | Candidate Model Construction | Produce challengers under the same validation regime as any manual research. | Planned |
+| 232 | Champion-Challenger Evaluation | Compare challengers against the incumbent on identical, fair evaluation. | Planned |
+| 233 | Promotion Gate Enforcement | Enforce the evidence gates mechanically so no candidate can bypass them. | Planned |
+| 234 | Shadow Evaluation of Challengers | Run challengers without capital until they earn promotion. | Planned |
+| 235 | Automated Rollback Mechanism | Revert to the previous champion automatically when degradation is confirmed. | Planned |
+| 236 | Adaptation Audit Trail | Record every autonomous change with its justification and evidence. | Planned |
+| 237 | Governance Boundary Enforcement | Make it structurally impossible for adaptation to relax absolute risk ceilings. | Planned |
+| 238 | Catastrophic Forgetting and Stability Controls | Prevent retraining from destroying previously validated capability. | Planned |
+| 239 | Autonomous Research Refresh Cycle | Schedule recurring data collection, research and re-evaluation autonomously. | Planned |
+| 240 | Continual Learning Consolidation and Phase Gate Review | Reconcile the continual learning band and certify governance integrity. | Planned |
+
+---
+
+## Phases 241-256 — Portfolio and Risk Management
+
+Protects capital. The upper risk bounds defined here are immutable and are not
+subject to autonomous modification.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 241 | Risk Constraint Taxonomy | Classify constraints as immutable ceilings, policy limits or tunable preferences. | Planned |
+| 242 | Immutable Upper Risk Bound Enforcement | Implement absolute ceilings no strategy, model or optimiser can raise. | Planned |
+| 243 | Position Sizing Models | Implement sizing driven by volatility, confidence and account equity. | Planned |
+| 244 | Per-Trade Risk Limits | Bound the loss any single position can inflict. | Planned |
+| 245 | Portfolio Exposure Aggregation | Aggregate exposure across products, symbols and directions into one view. | Planned |
+| 246 | Correlation and Concentration Control | Prevent apparent diversification that is actually a single concentrated bet. | Planned |
+| 247 | Leverage and Margin Utilization Limits | Bound leverage and margin usage across all margin-bearing products. | Planned |
+| 248 | Liquidation Distance Monitoring | Continuously monitor distance to liquidation and act before it is reached. | Planned |
+| 249 | Drawdown Control and Circuit Breakers | Halt or reduce trading automatically when drawdown thresholds are breached. | Planned |
+| 250 | Loss Streak and Cooldown Rules | Impose cooldowns after abnormal loss sequences. | Planned |
+| 251 | Capital Allocation Across Strategies | Allocate capital by validated evidence and correlation, not recent profit alone. | Planned |
+| 252 | Cross-Product Risk Netting | Account for offsetting exposure across products without understating true risk. | Planned |
+| 253 | Pre-Trade Risk Gate | Make every order pass a mandatory risk check that cannot be bypassed. | Planned |
+| 254 | Post-Trade Risk Reassessment | Reassess portfolio risk after every fill and react to breaches. | Planned |
+| 255 | Kill Switch and Emergency Flatten | Provide a reliable emergency stop that halts trading and can flatten exposure. | Planned |
+| 256 | Risk Consolidation and Phase Gate Review | Reconcile the risk band and certify capital protection before autonomy. | Planned |
+
+---
+
+## Phases 257-272 — Autonomous Orchestration
+
+Runs everything continuously and safely on a single Windows host, with explicit
+scheduling instead of an uncontrolled loop of expensive jobs.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 257 | Orchestrator Architecture | Design the long-lived process that owns and supervises all subsystems. | Planned |
+| 258 | Task Graph and Dependency Model | Model jobs and their dependencies explicitly as a directed graph. | Planned |
+| 259 | Job Scheduling Engine | Schedule recurring work by priority, dependency and resource availability. | Planned |
+| 260 | Resource Governor for CPU and GPU | Prevent concurrent heavy jobs from exhausting the host or starving trading. | Planned |
+| 261 | Concurrency and Isolation Model | Define threading, process and isolation boundaries between subsystems. | Planned |
+| 262 | Subsystem Lifecycle Management | Start, stop and restart subsystems in correct dependency order. | Planned |
+| 263 | Supervisor and Watchdog | Detect hung or dead components and recover them automatically. | Planned |
+| 264 | Failure Detection and Classification | Classify failures as transient, persistent or fatal and respond accordingly. | Planned |
+| 265 | Retry and Recovery Policies | Define per-subsystem recovery behaviour including give-up conditions. | Planned |
+| 266 | Persistent Orchestration State | Persist scheduling and subsystem state so restarts resume correctly. | Planned |
+| 267 | Crash Recovery and Resumption | Recover coherently from unexpected termination without duplicating work. | Planned |
+| 268 | Graceful Shutdown and Draining | Shut down cleanly without abandoning in-flight orders or corrupting state. | Planned |
+| 269 | Long-Duration Stability Controls | Prevent leaks, unbounded growth and degradation over multi-day runs. | Planned |
+| 270 | Windows Service and Continuity Behavior | Survive sleep, updates, session changes and other Windows host events. | Planned |
+| 271 | Runtime Profile Selection | Enable the correct subsystem set for the selected paper or live profile. | Planned |
+| 272 | Orchestration Consolidation and Phase Gate Review | Reconcile the orchestration band and certify unattended operation. | Planned |
+
+---
+
+## Phases 273-288 — Telegram Interface and Operations
+
+Makes the system observable and controllable by its operator, and survivable
+when something goes wrong.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 273 | Telegram Bot Integration | Integrate the official Bot API as the operator communication channel. | Planned |
+| 274 | Authentication and Authorization of Operators | Ensure only authorised chat identities can issue commands. | Planned |
+| 275 | Command Surface Design | Design a clear, safe command set with confirmation for dangerous actions. | Planned |
+| 276 | Status and Reporting Commands | Expose positions, performance, health and current activity on demand. | Planned |
+| 277 | Control and Intervention Commands | Allow pausing, resuming, flattening and emergency stop from the operator channel. | Planned |
+| 278 | Alert Taxonomy and Routing | Classify alerts by severity and route them so critical events are never buried. | Planned |
+| 279 | Alert Throttling and Deduplication | Prevent alert storms from destroying the operator's attention. | Planned |
+| 280 | Operational Metrics Collection | Collect health, latency, throughput and error metrics locally. | Planned |
+| 281 | Audit Log and Immutable Event Trail | Record every decision and action in an append-only, reviewable trail. | Planned |
+| 282 | Log Rotation and Retention | Bound log growth while preserving what audit and debugging require. | Planned |
+| 283 | Backup and Restore Procedures | Back up configuration, state, models and data, and verify restoration works. | Planned |
+| 284 | Disaster Recovery Runbook | Document and rehearse recovery from total host loss. | Planned |
+| 285 | Incident Response Procedures | Define triage and response for outages, divergence and unexpected losses. | Planned |
+| 286 | Maintenance Mode and Scheduled Downtime | Support safe maintenance without abandoning open positions. | Planned |
+| 287 | Operational Documentation and Runbooks | Write the procedures an operator follows during normal and abnormal operation. | Planned |
+| 288 | Operations Consolidation and Phase Gate Review | Reconcile the operations band and certify operability. | Planned |
+
+---
+
+## Phases 289-304 — Windows Launchers and System Integration
+
+Delivers the two user-facing entry points and proves the assembled system runs
+for days without intervention.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 289 | Launcher Contract Specification | Finalise exactly what each launcher must do, verify and refuse to do. | Planned |
+| 290 | Repository and Prerequisite Discovery | Locate the repository and validate Windows prerequisites reliably. | Planned |
+| 291 | Interactive Configuration Wizard | Collect missing configuration interactively with validation and safe defaults. | Planned |
+| 292 | Credential Collection and Persistence Flow | Collect and store credentials securely, never writing them into the repository. | Planned |
+| 293 | Paper Launcher Implementation | Implement the paper entry point selecting demo, testnet or simulated execution correctly. | Planned |
+| 294 | Live Launcher Implementation | Implement the live entry point with mandatory preflight and risk verification. | Planned |
+| 295 | Runtime Profile Wiring | Wire launcher selection through to orchestrator profile and product routing. | Planned |
+| 296 | Subsystem Startup Ordering | Start every required subsystem in correct dependency order with health gating. | Planned |
+| 297 | Preflight Verification Gate | Block startup when environment, credentials, connectivity or risk checks fail. | Planned |
+| 298 | Full-System Integration Testing | Test the assembled system end to end rather than component by component. | Planned |
+| 299 | End-to-End Paper Trading Validation | Validate the complete decision-to-execution path in a non-production environment. | Planned |
+| 300 | Long-Duration Soak Testing | Run continuously for days and measure stability, drift and resource behaviour. | Planned |
+| 301 | Resource Consumption Profiling | Profile CPU, GPU, memory, disk and network against host capacity. | Planned |
+| 302 | Failure Injection and Resilience Testing | Inject disconnections, errors and restarts to prove recovery actually works. | Planned |
+| 303 | User Operating Guide | Write the guide the operator uses to run GLOBIN day to day. | Planned |
+| 304 | Integration Consolidation and Phase Gate Review | Reconcile the integration band and certify readiness for live evaluation. | Planned |
+
+---
+
+## Phases 305-320 — Live Readiness and Staged Activation
+
+Moves to real capital gradually and reversibly. Nothing here is a single
+irreversible switch.
+
+| Phase | Title | Purpose | Status |
+|:-----:|-------|---------|:------:|
+| 305 | Live Readiness Criteria Definition | Define the objective, measurable conditions required before live trading. | Planned |
+| 306 | Shadow Mode Execution | Generate live decisions without sending orders and compare against reality. | Planned |
+| 307 | Live Order Path Verification | Verify the real order path with minimal size under close supervision. | Planned |
+| 308 | Minimal Capital Canary Deployment | Trade the smallest meaningful capital to expose real-world differences safely. | Planned |
+| 309 | Live Reconciliation Validation | Prove local state matches exchange state continuously under live conditions. | Planned |
+| 310 | Staged Capital Progression Policy | Define the evidence required before each capital increase. | Planned |
+| 311 | Live Risk Acceptance Criteria | Define the risk behaviour live trading must demonstrate to continue. | Planned |
+| 312 | Live Performance Acceptance Criteria | Define the performance evidence required to justify continued operation. | Planned |
+| 313 | Failure Drill Execution | Rehearse outages, disconnections and emergency stops against live conditions. | Planned |
+| 314 | Rollback and Deactivation Procedures | Ensure live trading can be wound down safely and quickly at any point. | Planned |
+| 315 | Live Monitoring and Escalation | Operate continuous monitoring with defined escalation thresholds. | Planned |
+| 316 | Regulatory and Account Compliance Review | Confirm operation remains within Binance terms and applicable obligations. | Planned |
+| 317 | Operational Handover Documentation | Document everything required to operate the system without its authors. | Planned |
+| 318 | Full System Audit | Audit the complete system against every ADR and stated invariant. | Planned |
+| 319 | Final Documentation Synchronization | Bring all documentation into exact agreement with the implemented system. | Planned |
+| 320 | Programme Completion and Final Acceptance | Verify all acceptance criteria and formally close the 320-phase programme. | Planned |
+
+---
+
+## Programme invariants
+
+These hold for every phase and are enforced by tests where practical:
+
+- Development happens on `master` only, and every completed phase is pushed to
+  `origin/master` with a clean working tree.
+- The runtime depends on free and open components only.
+- Data comes from officially documented interfaces; scraping is prohibited.
+- Binance Global is the only venue in scope.
+- No prediction is presented as a guarantee. The objective is a measurable
+  probabilistic edge after realistic costs and out-of-sample validation.
+- Autonomous adaptation may never raise the system's absolute risk ceilings.
+

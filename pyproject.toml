@@ -1,0 +1,134 @@
+# ---------------------------------------------------------------------------
+# GLOBIN project metadata.
+#
+# Phase 1 scope note: this file deliberately declares ZERO runtime dependencies.
+# That is not an oversight — it is an enforced invariant. `tests/test_packaging_
+# contract.py` asserts `project.dependencies == []`, so any future phase that
+# adds a runtime dependency must do so consciously and update the contract test.
+# Dependency management and lockfiles are the subject of Phases 17-32.
+# ---------------------------------------------------------------------------
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "globin"
+description = "Engineering foundation for GLOBIN, a local autonomous Binance Global research and trading system."
+readme = "README.md"
+# Floor chosen from evidence, not preference. The strictest constraint among
+# the libraries scheduled for later phases is XGBoost (>=3.12); PyTorch is
+# >=3.10, Gymnasium/Stable-Baselines3 >=3.10, Optuna >=3.9. Choosing 3.12 now
+# avoids a breaking bump when Phase 177+ introduces XGBoost. See
+# docs/research/phase_001_sources.md.
+requires-python = ">=3.12"
+dynamic = ["version"]
+keywords = ["binance", "trading", "research", "backtesting", "quantitative"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Private :: Do Not Upload",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+# No runtime dependencies. This is an invariant, not a stub. See note above.
+dependencies = []
+
+[project.optional-dependencies]
+# Free/open-source development toolchain only (ADR-0003).
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.hatch.version]
+# Single source of truth for the version is the package itself.
+path = "src/globin/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/globin"]
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+# `pythonpath` lets the whole suite run against the source tree with no build
+# and no install step. Phase 1 intentionally performs no packaging build; that
+# verification belongs to Phases 17-32.
+pythonpath = ["src"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
+filterwarnings = ["error"]
+
+# ---------------------------------------------------------------------------
+# ruff — linting and formatting
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+    "PTH",  # flake8-use-pathlib
+    "ARG",  # flake8-unused-arguments
+    "TID",  # flake8-tidy-imports
+    "RET",  # flake8-return
+    "TC",   # flake8-type-checking
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["globin"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# ---------------------------------------------------------------------------
+# mypy — static typing
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/globin", "tests"]
+warn_unreachable = true
+show_error_codes = true
+pretty = true
+
+# ---------------------------------------------------------------------------
+# coverage
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["globin"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]

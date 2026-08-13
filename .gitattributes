@@ -1,0 +1,52 @@
+# ---------------------------------------------------------------------------
+# GLOBIN .gitattributes
+#
+# The primary development machine has `core.autocrlf=true` configured at the
+# Git system level. Left alone, that setting decides line endings per-machine,
+# which makes diffs depend on who checked the file out. These rules override
+# it so the REPOSITORY always stores LF, regardless of local configuration,
+# while Windows-native script types are still checked out with CRLF because
+# cmd.exe and PowerShell are the primary runtime hosts (see ADR-0009).
+# ---------------------------------------------------------------------------
+
+# Default: normalise everything to LF inside the repository.
+* text=auto eol=lf
+
+# --- Windows-native scripts: must be CRLF in the working tree ---------------
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+*.psm1 text eol=crlf
+
+# --- Explicit text types ----------------------------------------------------
+*.py    text diff=python
+*.pyi   text diff=python
+*.md    text diff=markdown
+*.toml  text
+*.cfg   text
+*.ini   text
+*.json  text
+*.yml   text
+*.yaml  text
+*.txt   text
+*.sh    text eol=lf
+
+# --- Binary types: never diff, never normalise ------------------------------
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.7z    binary
+*.parquet binary
+*.feather binary
+*.pkl   binary
+*.pt    binary
+*.pth   binary
+*.onnx  binary
+*.db    binary
+*.sqlite binary
+*.duckdb binary

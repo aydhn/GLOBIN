@@ -1,0 +1,124 @@
+# ---------------------------------------------------------------------------
+# GLOBIN .gitignore
+#
+# Priority order of concerns:
+#   1. Secrets must never be committed (see docs/SOURCE_POLICY.md, AGENTS.md).
+#   2. Generated/derived artefacts must never be committed.
+#   3. Local environment state must never be committed.
+#
+# Entries for directories that do not exist yet (data/, models/, logs/, ...)
+# are intentional: they are the landing zones defined by later phases, and the
+# ignore rule must exist BEFORE the first byte of runtime output is written.
+# ---------------------------------------------------------------------------
+
+# --- Secrets and credentials (highest priority) ----------------------------
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials/
+credentials.json
+api_keys.json
+# Precise names only. Broad globs such as `*_secret*` are deliberately avoided:
+# they would also swallow legitimate source and documentation files whose names
+# merely contain the word (e.g. a document about secret handling).
+secrets.json
+secrets.toml
+secrets.yaml
+secrets.yml
+*.secret
+*.token
+telegram_token.txt
+
+# --- Python bytecode / caches ----------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# --- Python build / packaging artefacts ------------------------------------
+build/
+dist/
+sdist/
+wheels/
+*.egg-info/
+*.egg
+.eggs/
+MANIFEST
+
+# --- Virtual environments ---------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# --- Test / coverage / type / lint caches -----------------------------------
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+.tox/
+.nox/
+
+# --- Runtime output directories owned by later phases -----------------------
+# Market data, model binaries, optimisation studies and logs are large,
+# regenerable and/or account-specific. They are local state, never source.
+data/
+datasets/
+logs/
+models/
+artifacts/
+checkpoints/
+runs/
+mlruns/
+optuna_studies/
+backtest_results/
+reports/
+backups/
+*.db
+*.sqlite
+*.sqlite3
+*.duckdb
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.pt
+*.pth
+*.onnx
+*.zip
+
+# --- Editors / IDEs ---------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.spyderproject
+.ropeproject
+
+# --- Operating system -------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+.DS_Store
+
+# --- Jupyter ----------------------------------------------------------------
+.ipynb_checkpoints/
+*.ipynb_checkpoints
