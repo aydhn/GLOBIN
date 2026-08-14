@@ -30,6 +30,7 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/CONFIGURATION_POLICY.md",
     "docs/VALUE_TYPES_POLICY.md",
     "docs/TIME_POLICY.md",
+    "docs/PRECISION_POLICY.md",
     "docs/GIT_WORKFLOW.md",
     "docs/GLOSSARY.md",
     "docs/architecture/README.md",
@@ -53,6 +54,7 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/research/phase_007_sources.md",
     "docs/research/phase_008_sources.md",
     "docs/research/phase_009_sources.md",
+    "docs/research/phase_010_sources.md",
 )
 
 #: Minimum byte length for a document to count as substantive rather than a
@@ -110,6 +112,15 @@ REQUIRED_CONCEPTS: dict[str, tuple[str, ...]] = {
         "inject",
         "floor",
         "naive",
+    ),
+    "docs/PRECISION_POLICY.md": (
+        "exact",
+        "rounding",
+        "tick",
+        "step",
+        "increment",
+        "context",
+        "refus",
     ),
     "docs/GIT_WORKFLOW.md": ("master", "origin/master", "clean", "push"),
     "docs/engineering/ENGINEERING_CONTRACT.md": (

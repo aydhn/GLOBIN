@@ -332,3 +332,37 @@ to measure how long something took.
 which is what Binance publishes. A **projection** of an `Instant` rather than the
 way one is stored, and it **floors** — a truncated timestamp has already
 happened, whereas a rounded-up one may not have.
+
+---
+
+## Precision
+
+Full descriptions live in [`PRECISION_POLICY.md`](PRECISION_POLICY.md); these are
+the one-line definitions.
+
+**Exact regime** — the set of values where representation error is a correctness
+problem rather than a rounding curiosity: balances, sizes, prices, notional,
+fees, and every refusal computed from them. Carried as `Decimal` inside a
+`Quantity` or a `Price`. The **approximate regime** is everything whose result is
+never itself money — indicator values, model features, statistics — and it may
+use `float`.
+
+**Exact or refused** — the rule that an arithmetic operation returns the
+mathematically exact answer or raises, and never a rounded one. It is why
+`Quantity` addition takes no rounding mode: it never rounds.
+
+**Increment** ⚠ *commonly confused* — a grid spacing. One type for both a **tick
+size** (the grid a price must sit on) and a **step size** (the grid a quantity
+must sit on), because they are the same object applied to different things. It
+carries **no denomination**: which market a tick belongs to is venue data, owned
+by Phases 049-050.
+
+**Rounding mode** — the direction a magnitude moves when it is put onto a grid.
+Always a required argument, never a default. Four exist: `FLOOR`, `CEILING`,
+`HALF_EVEN`, and `EXACT` — which is not a rounding mode at all but the assertion
+that no rounding is needed.
+
+**Ambient context** — the thread-local `decimal.Context` that every `Decimal`
+*operator* silently reads. GLOBIN never uses one: every operation runs on a
+`Context` built for that call, and an architecture test refuses `getcontext`,
+`setcontext` and `localcontext` anywhere in the package.

@@ -175,7 +175,8 @@ class Instant:
         changed direction at the epoch would be a latent surprise rather than a
         decision.
 
-        This is not the rounding policy Phase 010 owns. That phase decides where
+        This is not the rounding policy `globin.domain.precision` holds. That
+        module decides where
         exact decimal arithmetic is mandatory for *prices and quantities*, and
         how tick and step sizes round. This is a lossy encoding of a timestamp
         into the unit a venue publishes, and the two do not constrain each other.

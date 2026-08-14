@@ -161,6 +161,67 @@ jobs:
         # exercising the CRLF rules in `.gitattributes`.
         run: python -m tools.quality shards
 
+  evidence:
+    name: Test evidence
+    # After the canonical gate, for the same reason the other two are: evidence
+    # about a tree that does not lint or type-check is evidence about something
+    # nobody will merge.
+    needs: quality
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Install what the harness launches
+        # No ruff and no mypy: the harness lints nothing and type-checks nothing.
+        # `pytest-cov` because the child passes `--cov`, and `hypothesis` because
+        # it is given `--hypothesis-profile=ci`. Same pins as every other job.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pytest==9.0.3" "pytest-cov==7.1.0" "hypothesis==6.165.7"
+
+      - name: Produce the test evidence
+        # Writes the step summary itself, through $GITHUB_STEP_SUMMARY, using the
+        # same code path that writes nothing when the variable is unset. There is
+        # no CI-only reporting logic here.
+        run: python -m tools.quality evidence
+
+      - name: Verify the evidence
+        # `always()`, so a failing suite still has its evidence checked before it
+        # is uploaded. This is NOT `continue-on-error`: the step's own failure
+        # still fails the job. The two look alike and are opposites, and
+        # `tests/contract/test_evidence_contract.py` pins the difference.
+        if: always()
+        run: python -m tools.quality.evidence verify
+
+      - name: Upload the evidence
+        # `always()` for the same reason, and it is the load-bearing one: a run
+        # that failed is exactly when somebody needs the JUnit report and the
+        # timings. Uploading them does not make the job pass — the steps above
+        # have already decided that.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-evidence-windows-py314
+          # Exactly the five evidence files. No caches, no virtual environment,
+          # no HTML coverage report — that last one is large and only useful
+          # interactively, and an artifact is a thing people download.
+          path: .globin/evidence/
+          # Explicit rather than inherited from the repository default, which a
+          # setting nobody remembers could change under this workflow.
+          retention-days: 30
+          # A run that produced nothing has already failed above; saying so here
+          # too turns a confusing empty artifact into a named error.
+          if-no-files-found: error
+
   hygiene:
     name: Pre-commit hooks
     runs-on: windows-latest

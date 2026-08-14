@@ -207,9 +207,10 @@ produces them — and the loss is named rather than prevented.
 The collision is superficially plausible and worth answering directly.
 
 Phase 010 owns *decimal arithmetic*: where `Decimal` is mandatory versus float,
-and how tick and step sizes round. Its subject is money-shaped magnitudes whose
-rounding is a financial decision — a tick size is set by a venue, and a rounding
-mode changes what you pay.
+and how tick and step sizes round. It is delivered, in
+[`PRECISION_POLICY.md`](PRECISION_POLICY.md). Its subject is money-shaped
+magnitudes whose rounding is a financial decision — a tick size is set by a
+venue, and a rounding mode changes what you pay.
 
 This is integer floor division between two exact integer grids, microseconds to
 milliseconds. It constructs no `Decimal` and reads no thread-local context, so
@@ -230,7 +231,7 @@ under the ambient decimal context and make it Phase 010's problem retroactively.
 
 | Question | Owning phase |
 |---|---|
-| Where exact decimal arithmetic is mandatory, and how prices round | 010 |
+| Where exact decimal arithmetic is mandatory, and how prices round | 010, delivered — [`PRECISION_POLICY.md`](PRECISION_POLICY.md) |
 | Canonical identifiers for runs and orders | 011 |
 | How a timestamp is serialised and how that format may evolve | 012 |
 | Server time synchronisation, drift measurement and the response to skew | 040 |

@@ -46,6 +46,7 @@ python -m tools.quality full
 | `coverage` | Full suite with branch coverage and its floor | Before delivery |
 | `shards` | The suite partitioned N ways, each shard its own process | Proving no test depends on sharing a process with another |
 | `mutation` | Mutation testing of the declared targets, against the baseline | Proving the tests would notice a change |
+| `evidence` | One run, recorded as JUnit XML, coverage reports, a digested manifest and checksums | Producing something a machine can read and a person can check later |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
 

@@ -28,6 +28,7 @@ IMPORTABLE_MODULES: tuple[str, ...] = (
     "globin.domain.clock",
     "globin.domain.configuration",
     "globin.domain.observability",
+    "globin.domain.precision",
     "globin.domain.values",
     "globin.ports",
     "globin.ports.architecture",

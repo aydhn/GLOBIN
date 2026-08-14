@@ -111,6 +111,25 @@ python_functions = ["test_*"]
 # An xfail that unexpectedly passes is a failure, not a curiosity. Without this
 # a fixed bug leaves its test permanently green-but-lying.
 xfail_strict = true
+# JUnit XML, for the evidence gate. All four keys are INERT unless a run passes
+# `--junitxml`, so no existing gate changes what it does by their presence —
+# which is how ADR-0032 condition 5 survives an edit to shared configuration.
+#
+# `junit_logging = "no"` is the load-bearing one. It keeps captured stdout,
+# stderr and log records OUT of the XML. A test that printed an environment
+# variable while diagnosing something would otherwise put it in a file CI
+# uploads as an artifact, and scrubbing afterwards is strictly worse than not
+# capturing: the redaction check in `tools/quality/evidence` is a backstop, not
+# the mechanism.
+#
+# `junit_duration_report = "total"` is pytest's own default, restated rather
+# than inherited so the choice is visible. "total" is setup + call + teardown,
+# which is the number that answers "how long did this test cost the suite" —
+# the question the evidence is for. "call" would hide an expensive fixture.
+junit_family = "xunit2"
+junit_suite_name = "globin"
+junit_logging = "no"
+junit_duration_report = "total"
 
 # The taxonomy. The first six are levels and are mutually exclusive: a test's
 # directory under `tests/` decides which one it carries, applied automatically in
@@ -340,4 +359,16 @@ tests = [
     "tests/unit/test_values.py",
     "tests/property/test_values_properties.py",
     "tests/contract/test_values_contract.py",
+]
+
+[[tool.globin.mutation.target]]
+# The Phase 010 precision rules: pure, branch-dense, and the module where a
+# missing boundary test would let a rounding happen in the wrong direction —
+# which is the failure this phase exists to prevent and the one a reader of the
+# result could not detect.
+module = "src/globin/domain/precision.py"
+tests = [
+    "tests/unit/test_precision.py",
+    "tests/property/test_precision_properties.py",
+    "tests/contract/test_precision_contract.py",
 ]

@@ -77,3 +77,40 @@ module = "src/globin/domain/values.py"
   suite asserts frozen, which is the property that carries behaviour, and this
   one carries none. See the note above this table.
   """
+
+[[target]]
+module = "src/globin/domain/precision.py"
+
+# Survivors recorded after reading each one, not pasted from the harness output.
+# The harness cannot write this file and fills every reason with a placeholder
+# that tests/contract/test_mutation_contract.py refuses, so an unread block
+# cannot reach the repository.
+#
+# The first run of this target produced four survivors. Two of them were real
+# test gaps at the inclusive edge of a bound, and they are not listed below
+# because tests were written instead: `test_an_increment_accepts_a_step_exactly
+# _on_its_bounds` now pins that `>` is not `>=` in both guards. Recording those
+# two as arguments would have been the easy option and the wrong one.
+
+  [[target.survivor]]
+  id = "Increment::boolean-constant::True->False::1"
+  reason = """
+  `slots=True` -> `slots=False` on the Increment dataclass. The same mutant as
+  the four recorded against `values.py`, and the same argument: `frozen=True`
+  already refuses every assignment, the suite asserts frozen, and slotted-ness
+  changes no comparison, hash or rendering. See the note above that table; if a
+  later phase states the slots contract for every frozen dataclass at once,
+  this entry should disappear with the others rather than alone.
+  """
+
+  [[target.survivor]]
+  id = "_rounds_up::comparison::Gt->GtE::0"
+  reason = """
+  `doubled > to.step` -> `doubled >= to.step`, and it is an equivalent mutant
+  rather than a missing test. The line is reachable only inside `if doubled !=
+  to.step`, so on every path that evaluates it the two operators agree by
+  construction. No input can distinguish them, and a test claiming to would be
+  asserting something untrue about the code. The equality case is the half-even
+  tie, which the branch above handles and which two unit tests pin in both
+  directions.
+  """

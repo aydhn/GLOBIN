@@ -128,6 +128,29 @@ _COVERAGE = Step(
 # example database left by the mutant before it.
 _MUTATION = Step("mutation", ("pytest", "hypothesis"), ("-m", "tools.quality.mutation"))
 
+# Deterministic test evidence. Run the suite once, serially, writing JUnit XML
+# and coverage; read both back; record what happened in a versioned, digested
+# manifest; and checksum everything for the artifact CI uploads.
+#
+# It buys ANSWERABILITY rather than time or coverage. `full` already says
+# whether the tree is good; this says what was measured, on which commit, with
+# which interpreter, and what the evidence's own digests are — six months later,
+# from files, without anybody having thought to write it down at the time.
+#
+# In neither `fast` nor `full`, on the same reasoning as the mutation and shard
+# gates: `full` already ends in a coverage-measured pytest run, and nesting a
+# pytest-spawning step inside one is the re-entrancy those harnesses avoid.
+#
+# `coverage` is declared alongside `pytest_cov` because the gate invokes
+# `python -m coverage xml` and `json` directly, and `hypothesis` because it
+# passes `--hypothesis-profile=ci` to the child itself, where the preflight
+# cannot see it.
+_EVIDENCE = Step(
+    "evidence",
+    ("pytest", "pytest_cov", "coverage", "hypothesis"),
+    ("-m", "tools.quality.evidence"),
+)
+
 # Deterministic multi-process execution. Collect once into a digested manifest,
 # partition it by a seeded hash, run each shard as its own pytest process, and
 # account for every test exactly once.
@@ -189,6 +212,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "mutation",
         "Mutation testing of the declared targets, against the committed baseline.",
         (_MUTATION,),
+    ),
+    Command(
+        "evidence",
+        "Machine-readable evidence for one run: JUnit XML, coverage, manifest, checksums.",
+        (_EVIDENCE,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

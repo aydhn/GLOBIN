@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — Phase 008.
+Superseded by [ADR-0037](0037-arithmetic-is-exact-or-refused-under-an-explicit-context.md) — Phase 008.
 
 **Date:** 2026-08-14
 
@@ -125,4 +125,11 @@ None.
 
 ## Superseded By
 
-None.
+[ADR-0037](0037-arithmetic-is-exact-or-refused-under-an-explicit-context.md).
+
+Phase 010 owns the precision policy this record deferred to by name, and it
+reached the opposite conclusion on the central question: arithmetic *is*
+defined, because a `decimal.Context` method performs it without touching the
+thread-local context this record assumed it would have to mutate. The
+reasoning below about *operators* remains accurate; the conclusion drawn from
+it no longer describes the code.

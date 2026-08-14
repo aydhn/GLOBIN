@@ -31,13 +31,17 @@ from typing import Any, Final
 import pytest
 
 from globin.domain import values
+from globin.domain.precision import Increment, Rounding, increment
 from globin.domain.values import (
     Currency,
     Price,
     Quantity,
     Side,
     Symbol,
+    align_price,
+    align_quantity,
     currency,
+    notional,
     price,
     quantity,
 )
@@ -72,6 +76,10 @@ BACKTICKED_RE: Final[re.Pattern[str]] = re.compile(r"`([^`]+)`")
 BTC_USDT: Final[Symbol] = Symbol(base=Currency(code="BTC"), quote=Currency(code="USDT"))
 ETH_USDT: Final[Symbol] = Symbol(base=Currency(code="ETH"), quote=Currency(code="USDT"))
 
+#: A grid to align onto, and a value that does not sit on it. Together they let
+#: the matrix exercise both an alignment that answers and one that refuses.
+A_TICK: Final[Increment] = increment("0.01")
+
 #: Sample values, annotated `Any` on purpose. Every arithmetic attempt below is a
 #: static error that mypy would refuse — which is half the guarantee, and not the
 #: half this file is checking. Routing through `Any` lets the runtime answer for
@@ -82,6 +90,7 @@ an_eth_price: Any = price("1", ETH_USDT)
 a_quantity: Any = quantity("1", "BTC")
 a_larger_quantity: Any = quantity("2", "BTC")
 an_eth_quantity: Any = quantity("1", "ETH")
+an_unaligned_price: Any = price("1.239", BTC_USDT)
 btc: Any = currency("BTC")
 eth: Any = currency("ETH")
 
@@ -98,15 +107,37 @@ ATTEMPTS: Final[dict[str, Callable[[], object]]] = {
     "Quantity < Quantity, same asset": lambda: a_quantity < a_larger_quantity,
     "Quantity < Quantity, different asset": lambda: a_quantity < an_eth_quantity,
     "hash of a Price": lambda: hash(a_price),
+    "Quantity + Quantity, same asset": lambda: a_quantity + a_larger_quantity,
+    "Quantity + Quantity, different asset": lambda: a_quantity + an_eth_quantity,
+    "Quantity - Quantity, leaving a remainder": lambda: a_larger_quantity - a_quantity,
+    "Quantity - Quantity, going below zero": lambda: a_quantity - a_larger_quantity,
+    "notional of a Price and a Quantity of its base": lambda: notional(a_price, a_quantity),
+    "notional of a Price and a Quantity of another asset": lambda: notional(
+        a_price, an_eth_quantity
+    ),
+    "alignment of a Price onto a tick": lambda: align_price(
+        a_price, tick=A_TICK, rounding=Rounding.FLOOR
+    ),
+    "alignment of a Quantity onto a step": lambda: align_quantity(
+        a_quantity, step=A_TICK, rounding=Rounding.FLOOR
+    ),
+    "alignment with a rounding mode spelled as a string": lambda: align_price(
+        a_price,
+        tick=A_TICK,
+        rounding="FLOOR",  # type: ignore[arg-type]
+    ),
+    "alignment of an unaligned value with EXACT": lambda: align_price(
+        an_unaligned_price, tick=A_TICK, rounding=Rounding.EXACT
+    ),
     "Price + Price": lambda: a_price + a_dearer_price,
     "Price - Price": lambda: a_dearer_price - a_price,
     "Price * Quantity": lambda: a_price * a_quantity,
-    "Quantity + Quantity": lambda: a_quantity + a_larger_quantity,
     "negation of a Price": lambda: -a_price,
     "float of a Price": lambda: float(a_price),
     "int of a Quantity": lambda: int(a_quantity),
     "round of a Price": lambda: round(a_price),
     "sum of two Prices": lambda: sum([a_price, a_dearer_price]),
+    "sum of two Quantities": lambda: sum([a_quantity, a_larger_quantity]),
     "Currency < Currency": lambda: btc < eth,
     "Symbol < Symbol": lambda: BTC_USDT < ETH_USDT,  # type: ignore[operator]
 }

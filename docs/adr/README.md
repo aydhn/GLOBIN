@@ -95,12 +95,14 @@ a future reader can judge whether the reason still holds.
 | [0028](0028-configuration-layers-override-last-wins-and-carry-their-origin.md) | Configuration layers are flat, override last-wins, carry their origin, and cannot remove a setting | Accepted |
 | [0029](0029-a-severity-threshold-is-a-decorating-sink.md) | A severity threshold is a decorating sink, not a field on a sink or a check in the logger | Accepted |
 | [0030](0030-domain-values-are-denominated-wrappers-over-decimal.md) | Domain values are denominated frozen wrappers over `Decimal`, never subclasses of it | Accepted |
-| [0031](0031-value-types-compare-but-do-not-compute.md) | Value types compare but do not compute; a wrong type returns `NotImplemented` and a wrong unit raises | Accepted |
+| [0031](0031-value-types-compare-but-do-not-compute.md) | Value types compare but do not compute; a wrong type returns `NotImplemented` and a wrong unit raises | Superseded |
 | [0032](0032-verification-tooling-may-be-added-outside-phase-scope.md) | Verification tooling may be added outside phase scope, under six conditions | Accepted |
 | [0033](0033-mutation-testing-is-a-repository-native-ast-harness.md) | Mutation testing is a repository-native `ast` harness gated by a committed survivor set | Accepted |
 | [0034](0034-time-is-injected-and-internal-time-is-utc.md) | Time is an injected clock behind two ports, and internal time is UTC | Accepted |
 | [0035](0035-milliseconds-are-a-floored-projection.md) | Milliseconds are a floored projection, not the representation | Accepted |
 | [0036](0036-test-execution-is-sharded-by-a-stable-digest-not-by-a-plugin.md) | Test execution is sharded by a stable digest, not by a plugin | Accepted |
+| [0037](0037-arithmetic-is-exact-or-refused-under-an-explicit-context.md) | Arithmetic is exact or refused, under an explicitly built context, and rounding is always an argument | Accepted |
+| [0038](0038-a-tick-size-and-a-step-size-are-one-undenominated-increment.md) | A tick size and a step size are one undenominated `Increment`, aligned by `divmod` | Accepted |
 
 ## Relationship to other documents
 

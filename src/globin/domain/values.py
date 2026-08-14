@@ -11,17 +11,35 @@ the confusion this phase exists to prevent is not only "a price where a quantity
 belongs" but "a price in USDT compared against a price in EUR". A bare magnitude
 in a wrapper would catch the first and miss the second.
 
-Three things are deliberately absent.
+*Arithmetic is exact, or it is refused.* An operator spelled ``a + b`` reads the
+caller's thread-local context and may round without saying so —
+``Decimal('1E+30') + Decimal('1E-30')`` returns ``1E+30`` under the default
+context, silently discarding the addend, which is the loss
+``ENGINEERING_CONTRACT.md`` invariant 22 forbids. Phase 008 answered by defining
+no operators at all and deferring to Phase 010.
 
-*There is no arithmetic.* Every :class:`decimal.Decimal` operation is performed
-under a thread-local context and may round without saying so —
-``Decimal('1E+30') + Decimal('1E-30')`` returns ``1E+30``, silently discarding
-the addend. ``ENGINEERING_CONTRACT.md`` invariant 22 forbids silent data loss and
-invariant 17 assigns the precision policy to **Phase 010** by name, so this
-module cannot define ``+`` without either deciding a rounding mode that is not
-its decision or shipping an operation that loses data. Comparison is exempt
-because it is exact: two values compare correctly regardless of the ambient
-precision, so permitting it settles nothing Phase 010 owns.
+Phase 010's answer is :mod:`globin.domain.precision`, and the methods of an
+explicitly built :class:`decimal.Context`. A ``Context`` method takes its
+precision and its traps from the object it is called on and touches no
+thread-local state at all — measured, and recorded in
+``docs/research/phase_010_sources.md``. That is what makes exact arithmetic
+possible here without the ambient-state problem ADR-0031 raised against it: this
+module never calls :func:`decimal.getcontext` or :func:`decimal.localcontext`,
+and an architecture test refuses either anywhere under ``src/globin``.
+
+:meth:`Quantity.__add__` and :meth:`Quantity.__sub__` are therefore exact or they
+raise, and neither takes a rounding mode because neither rounds. Rounding is a
+separate step with a name and a required argument (ADR-0037).
+
+Three things remain deliberately absent.
+
+*There is no arithmetic on a price.* A :class:`Price` is strictly positive, so
+the difference of two is not one; and the sum of two prices is not a price
+either — what a caller wants from ``(a + b) / 2`` is an average, which is a
+division and therefore needs a rounding mode. Signed money arrives with the
+portfolio accounting of **Phases 155-156**. Valuing a quantity at a price is
+:func:`notional`, named rather than spelled ``*`` because the result changes
+denomination and an operator cannot show that.
 
 *There is no registry.* :class:`Currency` validates the *shape* of a code and
 nothing else. ``Currency("ZZZQ")`` succeeds, because whether a venue lists an
@@ -45,6 +63,8 @@ from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Final
 
+from globin.domain import precision
+from globin.domain.precision import Increment, Rounding
 from globin.errors import ValidationError
 
 CURRENCY_ALPHABET: Final[str] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -97,8 +117,9 @@ Stated as a constant rather than read from :func:`decimal.getcontext`, because
 refusal that depends on ambient thread-local state is the hidden global state
 ``ENGINEERING_CONTRACT.md`` invariant 5 forbids. It is a fail-closed bound, not
 a rounding policy: a value too long to be held exactly is one whose first
-arithmetic operation would silently round it. What to *do* about precision
-remains Phase 010's.
+arithmetic operation would silently round it. What to *do* about precision is
+:mod:`globin.domain.precision`, which derives :data:`~globin.domain.precision.EXACT_PRECISION`
+from this bound and refuses any result that would exceed it.
 """
 
 MAX_ADJUSTED_EXPONENT: Final[int] = 30
@@ -121,8 +142,11 @@ unaffected by context, so this rule means the same thing everywhere.
 Thirty is a judgement, and a deliberately loose one: it is roughly eighteen
 orders of magnitude beyond the largest quantity of any asset a venue quotes.
 It is a bound on what can be *represented*, not a limit on what may be traded —
-risk ceilings are Phase 242 and rounding is Phase 010. A later phase that finds
-it too tight should widen it with the case that showed why, not delete it.
+risk ceilings remain Phase 242, and rounding is
+:mod:`globin.domain.precision`. A later phase that finds it too tight should
+widen it with the case that showed why, not delete it — and must check
+:data:`~globin.domain.precision.EXACT_PRECISION`, which is derived from this
+number and from :data:`MAX_SIGNIFICANT_DIGITS`.
 """
 
 SYMBOL_SEPARATOR: Final[str] = "/"
@@ -276,12 +300,15 @@ class Quantity:
         """Render the amount and its asset."""
         return f"{format(self.amount, 'f')} {self.currency}"
 
-    def _comparable(self, other: object, operator: str) -> Decimal | None:
-        """The other amount when the comparison is meaningful.
+    def _comparable(self, other: object, operator: str, verb: str = "compare") -> Decimal | None:
+        """The other amount when the operation is meaningful.
 
         Args:
             other: Whatever appeared on the right of the operator.
             operator: The operator's spelling, for the message.
+            verb: What the caller was attempting, for the message. Comparison and
+                arithmetic admit exactly the same pairs for exactly the same
+                reason, and differ only in how the refusal should read.
 
         Returns:
             ``other``'s amount, or ``None`` when ``other`` is not a
@@ -300,8 +327,7 @@ class Quantity:
             return None
         if other.currency != self.currency:
             msg = (
-                f"cannot compare {self} with {other} using {operator!r}: "
-                f"they count different assets"
+                f"cannot {verb} {self} with {other} using {operator!r}: they count different assets"
             )
             raise ValidationError(msg)
         return other.amount
@@ -325,6 +351,54 @@ class Quantity:
         """Whether this is at least another quantity of the same asset."""
         amount = self._comparable(other, ">=")
         return NotImplemented if amount is None else self.amount >= amount
+
+    def __add__(self, other: object) -> "Quantity":
+        """The total of two quantities of the same asset.
+
+        Args:
+            other: The quantity to add.
+
+        Returns:
+            A new :class:`Quantity`, of the same asset.
+
+        Raises:
+            ValidationError: If ``other`` counts a different asset, or if the
+                exact total is outside the bounds a quantity may carry.
+
+        Balances add, fills add and fees add, which is why this is the one
+        arithmetic operator the system genuinely needs. It rounds nothing: the
+        sum is computed exactly by :func:`globin.domain.precision.add` and then
+        admitted by :meth:`__post_init__` on the same terms as the operands, so a
+        total too long to hold exactly is refused rather than truncated.
+        """
+        amount = self._comparable(other, "+", verb="add")
+        if amount is None:
+            return NotImplemented
+        return Quantity(amount=precision.add(self.amount, amount), currency=self.currency)
+
+    def __sub__(self, other: object) -> "Quantity":
+        """What remains after taking one quantity from another of the same asset.
+
+        Args:
+            other: The quantity to take away.
+
+        Returns:
+            A new :class:`Quantity`, of the same asset.
+
+        Raises:
+            ValidationError: If ``other`` counts a different asset, or if the
+                difference is negative.
+
+        A negative result is not a quantity — direction is a :class:`Side`, which
+        is ADR-0030's decision and not this operator's to revisit — so
+        :meth:`__post_init__` refuses it. "You cannot spend more than you hold"
+        is therefore a fact about the type rather than a check somebody has to
+        remember to write.
+        """
+        amount = self._comparable(other, "-", verb="subtract")
+        if amount is None:
+            return NotImplemented
+        return Quantity(amount=precision.subtract(self.amount, amount), currency=self.currency)
 
 
 @dataclass(frozen=True, slots=True)
@@ -630,3 +704,99 @@ def price(amount: Decimal | int | str, market: Symbol) -> Price:
         ValidationError: As :func:`_decimal` and :func:`_validate_amount`.
     """
     return Price(amount=_decimal(amount, "price amount"), symbol=market)
+
+
+def notional(unit_price: Price, amount: Quantity) -> Quantity:
+    """What a quantity of an asset is worth at a price.
+
+    Args:
+        unit_price: What one unit of the base asset costs.
+        amount: How much of that asset is being valued.
+
+    Returns:
+        A :class:`Quantity` denominated in the price's **quote** asset:
+        ``60000 USDT per BTC`` and ``2 BTC`` give ``120000 USDT``.
+
+    Raises:
+        ValidationError: If either argument is of the wrong type, if ``amount``
+            counts an asset this price does not price, or if the exact product is
+            outside the bounds a quantity may carry.
+
+    Named rather than spelled ``*``, because the result changes denomination and
+    an operator cannot show that. A reader of ``a * b`` has no way to see that
+    the answer is in a third currency, and a reader of ``notional(p, q)`` can be
+    told.
+
+    This is also the operation that vindicates ADR-0030. The check below — that
+    the quantity counts the asset this price actually prices — is expressible
+    only because both values carry their denomination. Without that it would be a
+    comment, and comments do not raise.
+    """
+    _require(unit_price, Price, label="notional price", remedy="pass a Price")
+    _require(amount, Quantity, label="notional quantity", remedy="pass a Quantity")
+    if amount.currency != unit_price.symbol.base:
+        msg = (
+            f"cannot value {amount} at {unit_price}: this price prices "
+            f"{unit_price.symbol.base}, not {amount.currency}"
+        )
+        raise ValidationError(msg)
+    return Quantity(
+        amount=precision.multiply(unit_price.amount, amount.amount),
+        currency=unit_price.symbol.quote,
+    )
+
+
+def align_price(held: Price, *, tick: Increment, rounding: Rounding) -> Price:
+    """Put a price onto its market's tick grid.
+
+    Args:
+        held: The price to align.
+        tick: The market's tick size.
+        rounding: Which way to move it. Required and keyword-only.
+
+    Returns:
+        A :class:`Price` on the grid, for the same market.
+
+    Raises:
+        ValidationError: If ``held`` is not a :class:`Price`, if ``rounding`` is
+            not a :class:`~globin.domain.precision.Rounding` member, if the
+            rounding is ``EXACT`` and the price is not already aligned, or if the
+            aligned value is not a price — flooring a price below one tick gives
+            zero, and zero is a sentinel rather than a price.
+
+    The tick is not checked against the market, because nothing here knows which
+    tick belongs to which market. That pairing is venue data, and the instrument
+    registry that owns it is **Phases 049-050**.
+    """
+    _require(held, Price, label="aligned price", remedy="pass a Price")
+    return Price(
+        amount=precision.align(held.amount, to=tick, rounding=rounding),
+        symbol=held.symbol,
+    )
+
+
+def align_quantity(held: Quantity, *, step: Increment, rounding: Rounding) -> Quantity:
+    """Put a quantity onto its asset's step grid.
+
+    Args:
+        held: The quantity to align.
+        step: The step size the quantity must be a multiple of.
+        rounding: Which way to move it. Required and keyword-only.
+
+    Returns:
+        A :class:`Quantity` on the grid, of the same asset.
+
+    Raises:
+        ValidationError: If ``held`` is not a :class:`Quantity`, if ``rounding``
+            is not a :class:`~globin.domain.precision.Rounding` member, or if the
+            rounding is ``EXACT`` and the quantity is not already aligned.
+
+    Unlike :func:`align_price`, flooring to zero is admissible here: a zero
+    quantity is a real answer, and "your order rounds down to nothing" is
+    precisely what a caller needs to be told rather than shielded from.
+    """
+    _require(held, Quantity, label="aligned quantity", remedy="pass a Quantity")
+    return Quantity(
+        amount=precision.align(held.amount, to=step, rounding=rounding),
+        currency=held.currency,
+    )

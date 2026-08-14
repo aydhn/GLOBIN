@@ -173,9 +173,12 @@ arithmetic and say so; do not let a `float` reach a place where a cent can
 disappear. Since Phase 008 the types that carry those values live in
 [`globin.domain.values`](../../src/globin/domain/values.py), and constructing one
 from a `float` is refused rather than discouraged
-([`VALUE_TYPES_POLICY.md`](../VALUE_TYPES_POLICY.md)). The precision policy —
-rounding, tick and step sizes, and where exact arithmetic is mandatory — is still
-**Phase 010**.
+([`VALUE_TYPES_POLICY.md`](../VALUE_TYPES_POLICY.md)). Since Phase 010 the
+precision policy — rounding, tick and step sizes, and where exact arithmetic is
+mandatory — is [`PRECISION_POLICY.md`](../PRECISION_POLICY.md), enforced by
+[`globin.domain.precision`](../../src/globin/domain/precision.py) and by
+`tests/architecture/test_precision_discipline.py`. Arithmetic on an amount is
+exact or it raises; rounding is never ambient and never defaulted.
 
 ---
 

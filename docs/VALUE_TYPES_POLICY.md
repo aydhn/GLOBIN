@@ -9,7 +9,8 @@ compares the two in both directions so that neither can drift.
 
 Written for a contributor about to pass a number across a boundary. If you are
 asking "can I add these two together", the answer is in
-[Which operations exist](#which-operations-exist), and it is no.
+[Which operations exist](#which-operations-exist): yes for two quantities of one
+asset, no for two prices, and never with a rounding mode chosen for you.
 
 ---
 
@@ -114,15 +115,25 @@ magnitude bound is written out rather than delegated to
 | `Quantity < Quantity, same asset` | `answers` |
 | `Quantity < Quantity, different asset` | `ValidationError` |
 | `hash of a Price` | `answers` |
+| `Quantity + Quantity, same asset` | `answers` |
+| `Quantity + Quantity, different asset` | `ValidationError` |
+| `Quantity - Quantity, leaving a remainder` | `answers` |
+| `Quantity - Quantity, going below zero` | `ValidationError` |
+| `notional of a Price and a Quantity of its base` | `answers` |
+| `notional of a Price and a Quantity of another asset` | `ValidationError` |
+| `alignment of a Price onto a tick` | `answers` |
+| `alignment of a Quantity onto a step` | `answers` |
+| `alignment with a rounding mode spelled as a string` | `ValidationError` |
+| `alignment of an unaligned value with EXACT` | `ValidationError` |
 | `Price + Price` | `TypeError` |
 | `Price - Price` | `TypeError` |
 | `Price * Quantity` | `TypeError` |
-| `Quantity + Quantity` | `TypeError` |
 | `negation of a Price` | `TypeError` |
 | `float of a Price` | `TypeError` |
 | `int of a Quantity` | `TypeError` |
 | `round of a Price` | `TypeError` |
 | `sum of two Prices` | `TypeError` |
+| `sum of two Quantities` | `TypeError` |
 | `Currency < Currency` | `TypeError` |
 | `Symbol < Symbol` | `TypeError` |
 
@@ -145,15 +156,29 @@ different markets are simply not the same value, and `False` says so. Ordering
 carries no such obligation, and "is 5 USDT less than 3 EUR" has no answer worth
 inventing.
 
-**There is no arithmetic at all.** Every `Decimal` operation runs under a
-thread-local context and may round without saying so —
+**Arithmetic is exact, or it is refused.** Every `Decimal` *operator* runs under
+a thread-local context and may round without saying so —
 `Decimal('1E+30') + Decimal('1E-30')` returns `1E+30`, discarding the addend.
-Invariant 22 forbids silent data loss, and invariant 17 assigns the precision
-policy to Phase 010 by name, so this module cannot define `+` without either
-deciding a rounding mode that is not its decision or shipping an operation that
-loses data. Comparison is exempt because it is exact: two values compare
-correctly whatever the ambient precision, so permitting it settles nothing
-Phase 010 owns.
+Invariant 22 forbids that, so nothing here uses one.
+
+Phase 008 shipped these types with no arithmetic at all, deferring to the phase
+that owned the rounding rule. Phase 010 delivered it, and the answer is in
+[`PRECISION_POLICY.md`](PRECISION_POLICY.md): a `decimal.Context` method performs
+the operation using the context handed to it and touches nothing thread-local, so
+exact arithmetic is possible here without any ambient state.
+
+What that permits, and what it still refuses:
+
+- `Quantity + Quantity` and `Quantity - Quantity` of the same asset, computed
+  exactly. A total too long to hold, or a difference below zero, raises.
+- `notional(price, quantity)`, denominated in the price's quote asset. Named
+  rather than spelled `*`, because the result changes denomination.
+- `align_price` and `align_quantity`, each taking a required rounding mode.
+- **No arithmetic on a `Price`.** A price is strictly positive, so the difference
+  of two is not one, and the sum of two is not one either. Signed money is
+  Phases 155-156.
+- **No `round`, `float`, `int`, `abs` or unary minus** on either type. Each reads
+  or implies the ambient context that Phase 010 exists to escape.
 
 ---
 
@@ -164,7 +189,7 @@ absence of a rule.
 
 | Question | Phase |
 |---|---|
-| Rounding, tick size, step size, where exact arithmetic is mandatory | 010 |
+| Rounding, tick size, step size, where exact arithmetic is mandatory | 010, delivered — [`PRECISION_POLICY.md`](PRECISION_POLICY.md) |
 | Timestamps, clocks and timezones | 009, delivered — [`TIME_POLICY.md`](TIME_POLICY.md) |
 | Canonical identifiers, and the register of assets that exist | 011 |
 | Serialization and schema evolution for persisted values | 012 |

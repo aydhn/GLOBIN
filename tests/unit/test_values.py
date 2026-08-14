@@ -22,6 +22,7 @@ from typing import Any, Final
 
 import pytest
 
+from globin.domain.precision import Rounding, increment
 from globin.domain.values import (
     CURRENCY_ALPHABET,
     MAX_ADJUSTED_EXPONENT,
@@ -33,7 +34,10 @@ from globin.domain.values import (
     Quantity,
     Side,
     Symbol,
+    align_price,
+    align_quantity,
     currency,
+    notional,
     price,
     quantity,
     symbol,
@@ -449,15 +453,19 @@ def test_a_value_can_be_a_dictionary_key() -> None:
     ],
 )
 def test_no_arithmetic_is_defined_on_a_price(attempt: Callable[[Any], object]) -> None:
-    """Absence, asserted twice over.
+    """Absence, asserted twice over, and now for a stronger reason than in Phase 008.
 
-    `Decimal` arithmetic runs under a thread-local context and rounds without
-    saying so — `Decimal('1E+30') + Decimal('1E-30')` discards the addend.
-    Invariant 22 forbids silent data loss and invariant 17 gives the precision
-    policy to Phase 010, so these operators wait for the phase that owns the
-    rounding rule.
+    Phase 008 left these undefined because the rounding rule had no owner. Phase
+    010 owns it, and still leaves them undefined — which is a decision rather
+    than a deferral. A `Price` is strictly positive, so the difference of two is
+    not a price; the sum of two is not one either, because what a caller wants
+    from `(a + b) / 2` is an average, and that is a division needing a mode.
+    `round()` and `float()` stay absent because each reads the ambient context
+    this phase spent its existence escaping. Signed money is Phases 155-156.
 
-    Half of that guarantee is already mypy's: every expression below is a static
+    Valuing a quantity at a price is `notional()`, named rather than spelled `*`.
+
+    Half of the guarantee is already mypy's: every expression below is a static
     error at any call site the type checker can see, which is why the operand
     arrives here through an untyped parameter. This covers the other half — the
     call sites it cannot see, where a value arrived as `object` from a document.
@@ -470,17 +478,184 @@ def test_no_arithmetic_is_defined_on_a_price(attempt: Callable[[Any], object]) -
 @pytest.mark.parametrize(
     "attempt",
     [
-        pytest.param(lambda q: q + q, id="quantity + quantity"),
-        pytest.param(lambda q: q - q, id="quantity - quantity"),
         pytest.param(lambda q: abs(q), id="absolute value"),
         pytest.param(lambda q: int(q), id="int()"),
+        pytest.param(lambda q: float(q), id="float()"),
+        pytest.param(lambda q: round(q), id="round()"),
+        pytest.param(lambda q: -q, id="negate a quantity"),
         pytest.param(lambda q: q / 2, id="divide by a number"),
+        pytest.param(lambda q: q * 2, id="scale by a number"),
+        pytest.param(lambda q: sum([q, q]), id="sum()"),
     ],
 )
-def test_no_arithmetic_is_defined_on_a_quantity(attempt: Callable[[Any], object]) -> None:
-    """As for a price. Halving a position is a rounding decision, and Phase 010 owns it."""
+def test_only_addition_and_subtraction_are_defined_on_a_quantity(
+    attempt: Callable[[Any], object],
+) -> None:
+    """Quantities add and subtract. Everything else here still refuses.
+
+    Halving a position is a rounding decision, and the answer to a rounding
+    decision is `align_quantity` with a mode, never an operator that picks one
+    silently. `sum()` is in the list because it begins at `0`, so it reaches for
+    `__radd__`, which is deliberately absent: an empty sum has no asset to be
+    denominated in, and returning `0` would invent one.
+    """
     with pytest.raises(TypeError):
         attempt(quantity("1", "BTC"))
+
+
+# --------------------------------------------------------------------------
+# Arithmetic on a quantity
+# --------------------------------------------------------------------------
+
+
+def test_two_quantities_of_one_asset_add() -> None:
+    """The operation the system actually needs: balances and fills accumulate."""
+    total = quantity("1.5", "BTC") + quantity("2.25", "BTC")
+    assert total == quantity("3.75", "BTC")
+
+
+def test_two_quantities_of_one_asset_subtract() -> None:
+    """What remains after taking some away."""
+    assert quantity("3", "BTC") - quantity("1.25", "BTC") == quantity("1.75", "BTC")
+
+
+def test_subtraction_below_zero_is_refused_by_the_type_itself() -> None:
+    """ "You cannot spend more than you hold" as a fact about the type.
+
+    The refusal comes from `__post_init__`, not from a check inside `__sub__`,
+    which is the point: a quantity has no direction, so there is no negative
+    quantity for the operator to return.
+    """
+    with pytest.raises(ValidationError, match="never negative"):
+        quantity("1", "BTC") - quantity("2", "BTC")
+
+
+@pytest.mark.parametrize(
+    ("attempt", "verb"),
+    [
+        pytest.param(lambda a, b: a + b, "add", id="add"),
+        pytest.param(lambda a, b: a - b, "subtract", id="subtract"),
+    ],
+)
+def test_arithmetic_across_two_assets_is_refused_by_name(
+    attempt: Callable[[Any, Any], Any], verb: str
+) -> None:
+    """A wrong *unit* raises, because mypy could not have caught it.
+
+    Both operands are `Quantity`, so a `TypeError` would say only that the
+    operation is unsupported between two instances of the same class — which
+    tells the caller nothing about the actual mistake.
+    """
+    with pytest.raises(ValidationError, match=f"cannot {verb}.*different assets"):
+        attempt(quantity("1", "BTC"), quantity("1", "ETH"))
+
+
+@pytest.mark.parametrize(
+    "attempt",
+    [
+        pytest.param(lambda q, other: q + other, id="add"),
+        pytest.param(lambda q, other: q - other, id="subtract"),
+    ],
+)
+def test_arithmetic_against_something_that_is_not_a_quantity_is_a_type_error(
+    attempt: Callable[[Any, Any], Any],
+) -> None:
+    """A wrong *type* returns `NotImplemented`, so Python names both classes."""
+    with pytest.raises(TypeError):
+        attempt(quantity("1", "BTC"), Decimal(1))
+
+
+def test_a_total_too_long_to_hold_exactly_is_refused_rather_than_rounded() -> None:
+    """The exact sum exists; it is simply not a quantity.
+
+    `1E+30 + 1E-30` is exactly representable and 61 digits long, which is more
+    than a quantity may carry. Refusing it is the phase working: the alternative
+    is a total that silently equals one of its own addends.
+    """
+    with pytest.raises(ValidationError, match="significant digits"):
+        quantity("1E+30", "BTC") + quantity("1E-30", "BTC")
+
+
+# --------------------------------------------------------------------------
+# Notional and alignment
+# --------------------------------------------------------------------------
+
+
+def test_a_notional_is_denominated_in_the_quote_asset() -> None:
+    """Two BTC at sixty thousand USDT each is a hundred and twenty thousand USDT.
+
+    The denomination changing is why this is a named function rather than `*`.
+    """
+    assert notional(price("60000", BTC_USDT), quantity("2", "BTC")) == quantity("120000", "USDT")
+
+
+def test_a_notional_refuses_a_quantity_of_an_asset_the_price_does_not_price() -> None:
+    """The check ADR-0030 exists to make possible.
+
+    Without denomination this would multiply two numbers and answer confidently.
+    """
+    with pytest.raises(ValidationError, match="this price prices BTC, not ETH"):
+        notional(price("60000", BTC_USDT), quantity("2", "ETH"))
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        pytest.param(Decimal(1), quantity("2", "BTC"), id="price is not a Price"),
+        pytest.param(price("1", BTC_USDT), Decimal(2), id="quantity is not a Quantity"),
+    ],
+)
+def test_a_notional_refuses_arguments_of_the_wrong_type(first: Any, second: Any) -> None:
+    """The guard for call sites mypy cannot see."""
+    with pytest.raises(ValidationError, match="notional"):
+        notional(first, second)
+
+
+def test_a_price_aligns_onto_a_tick_in_the_direction_asked_for() -> None:
+    """The market survives alignment; only the amount moves."""
+    aligned = align_price(price("1.239", BTC_USDT), tick=increment("0.01"), rounding=Rounding.FLOOR)
+    assert aligned == price("1.23", BTC_USDT)
+
+
+def test_a_quantity_aligns_onto_a_step_and_may_reach_zero() -> None:
+    """ "Your order rounds down to nothing" is an answer, not an error.
+
+    A zero quantity is admissible where a zero price is not, so this is the one
+    place the two alignment helpers genuinely differ.
+    """
+    aligned = align_quantity(
+        quantity("0.0009", "BTC"), step=increment("0.01"), rounding=Rounding.FLOOR
+    )
+    assert aligned == quantity("0", "BTC")
+
+
+def test_flooring_a_price_below_one_tick_is_refused() -> None:
+    """Zero is a sentinel rather than a price, so the aligned value is not one."""
+    with pytest.raises(ValidationError, match="zero price is a sentinel"):
+        align_price(price("0.0009", BTC_USDT), tick=increment("0.01"), rounding=Rounding.FLOOR)
+
+
+@pytest.mark.parametrize(
+    ("attempt", "expected"),
+    [
+        pytest.param(
+            lambda: align_price(Decimal(1), tick=increment("0.01"), rounding=Rounding.FLOOR),  # type: ignore[arg-type]
+            "aligned price",
+            id="price",
+        ),
+        pytest.param(
+            lambda: align_quantity(Decimal(1), step=increment("0.01"), rounding=Rounding.FLOOR),  # type: ignore[arg-type]
+            "aligned quantity",
+            id="quantity",
+        ),
+    ],
+)
+def test_alignment_refuses_something_that_is_not_the_value_it_aligns(
+    attempt: Callable[[], object], expected: str
+) -> None:
+    """A bare `Decimal` has no market and no asset, so it cannot be aligned here."""
+    with pytest.raises(ValidationError, match=expected):
+        attempt()
 
 
 @pytest.mark.parametrize("compare", ORDERINGS)
