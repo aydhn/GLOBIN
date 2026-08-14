@@ -1,0 +1,79 @@
+# GLOBIN mutation baseline.
+#
+# Which mutants are known to survive, and the argument for each. Compared in both
+# directions by `python -m tools.quality mutation`: a survivor that is not listed
+# fails the gate, and a listed survivor that a run kills fails it too. The second
+# direction matters as much as the first, for the same reason `xfail_strict` is
+# set in pyproject.toml — a claim that has stopped being true is worse than no
+# claim, because somebody will believe it.
+#
+# The total number of mutants is deliberately not pinned. Adding a branch the
+# tests already cover produces mutants that die immediately, and failing a build
+# for that would be friction with nothing behind it. Adding a branch nothing
+# covers produces a survivor, which the rule above already catches.
+#
+# NOT A SNAPSHOT. Nothing writes this file. `tomllib` reads TOML and the standard
+# library ships no writer, so the harness physically cannot refresh a baseline
+# and does not pretend to: on disagreement it prints the block it would have
+# described, for a person to read, judge and paste. A survivor here is a test gap
+# somebody has argued for, and the `reason` is the argument. An entry without one
+# is refused by tests/contract/test_mutation_contract.py.
+schema = 1
+
+[[target]]
+module = "src/globin/domain/values.py"
+
+# All four survivors are the same mutation of the same decorator: `slots=True`
+# becoming `slots=False` on a frozen dataclass. They are recorded rather than
+# killed, and the argument is the same for each, so it is made once here and
+# referred to below.
+#
+# `frozen=True` already refuses every assignment through `__setattr__`, and it is
+# `frozen` that the suite asserts — the `frozen=True -> False` mutant in the very
+# same decorator is killed by `test_a_price_is_frozen`. What `slots` adds is that
+# `object.__setattr__` cannot smuggle an undeclared attribute onto an instance
+# either. Nothing in GLOBIN does that, and nothing observes it: the generated
+# `__eq__` and `__hash__` read the declared fields, so an attribute added behind
+# `frozen`'s back would change no comparison, no hash and no rendering.
+#
+# A test could still kill these, by asserting that `object.__setattr__` raises.
+# It is not written, deliberately. No other frozen dataclass in this repository
+# asserts its own slotted-ness — not `LogEvent`, not `ConfigLayer`, not
+# `ProjectContract` — so adding the assertion for these four alone would be a
+# test written to move a number rather than to state a rule, which is the
+# practice `docs/TESTING_STRATEGY.md` and the phase brief both refuse. If a later
+# phase decides that "a value carries exactly the fields it declares" is a
+# contract worth stating, it should state it for every frozen dataclass at once,
+# and these four entries should disappear together.
+
+  [[target.survivor]]
+  id = "Currency::boolean-constant::True->False::1"
+  reason = """
+  `slots=True` -> `slots=False` on the Currency dataclass. An implementation
+  detail nothing observes: frozen already refuses assignment, and equality and
+  hashing read the declared fields. See the note above this table.
+  """
+
+  [[target.survivor]]
+  id = "Symbol::boolean-constant::True->False::1"
+  reason = """
+  `slots=True` -> `slots=False` on the Symbol dataclass. As for Currency: the
+  frozen mutant in the same decorator is killed, and slotted-ness changes no
+  comparison, hash or rendering. See the note above this table.
+  """
+
+  [[target.survivor]]
+  id = "Quantity::boolean-constant::True->False::1"
+  reason = """
+  `slots=True` -> `slots=False` on the Quantity dataclass. As for Currency: an
+  attribute added behind frozen's back would be invisible to every operation
+  this module defines. See the note above this table.
+  """
+
+  [[target.survivor]]
+  id = "Price::boolean-constant::True->False::1"
+  reason = """
+  `slots=True` -> `slots=False` on the Price dataclass. As for Currency: the
+  suite asserts frozen, which is the property that carries behaviour, and this
+  one carries none. See the note above this table.
+  """

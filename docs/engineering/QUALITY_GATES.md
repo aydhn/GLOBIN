@@ -44,6 +44,7 @@ python -m tools.quality full
 | `integration` | The integration level only | While wiring components together |
 | `property` | The property level, exploratory Hypothesis profile | Searching for a new counter-example |
 | `coverage` | Full suite with branch coverage and its floor | Before delivery |
+| `mutation` | Mutation testing of the declared targets, against the baseline | Proving the tests would notice a change |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
 
@@ -109,11 +110,12 @@ instead was read the partial-branch column and test the decisions it named: the
 taxonomy added, and a defect in `import_cycles` that no coverage number would
 ever have shown, because the affected line was executed on every run.
 
-One line is knowingly uncovered: the `if __name__ == "__main__"` guard in
-`tools/quality/__main__.py`. It runs on every real invocation and in another
-process, so the suite cannot see it. It is exercised by a subprocess test rather
-than annotated with a `pragma`, because a pragma would claim coverage this
-repository does not have.
+Two lines are knowingly uncovered, and they are the same line twice: the
+`if __name__ == "__main__"` guard in `tools/quality/__main__.py` and in
+`tools/quality/mutation/__main__.py`. Each runs on every real invocation and in
+another process, so the suite cannot see it. Both are exercised by a test that
+starts the module rather than annotated with a `pragma`, because a pragma would
+claim coverage this repository does not have.
 
 Excluded from measurement, via `exclude_also` so that coverage's own defaults
 are kept rather than replaced:

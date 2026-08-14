@@ -111,6 +111,23 @@ _COVERAGE = Step(
     ),
 )
 
+# Mutation testing. The step launches `tools.quality.mutation`, which copies the
+# tree into a temporary directory, rewrites one module per mutant and runs a
+# narrow pytest subset against it. Nothing it does touches this tree, which is
+# why it is not in `MUTATING_COMMANDS` below — the two senses of "mutate" sit one
+# screen apart and only one of them is about the working tree.
+#
+# It is in neither `fast` nor `full`. `fast` promises seconds; this is minutes.
+# `full` runs before every commit and already ends in a coverage-measured pytest
+# run, and nesting a pytest-spawning step inside one is exactly the re-entrancy
+# the harness works to make impossible.
+#
+# `hypothesis` is declared even though no flag here names it: the harness passes
+# `--hypothesis-profile=ci` to the child itself, so the preflight cannot see it in
+# this argv, and without the profile one mutant's verdict could depend on the
+# example database left by the mutant before it.
+_MUTATION = Step("mutation", ("pytest", "hypothesis"), ("-m", "tools.quality.mutation"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -140,6 +157,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
     Command("integration", "Several components together, still entirely local.", (_INTEGRATION,)),
     Command("property", "Property tests under the exploratory Hypothesis profile.", (_PROPERTY,)),
     Command("coverage", "The full suite with branch coverage and its threshold.", (_COVERAGE,)),
+    Command(
+        "mutation",
+        "Mutation testing of the declared targets, against the committed baseline.",
+        (_MUTATION,),
+    ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),
 )

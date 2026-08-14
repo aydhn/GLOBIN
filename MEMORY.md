@@ -33,8 +33,9 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Phase 004 | **Test Architecture and Quality Gates.** Five test levels as directories under `tests/`, markers derived from the directory, `tests` as a package with helpers in `tests/support.py`; explicit mypy flags in place of `strict = true`; branch coverage gated at 95; `.pre-commit-config.yaml`; the canonical entrypoint `tools/quality`; and a SHA-pinned, least-privilege, verification-only CI workflow. Commit `abb96a9`, pushed. **CI is confirmed working:** the first run on that commit succeeded on both Python 3.12 and 3.14, and the pre-commit job passed. The phase was reported before that run existed, so ADR-0020 and the Phase 004 research ledger still describe the workflow as never executed — correct for their date, and superseded by this row. |
 | Phase 005 | **Error Taxonomy and Deterministic Test Foundations.** `globin.errors` — one root, five categories divided by who must act — replacing the ad-hoc `ValueError` scheme in the adapters and domain layers. Plus a `property` taxonomy level with Hypothesis, autouse fixtures that refuse outbound sockets and fail a test leaking process state, the `create_autospec` rule for mocks, and the `external` deselection that Phase 004's marker description had promised but nothing performed. ADR-0021 to ADR-0024. Commit `7f65d25`, pushed. |
 | Phase 006 | **Structured Logging Foundation.** `observability.py` in all four layers plus `build_logger` in the composition root: a `LogEvent` domain value that redacts itself in `__post_init__`, a one-method `LogSink` port, an immutable `Logger` whose `bind` returns a new logger, and a `StreamLogSink` writing JSON Lines. Correlation is explicit, never a context variable; the timestamp is stamped by the adapter so Phase 009 keeps the clock decision. `docs/LOGGING_POLICY.md` owns the severity meanings and the redacted-name list, and a contract test compares that document against the code in both directions. ADR-0025 and ADR-0026. Commit `9913edb`, pushed. |
-| Last completed | **007 — Configuration Model and Schema Contract.** `configuration.py` in all four layers plus `build_configuration` in the composition root. The model is frozen dataclasses and *is* the schema: the key register and the defaults layer are both derived from `dataclasses.fields()`, so a setting cannot be half-added. Layers are flat dotted keys carrying an origin; `resolve` folds them last-wins and **never raises**, so every refusal lives in `as_config` where the origin can be named. `docs/CONFIGURATION_POLICY.md` owns the settings register, and its contract test feeds each documented default back through the binding rather than comparing strings. The one setting is `logging.min_severity`, honoured by a decorating `ThresholdLogSink` — `StreamLogSink` and `Logger` are untouched. ADR-0027 to ADR-0029. Commit `651f35d`, pushed. |
-| Next phase | **008 — Domain Value Types and Units.** Not started. |
+| Phase 007 | **Configuration Model and Schema Contract.** `configuration.py` in all four layers plus `build_configuration` in the composition root. The model is frozen dataclasses and *is* the schema: the key register and the defaults layer are both derived from `dataclasses.fields()`, so a setting cannot be half-added. Layers are flat dotted keys carrying an origin; `resolve` folds them last-wins and **never raises**, so every refusal lives in `as_config` where the origin can be named. `docs/CONFIGURATION_POLICY.md` owns the settings register, and its contract test feeds each documented default back through the binding rather than comparing strings. The one setting is `logging.min_severity`, honoured by a decorating `ThresholdLogSink` — `StreamLogSink` and `Logger` are untouched. ADR-0027 to ADR-0029. Commit `651f35d`, pushed. |
+| Last completed | **008 — Domain Value Types and Units.** `values.py` in the domain layer and nowhere else: five denominated types — `Side`, `Currency`, `Symbol`, `Quantity`, `Price` — carrying `Decimal`, never subclassing it. They **compare but do not compute**: `Decimal` arithmetic reads a thread-local context and silently rounds, so the operators wait for Phase 010, while comparison is exact and settles nothing that phase owns. A wrong type returns `NotImplemented`; a wrong *unit* raises `ValidationError`, because mypy could not have caught it. `docs/VALUE_TYPES_POLICY.md` owns the register, and its contract test **executes** each documented operation rather than comparing strings. Delivered with it, as tooling rather than phase scope: a mutation-testing gate. ADR-0030 to ADR-0033. |
+| Next phase | **009 — Time, Clock and Timezone Discipline.** Not started. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
 
 **The roadmap has been amended three times.** Band ranges, phase numbers and band
@@ -108,6 +109,21 @@ plus the brief's genuine residue. One decision was taken with it:
 The residue that *was* delivered — an `integration` command in the quality table,
 and a written test-data and factory contract in `TESTING_STRATEGY.md` — is defect
 repair against Phases 004 and 005, not a widening of Phase 007.
+
+**A sixth was proposed in Phase 008 and also refused — but this time something
+was added beside the phase rather than instead of it.** The owner's brief
+described executable architecture contracts, regression fixtures, deterministic
+test selection and mutation testing. An audit found every item delivered except
+two: serialization round-trip contracts, which **Phase 012 owns**, and mutation
+testing, which **no phase in the programme owns at all**. The conflict was put to
+the owner with four options; he chose the roadmap's phase as written *plus* the
+mutation gate as **tooling**, on the condition that the permission be written
+down. [ADR-0032](docs/adr/0032-verification-tooling-may-be-added-outside-phase-scope.md)
+is that record. It is **not a fourth amendment**: no phase is renamed, no status
+moves, and the count above stays three. It states six conditions — displaces no
+phase, defers nothing, adds no dependency, adds no runtime capability, only
+reports, and is documented and tested like everything else — and an addition that
+cannot state all six is a scope amendment wearing a different word.
 
 **Nothing so far implements trading.** No exchange connection, no credentials,
 no market data, no strategy, no models. Anything claiming otherwise is wrong.
@@ -251,6 +267,48 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
   for permission to deliver a completed, verified phase — just do it. The
   authorization covers delivery only; verifying that the phase really is
   complete and clean beforehand is still required.
+- **`Decimal` arithmetic reads a thread-local context and can round silently;
+  comparison cannot.** `Decimal('1E+30') + Decimal('1E-30')` returns `1E+30`,
+  discarding the addend, while two 31-digit values compare correctly under
+  `prec=3`. That split is the entire reason Phase 008's value types order and
+  compare but define no arithmetic operator (ADR-0031).
+- **Never subclass `Decimal` to make a unit type.** With `class P(Decimal)` and
+  `class Q(Decimal)`, `P('2') == Q('2')` is `True` and `P('2') + Q('3')` is a
+  plain `Decimal` — the two would be interchangeable exactly where it matters.
+- **`isinstance(True, int)` is `True` and `Decimal(True)` is one**, so a `bool`
+  guard must precede an `int` guard. **`Decimal('-0').is_signed()` is `True`
+  while `Decimal('-0') == 0` is also `True`**, so a non-negativity check is
+  `is_signed()` and never `< 0`.
+- **A refusal that consults `decimal.getcontext()` is hidden global state.**
+  `is_subnormal()` is defined against the ambient `Emin`, so Phase 008 bounds
+  magnitude with `adjusted()` — documented as context-free — instead. The whole
+  validator accepts identical values under any thread-local precision, and a
+  test asserts it.
+- **mypy accepts `return NotImplemented` from a `-> bool` comparison dunder**
+  under this repository's flags. No `type: ignore` is needed. It also reports
+  `Price == Quantity` as a non-overlapping comparison, so a test asserting the
+  runtime behaviour has to route one operand through `object`.
+- **pytest's `pythonpath` ini entries land at `sys.path[0]`**, resolved against
+  rootdir, *after* the interpreter has processed `PYTHONPATH` — verified in
+  `_pytest/config/__init__.py`. So `PYTHONPATH` cannot shadow `src/`. The
+  mutation harness copies `pyproject.toml` into its sandbox and runs the child
+  from there for this reason, and proves it on every run with a canary that
+  replaces the target module with `raise ImportError` and requires the subset to
+  fail.
+- **Do not set `PYTHONNOUSERSITE` for a child process on this machine.** The
+  toolchain is installed at user level, so it makes the child unable to find
+  pytest. The mutation harness's unmutated control run caught this immediately,
+  which is what that control is for.
+- **Mutation testing finds what coverage cannot, and the first run proved it.**
+  A cross-type comparison test matching `"not supported between instances"`
+  accepted a mutant whose message named `Decimal` and `NoneType` instead of the
+  two value types. Every line still executed, so coverage was unchanged.
+  Tightening the assertion killed eight mutants.
+- **The mutation baseline compares the survivor *set*, both ways, and pins no
+  count.** A new survivor fails; a recorded survivor that a run kills also fails,
+  on the same reasoning as `xfail_strict`. Nothing writes the file — `tomllib`
+  cannot emit TOML — so a stale baseline is corrected by a person, and the block
+  the tool prints is filled with a placeholder a contract test refuses.
 - **Never** commit credentials. **Never** report a check as passing without
   running it. **Never** implement a later phase early. **Never** delete working
   functionality to simplify a task.

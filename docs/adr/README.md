@@ -94,6 +94,10 @@ a future reader can judge whether the reason still holds.
 | [0027](0027-configuration-is-a-frozen-dataclass-validated-at-the-boundary.md) | Configuration is a frozen dataclass validated at one boundary, and the dataclass is the schema | Accepted |
 | [0028](0028-configuration-layers-override-last-wins-and-carry-their-origin.md) | Configuration layers are flat, override last-wins, carry their origin, and cannot remove a setting | Accepted |
 | [0029](0029-a-severity-threshold-is-a-decorating-sink.md) | A severity threshold is a decorating sink, not a field on a sink or a check in the logger | Accepted |
+| [0030](0030-domain-values-are-denominated-wrappers-over-decimal.md) | Domain values are denominated frozen wrappers over `Decimal`, never subclasses of it | Accepted |
+| [0031](0031-value-types-compare-but-do-not-compute.md) | Value types compare but do not compute; a wrong type returns `NotImplemented` and a wrong unit raises | Accepted |
+| [0032](0032-verification-tooling-may-be-added-outside-phase-scope.md) | Verification tooling may be added outside phase scope, under six conditions | Accepted |
+| [0033](0033-mutation-testing-is-a-repository-native-ast-harness.md) | Mutation testing is a repository-native `ast` harness gated by a committed survivor set | Accepted |
 
 ## Relationship to other documents
 

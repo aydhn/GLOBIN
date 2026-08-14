@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 007 of 320 complete — foundation only
+## Current status: Phase 008 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -28,7 +28,7 @@ capability cannot be claimed here without pointing at something real.
 |---|---|
 | Repository, branch policy, engineering contract — [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) | Implemented |
 | 320-phase roadmap, every phase named — [`ROADMAP.md`](ROADMAP.md) | Implemented |
-| Architecture decision records (29) — [`docs/adr/`](docs/adr/README.md) | Implemented |
+| Architecture decision records (33) — [`docs/adr/`](docs/adr/README.md) | Implemented |
 | Research source ledgers with primary sources — [`docs/research/`](docs/research/phase_001_sources.md) | Implemented |
 | Engineering contracts: done-criteria, authority order, layout, doc standard — [`DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md) | Implemented |
 | Change templates for pull requests and issues — [`pull_request_template.md`](.github/pull_request_template.md) | Implemented |
@@ -40,6 +40,8 @@ capability cannot be claimed here without pointing at something real.
 | Property-based testing, enforced offline tests, process isolation — [`tests/conftest.py`](tests/conftest.py) | Implemented |
 | Structured logging: correlation-aware records that redact secrets by construction — [`LOGGING_POLICY.md`](docs/LOGGING_POLICY.md) | Implemented |
 | Typed configuration model: declared defaults, layered overrides, unknown settings refused — [`CONFIGURATION_POLICY.md`](docs/CONFIGURATION_POLICY.md) | Implemented |
+| Denominated value types: a price knows its market, a quantity knows its asset, and neither can be a float — [`VALUE_TYPES_POLICY.md`](docs/VALUE_TYPES_POLICY.md) | Implemented |
+| Mutation testing over the pure core, gated by a committed survivor set — [`mutation-baseline.toml`](docs/engineering/mutation-baseline.toml) | Implemented |
 | Everything else | Not started |
 
 ### What does not exist

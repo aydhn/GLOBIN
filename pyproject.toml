@@ -288,3 +288,56 @@ exclude_also = [
     "^\\s*\\.\\.\\.$",
     "@(abc\\.)?abstractmethod",
 ]
+
+# ---------------------------------------------------------------------------
+# mutation testing
+# ---------------------------------------------------------------------------
+# Coverage says a line ran. Mutation testing says whether anything would have
+# noticed it being different, which is the question a suite full of assertions
+# that assert nothing would still fail. The two are separate evidence and
+# neither replaces the other.
+#
+# GLOBIN's own harness rather than a third-party tool, and not by preference:
+# mutmut calls os.fork() and its documentation requires WSL on Windows, while
+# this project's declared host and its CI are both Windows (ADR-0009).
+# cosmic-ray is cross-platform but brings thirteen transitive dependencies —
+# aiohttp, gitpython and sqlalchemy among them — into a repository whose
+# `dependencies = []` is asserted by a contract test, and reviewing a dependency
+# of that size is Phase 014's process, which does not exist yet. See ADR-0032.
+[tool.globin.mutation]
+# The committed record of which mutants are known to survive, and why. Nothing
+# writes it: tomllib reads TOML and cannot emit it, so the harness has no
+# --update and a stale baseline has to be corrected by a person.
+baseline = "docs/engineering/mutation-baseline.toml"
+
+# What is copied into the throwaway tree. `pyproject.toml` is load-bearing here:
+# pytest resolves `pythonpath = ["src", "."]` against its rootdir and inserts the
+# result at sys.path[0], ahead of anything PYTHONPATH could contribute. Without
+# the sandbox owning this file the child would import the real globin package and
+# report every mutant as surviving.
+#
+# `docs` is here because the contract test below reads VALUE_TYPES_POLICY.md. That
+# test is what binds a published bound to its documented value, so without the
+# document a mutant changing `MAX_SIGNIFICANT_DIGITS` would survive — not because
+# nothing checks it, but because the check was outside the sandbox.
+sandbox = ["pyproject.toml", "src", "tests", "tools", "docs"]
+
+# The per-mutant budget is max(floor, control * factor), where `control` is the
+# unmutated subset timed on this machine. Relative rather than absolute so that a
+# slow machine gets a proportionally longer budget. An undeclared timeout is
+# never a verdict — it stops the run as unmeasured.
+timeout_factor = 8
+timeout_floor_seconds = 30
+
+[[tool.globin.mutation.target]]
+# The Phase 008 value types: pure, branch-dense, and the place where a missing
+# boundary test would let an inexact amount through.
+module = "src/globin/domain/values.py"
+# File paths, never a `-k` expression or a marker. A mistyped path is caught
+# before anything launches; a mistyped selector makes pytest exit 5 having
+# collected nothing, which a careless reading scores as a flawless run.
+tests = [
+    "tests/unit/test_values.py",
+    "tests/property/test_values_properties.py",
+    "tests/contract/test_values_contract.py",
+]

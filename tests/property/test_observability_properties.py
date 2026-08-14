@@ -176,7 +176,7 @@ def test_every_generated_event_round_trips_through_its_own_mapping(
 
 @given(value=st.decimals(allow_nan=False, allow_infinity=False))
 def test_a_decimal_is_rendered_rather_than_refused(value: Decimal) -> None:
-    """Prices will be decimals from Phase 010; logging one must never raise."""
+    """Prices are decimals from Phase 008; logging one must never raise."""
     record = as_record(log_event(Severity.INFO, "a.b", "corr-1", {"price": value}), "T")
     rendered = record["fields"]
 

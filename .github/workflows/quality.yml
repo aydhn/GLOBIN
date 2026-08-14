@@ -92,6 +92,41 @@ jobs:
       - name: Run the canonical quality gate
         run: python -m tools.quality full
 
+  mutation:
+    name: Mutation baseline
+    # After the canonical gate rather than beside it. A mutation result on a tree
+    # that does not lint or type-check is noise, and this way the job costs
+    # nothing on a commit that was going to fail anyway.
+    needs: quality
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Install what the harness launches
+        # No ruff and no mypy: the harness lints nothing and type-checks nothing,
+        # it copies the tree and runs a pytest subset against one mutated module
+        # at a time. Same pins as the jobs above, for the same reason.
+        #
+        # One interpreter, not the matrix. `ast.unparse` is not guaranteed to
+        # produce identical text across Python versions, so a baseline recorded
+        # against one interpreter is evidence about that interpreter. Running it
+        # twice would be claiming more than the tool can support.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pytest==9.0.3" "hypothesis==6.165.7"
+
+      - name: Compare the mutation baseline
+        run: python -m tools.quality mutation
+
   hygiene:
     name: Pre-commit hooks
     runs-on: windows-latest
