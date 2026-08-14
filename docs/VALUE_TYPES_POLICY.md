@@ -191,7 +191,8 @@ absence of a rule.
 |---|---|
 | Rounding, tick size, step size, where exact arithmetic is mandatory | 010, delivered — [`PRECISION_POLICY.md`](PRECISION_POLICY.md) |
 | Timestamps, clocks and timezones | 009, delivered — [`TIME_POLICY.md`](TIME_POLICY.md) |
-| Canonical identifiers, and the register of assets that exist | 011 |
+| Canonical identifiers, and the form each kind of name takes | 011, delivered — [`IDENTIFIER_POLICY.md`](IDENTIFIER_POLICY.md) |
+| The register of assets that exist | 049-050 |
 | Serialization and schema evolution for persisted values | 012 |
 | The venue spelling of a market, such as the concatenated form | 033-048 |
 | Absolute risk ceilings on position and order size | 242 |

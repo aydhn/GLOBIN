@@ -281,7 +281,9 @@ these are the one-line definitions.
 
 **Currency** — an asset code, validated for shape and never for membership.
 `Currency("ZZZQ")` succeeds: whether a venue lists an asset is a capability
-question, and the register of canonical identifiers is Phase 011.
+question, and the register of assets that exist is Phases 049-050. The canonical
+*form* of every kind of identifier is
+[`IDENTIFIER_POLICY.md`](IDENTIFIER_POLICY.md).
 
 **Symbol** ⚠ *commonly confused* — a market, held as a pair of currencies. **Not**
 the venue's concatenated spelling: `BTCUSDT` cannot be split without knowing
@@ -366,3 +368,37 @@ that no rounding is needed.
 *operator* silently reads. GLOBIN never uses one: every operation runs on a
 `Context` built for that call, and an architecture test refuses `getcontext`,
 `setcontext` and `localcontext` anywhere in the package.
+
+## Identifiers
+
+Full descriptions live in [`IDENTIFIER_POLICY.md`](IDENTIFIER_POLICY.md); these
+are the one-line definitions.
+
+**Canonical form** — the single spelling GLOBIN uses for one kind of thing.
+`spot` and `SPOT` are one product spelled twice, and a report grouped by either
+is wrong in a way that looks right, so one spelling is fixed and the rest are
+refused.
+
+**Identifier kind** — one of the six things GLOBIN gives a canonical name:
+symbol, product, environment, run, model and order. The list is an enumeration,
+so a seventh is a reviewable change rather than a new string literal somewhere.
+
+**Registry** ⚠ *commonly confused* — the statement of what canonical form each
+kind takes. **Not** a list of which products, environments or assets exist:
+that is a capability question answered against the venue (ADR-0006), owned by
+Phases 033, 035, 036 and 049-050. `product_id("nosuchproduct")` succeeds for the
+same reason `Currency("ZZZQ")` does.
+
+**Run identifier** ⚠ *commonly confused* — the identifier of one execution of
+GLOBIN doing a piece of work. Deliberately the same shape as a **correlation
+ID** — thirty-two lowercase hexadecimal characters — and not the same thing: a
+correlation ID ties together the records of one piece of work, and a run is the
+execution that work happened in.
+
+**Opaque identifier** — one that crosses into another system and comes back, so
+its case is significant and it is never folded. An order identifier is the only
+kind today.
+
+**Minting** — generating an identifier rather than reading one. It reads a
+source of randomness, so it lives in the adapters layer beside the clock
+(ADR-0026). Runs are the only kind GLOBIN mints.

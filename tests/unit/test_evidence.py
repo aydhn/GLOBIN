@@ -15,7 +15,15 @@ from typing import Final
 
 import pytest
 
-from tools.quality.evidence import checksums, coverage_report, junit, manifest, redaction, summary
+from tools.quality.evidence import (
+    checksums,
+    coverage_report,
+    diagnostics,
+    junit,
+    manifest,
+    redaction,
+    summary,
+)
 from tools.quality.evidence.cli import USAGE, UsageError, main, parse
 from tools.quality.evidence.junit import EvidenceError
 
@@ -360,6 +368,205 @@ def test_findings_are_described_in_a_stable_order() -> None:
     assert redaction.describe(findings).splitlines() == ["  a:1: first", "  b:2: second"]
 
 
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        pytest.param(r"<source>C:\Users\Some One\GLOBIN</source>", 1, id="windows source"),
+        pytest.param("C:/Users/Some One/a.py", 1, id="windows forward slashes"),
+        pytest.param('"file": "/home/someone/a.py"', 1, id="posix home"),
+        pytest.param("/Users/someone/a.py", 1, id="macos home"),
+        pytest.param("src/globin/errors.py", 0, id="a relative path is spared"),
+        pytest.param("test_the_child_does_not_set_pythonnousersite", 0, id="usersite is spared"),
+        pytest.param("<source>.</source>", 0, id="a stripped source is spared"),
+    ],
+)
+def test_an_absolute_path_is_reported_and_a_relative_one_is_not(line: str, expected: int) -> None:
+    """An absolute path is not a credential; it is a person's name, on this host.
+
+    The two spared rows are the ones that matter. `pythonnousersite` is a real
+    test name in this suite and contains `usersite`, and a check that matched it
+    would fail every run for ever.
+    """
+    assert len(redaction.scan("a.xml", line)) == expected
+
+
+# --------------------------------------------------------------------------
+# Diagnostics
+#
+# The security property is the one to read first. Ruff reports absolute paths
+# even when given a relative target, and on this machine those paths contain the
+# account holder's name -- so every test below that touches a path is really
+# asking whether a person's name can reach a published artifact.
+# --------------------------------------------------------------------------
+
+#: A repository root spelled the way this machine spells one, so the tests below
+#: exercise the case-folding and the separator conversion rather than a tidy
+#: POSIX path that would have needed neither.
+ROOT: Final[str] = r"C:\Users\Some One\Desktop\GLOBIN"
+
+
+@pytest.mark.parametrize(
+    ("reported", "expected"),
+    [
+        pytest.param(ROOT + r"\src\globin\errors.py", "src/globin/errors.py", id="absolute"),
+        pytest.param("c:/users/some one/desktop/globin/src/a.py", "src/a.py", id="different case"),
+        pytest.param(r"src\globin\errors.py", "src/globin/errors.py", id="relative"),
+        pytest.param("./src/a.py", "src/a.py", id="dot slash"),
+        pytest.param("src/a.py", "src/a.py", id="already normal"),
+        pytest.param(r"C:\Users\Someone\other.py", "<outside>/other.py", id="outside"),
+        pytest.param("/etc/passwd", "<outside>/passwd", id="posix outside"),
+    ],
+)
+def test_a_reported_path_is_reduced_to_the_repository(reported: str, expected: str) -> None:
+    """The account name in an absolute path is what must never reach an artifact.
+
+    The `different case` row is the one that would silently regress: Windows
+    reports the same directory with different capitalisation in different tools,
+    and a comparison that missed on case would emit the very path it checked.
+    """
+    assert diagnostics.normalise_path(reported, repo_root=ROOT) == expected
+
+
+def test_no_normalised_path_can_still_be_absolute() -> None:
+    """The guard behind the table: whatever goes in, a drive letter never comes out."""
+    for reported in (ROOT + r"\a.py", r"C:\Users\Someone\secret.py", "/home/me/x.py"):
+        result = diagnostics.normalise_path(reported, repo_root=ROOT)
+        assert ":" not in result
+        assert "\\" not in result
+        assert not result.startswith("/")
+
+
+@pytest.mark.parametrize("text", ["", "   ", "[]"])
+def test_ruff_finding_nothing_reads_as_nothing(text: str) -> None:
+    """A clean run writes `[]`, and a run with no output writes nothing at all."""
+    assert diagnostics.from_ruff(text, repo_root=ROOT) == ()
+
+
+def test_a_ruff_diagnostic_is_read_and_its_path_normalised() -> None:
+    """The shape Ruff actually emits, taken from a real run and trimmed."""
+    payload = json.dumps(
+        [
+            {
+                "code": "F401",
+                "message": "unused import",
+                "filename": ROOT + r"\src\globin\a.py",
+                "location": {"row": 3, "column": 8},
+            }
+        ]
+    )
+    assert diagnostics.from_ruff(payload, repo_root=ROOT) == (
+        diagnostics.Diagnostic(
+            path="src/globin/a.py", line=3, column=8, code="F401", message="unused import"
+        ),
+    )
+
+
+def test_a_ruff_diagnostic_with_no_code_is_kept() -> None:
+    """Ruff writes `null` for a syntax error's code, and that is still a finding.
+
+    Refusing the whole report over one absent field would lose every other
+    finding in it.
+    """
+    payload = json.dumps([{"code": None, "message": "bad syntax", "filename": "src/a.py"}])
+    assert diagnostics.from_ruff(payload, repo_root=ROOT)[0].code == ""
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param("not json at all", id="not json"),
+        pytest.param('{"a": 1}', id="an object rather than an array"),
+        pytest.param("[1, 2]", id="an array of non-objects"),
+    ],
+)
+def test_unreadable_ruff_output_is_refused_rather_than_guessed(payload: str) -> None:
+    """Evidence assembled from something unparsed would be evidence about nothing."""
+    with pytest.raises(EvidenceError):
+        diagnostics.from_ruff(payload, repo_root=ROOT)
+
+
+def test_the_format_check_reads_its_filenames_and_ignores_its_summary() -> None:
+    """`ruff format` has no JSON output, so the documented line prefix is the contract."""
+    output = (
+        "Would reformat: src\\globin\\a.py\n"
+        "Would reformat: tools\\b.py\n"
+        "2 files would be reformatted\n"
+    )
+    found = diagnostics.from_ruff_format(output, repo_root=ROOT)
+    assert [entry.path for entry in found] == ["src/globin/a.py", "tools/b.py"]
+    assert {entry.code for entry in found} == {diagnostics.FORMAT_CODE}
+
+
+def test_a_formatted_tree_produces_no_findings() -> None:
+    """The ordinary case prints a count and nothing else."""
+    assert diagnostics.from_ruff_format("117 files already formatted\n", repo_root=ROOT) == ()
+
+
+def test_a_mypy_diagnostic_is_read_from_its_json_line() -> None:
+    """mypy emits JSON Lines rather than an array, with Windows separators."""
+    line = json.dumps(
+        {
+            "file": r"src\globin\a.py",
+            "line": 12,
+            "column": 4,
+            "message": "Missing return",
+            "code": "return",
+        }
+    )
+    assert diagnostics.from_mypy(line, repo_root=ROOT) == (
+        diagnostics.Diagnostic(
+            path="src/globin/a.py", line=12, column=4, code="return", message="Missing return"
+        ),
+    )
+
+
+def test_a_line_that_is_not_a_diagnostic_is_skipped() -> None:
+    """mypy writes a summary alongside the diagnostics, and it is not one."""
+    text = '{"file": "a.py", "line": 1, "column": 0, "message": "m", "code": "c"}\nFound 1 error\n'
+    assert len(diagnostics.from_mypy(text, repo_root=ROOT)) == 1
+
+
+def test_diagnostics_are_ordered_so_two_runs_agree() -> None:
+    """A tool's own output order is not guaranteed, and evidence must be comparable."""
+    payload = json.dumps(
+        [
+            {"code": "B", "message": "m", "filename": "src/z.py", "location": {"row": 1}},
+            {"code": "A", "message": "m", "filename": "src/a.py", "location": {"row": 9}},
+            {"code": "A", "message": "m", "filename": "src/a.py", "location": {"row": 2}},
+        ]
+    )
+    found = diagnostics.from_ruff(payload, repo_root=ROOT)
+    assert [(entry.path, entry.line) for entry in found] == [
+        ("src/a.py", 2),
+        ("src/a.py", 9),
+        ("src/z.py", 1),
+    ]
+
+
+def test_a_rendered_document_is_sorted_ascii_and_counted() -> None:
+    """The three properties that make a written artifact comparable between machines."""
+    document = diagnostics.build(
+        tool="lint",
+        command="-m ruff check .",
+        exit_code=1,
+        diagnostics=(
+            diagnostics.Diagnostic(path="src/a.py", line=1, column=1, code="E", message="pek iyi"),
+        ),
+    )
+    rendered = diagnostics.render(document)
+    assert rendered.isascii(), "a Windows console codepage must be able to print this"
+    assert rendered.endswith("\n")
+    assert json.loads(rendered)["count"] == 1
+    assert list(json.loads(rendered)) == sorted(json.loads(rendered))
+
+
+def test_a_document_records_the_exit_code_it_was_given() -> None:
+    """A gate that did not finish is not a gate that found nothing."""
+    document = diagnostics.build(tool="typing", command="-m mypy", exit_code=None, diagnostics=())
+    assert document["exit_code"] is None
+    assert document["count"] == 0
+
+
 # --------------------------------------------------------------------------
 # The manifest
 # --------------------------------------------------------------------------
@@ -369,6 +576,7 @@ def _document() -> dict[str, object]:
     """A minimal, internally consistent manifest."""
     return manifest.build(
         run={"collected": 2, "passed": 2, "failed": 0, "errors": 0, "skipped": 0},
+        gates={"tests": {"exit_code": 0, "passed": True, "findings": 0}},
         timing={"duration_seconds": 1.5, "slow_tests": []},
     )
 
@@ -478,9 +686,12 @@ def test_a_summary_reports_the_verdict_and_the_numbers() -> None:
             "git_sha": "abc123",
             "percent_covered": 99.47,
             "coverage_threshold": 95.0,
-            "coverage_gate_passed": True,
-            "test_gate_passed": True,
             "artifacts": ["a.xml"],
+        },
+        gates={
+            "tests": {"exit_code": 0, "passed": True, "findings": 0},
+            "coverage": {"exit_code": None, "passed": True, "findings": None},
+            "lint": {"exit_code": 0, "passed": True, "findings": 0},
         },
         timing={
             "duration_seconds": 31.7,
@@ -498,7 +709,11 @@ def test_a_summary_reports_the_verdict_and_the_numbers() -> None:
 def test_a_failing_run_is_reported_as_failing() -> None:
     """The verdict has to be visible without reading the table."""
     document = manifest.build(
-        run={"test_gate_passed": False, "coverage_gate_passed": True},
+        run={},
+        gates={
+            "tests": {"exit_code": 1, "passed": False, "findings": 3},
+            "coverage": {"exit_code": None, "passed": True, "findings": None},
+        },
         timing={"duration_seconds": 1.0},
     )
     assert "**FAILED**" in summary.render(document)
@@ -507,7 +722,11 @@ def test_a_failing_run_is_reported_as_failing() -> None:
 def test_an_unmeasured_gate_renders_as_not_run() -> None:
     """`QUALITY_GATES.md` allows three states, and this is the third."""
     document = manifest.build(
-        run={"test_gate_passed": True, "coverage_gate_passed": None},
+        run={},
+        gates={
+            "tests": {"exit_code": 0, "passed": True, "findings": 0},
+            "coverage": {"exit_code": None, "passed": None, "findings": None},
+        },
         timing={"duration_seconds": 1.0},
     )
     rendered = summary.render(document)

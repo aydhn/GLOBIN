@@ -26,6 +26,8 @@ from tools.quality.evidence.gate import (
     EXIT_GATE_FAILED,
     EXIT_OK,
     EXIT_UNMEASURED,
+    REPO_ROOT,
+    evidence_files,
     junit_filename,
     run_evidence,
     verify_evidence,
@@ -122,7 +124,14 @@ class FakeRunner:
         # situation and already covered by `coverage_percent`.
         if "xml" in arguments:
             if self.report_code == 0:
-                Path(arguments[-1]).write_text("<coverage/>", encoding="utf-8")
+                # What `coverage xml` actually writes, including the absolute
+                # `<source>` element. Every test in this file therefore
+                # exercises the stripping, rather than one test that could be
+                # deleted without the others noticing.
+                Path(arguments[-1]).write_text(
+                    f"<coverage><sources><source>{REPO_ROOT}</source></sources></coverage>",
+                    encoding="utf-8",
+                )
             return self.report_code, b""
         if "json" in arguments:
             if self.report_code == 0:
@@ -131,6 +140,26 @@ class FakeRunner:
                 )
             return self.report_code, b""
         return 0, b""
+
+
+def _verdicts(document: dict[str, object]) -> dict[str, object]:
+    """Each gate's verdict, by name, read out of a manifest.
+
+    Args:
+        document: A loaded manifest.
+
+    Returns:
+        One entry per gate, carrying ``True``, ``False`` or ``None``.
+
+    Since schema version 2 a verdict lives in ``gates`` and nowhere else, so
+    every assertion about whether something passed comes through here.
+    """
+    gates = document["gates"]
+    assert isinstance(gates, dict)
+    return {
+        name: entry.get("passed") if isinstance(entry, dict) else None
+        for name, entry in gates.items()
+    }
 
 
 def test_a_passing_run_writes_every_file_and_verifies(tmp_path: Path) -> None:
@@ -149,9 +178,14 @@ def test_the_manifest_records_what_the_run_found(tmp_path: Path) -> None:
     assert isinstance(run, dict)
     assert (run["collected"], run["passed"], run["failed"]) == (2, 2, 0)
     assert run["percent_covered"] == pytest.approx(99.5)
-    assert run["coverage_gate_passed"] is True
-    assert run["test_gate_passed"] is True
     assert manifest.counts_are_consistent(run) == ()
+    assert _verdicts(document) == {
+        "tests": True,
+        "coverage": True,
+        "lint": True,
+        "format": True,
+        "typing": True,
+    }
 
 
 def test_the_manifest_carries_no_absolute_path_and_no_timestamp(tmp_path: Path) -> None:
@@ -168,6 +202,32 @@ def test_the_manifest_carries_no_absolute_path_and_no_timestamp(tmp_path: Path) 
     assert "timestamp" not in text
 
 
+def test_no_published_file_carries_this_machines_repository_path(tmp_path: Path) -> None:
+    """The leak that was found in practice, turned into a gate.
+
+    `coverage xml` writes the absolute repository root into a `<source>`
+    element. On this host every absolute path contains the account holder's full
+    name, and `.globin/evidence/` is uploaded whole — so the artifact named a
+    person until Phase 011 stripped it.
+    """
+    run_evidence(reports=tmp_path, run_process=FakeRunner())
+    root = str(REPO_ROOT)
+    for name in evidence_files():
+        text = (tmp_path / name).read_text(encoding="utf-8", errors="replace")
+        assert root not in text, name
+        assert root.replace("\\", "/") not in text, name
+
+
+def test_the_raw_coverage_database_is_not_left_to_be_uploaded(tmp_path: Path) -> None:
+    """The one file here that cannot be normalised, so it is removed instead.
+
+    It is a binary store of absolute paths, every number in it is already in
+    `coverage.json`, and the upload takes the whole directory.
+    """
+    run_evidence(reports=tmp_path, run_process=FakeRunner())
+    assert not (tmp_path / "run.coverage").exists()
+
+
 def test_a_failing_suite_still_produces_evidence_but_still_fails(tmp_path: Path) -> None:
     """The condition the whole design turns on.
 
@@ -180,7 +240,7 @@ def test_a_failing_suite_still_produces_evidence_but_still_fails(tmp_path: Path)
     document = manifest.load((tmp_path / "evidence-manifest.json").read_text(encoding="utf-8"))
     run = document["run"]
     assert isinstance(run, dict)
-    assert run["test_gate_passed"] is False
+    assert _verdicts(document)["tests"] is False
     assert run["failed"] == 1
     assert (tmp_path / "checksums.sha256").is_file()
     assert verify_evidence(reports=tmp_path) == EXIT_OK
@@ -193,7 +253,7 @@ def test_coverage_below_the_floor_fails_the_gate_and_is_recorded(tmp_path: Path)
     document = manifest.load((tmp_path / "evidence-manifest.json").read_text(encoding="utf-8"))
     run = document["run"]
     assert isinstance(run, dict)
-    assert run["coverage_gate_passed"] is False
+    assert _verdicts(document)["coverage"] is False
     assert run["percent_covered"] == pytest.approx(42.0)
 
 
@@ -212,7 +272,7 @@ def test_unmeasurable_coverage_is_unmeasured_rather_than_zero(tmp_path: Path) ->
     run = document["run"]
     assert isinstance(run, dict)
     assert run["percent_covered"] is None
-    assert run["coverage_gate_passed"] is None
+    assert _verdicts(document)["coverage"] is None
 
 
 def test_the_previous_run_is_removed_before_the_next_one_is_written(tmp_path: Path) -> None:
@@ -308,7 +368,7 @@ def test_verification_of_an_empty_directory_reports_every_file(
 ) -> None:
     """Verifying evidence that was never produced must fail, not pass vacuously."""
     assert verify_evidence(reports=tmp_path) == EXIT_GATE_FAILED
-    assert capsys.readouterr().out.count("missing") == 5
+    assert capsys.readouterr().out.count("missing") == len(evidence_files())
 
 
 def test_the_step_summary_is_written_only_when_github_asks(
@@ -363,5 +423,7 @@ def test_the_coverage_reports_do_not_re_apply_the_threshold(tmp_path: Path) -> N
     """
     runner = FakeRunner()
     run_evidence(reports=tmp_path, run_process=runner)
-    for command in runner.commands[1:]:
+    coverage_commands = [command for command in runner.commands if "coverage" in command]
+    assert coverage_commands, "no coverage command ran, so this asserted nothing"
+    for command in coverage_commands:
         assert "--fail-under=0" in command

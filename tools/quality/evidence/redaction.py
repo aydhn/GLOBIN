@@ -71,6 +71,18 @@ LITERAL_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ("a bearer token", re.compile(r"\bBearer\s+[A-Za-z0-9_\-.]{16,}", re.IGNORECASE)),
     ("a private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
     ("a URL carrying credentials", re.compile(r"://[^\s/:@]+:[^\s/@]+@")),
+    # An absolute path is not a credential, and it is here for the same reason
+    # the others are: it is something this machine knows and an artifact should
+    # not carry. On this host every absolute path contains the account holder's
+    # full name, so a published file holding one names a person. Found in
+    # practice -- `coverage xml` writes the repository root into a `<source>`
+    # element -- which is why the gate now normalises it and this says so if the
+    # normalisation ever stops working.
+    (
+        "an absolute Windows path",
+        re.compile(r"\b[A-Za-z]:[\\/]{1,2}(?:Users|home)\b", re.IGNORECASE),
+    ),
+    ("an absolute home path", re.compile(r"(?:^|[\s\"'(])/(?:home|Users)/[^\s\"')]+")),
 )
 
 

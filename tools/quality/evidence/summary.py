@@ -31,13 +31,15 @@ def render(document: dict[str, object]) -> str:
         Markdown, newline-terminated.
     """
     run = _section(document, "run")
+    gates = _section(document, "gates")
     timing = _section(document, "timing")
-    passed = bool(run.get("test_gate_passed")) and bool(run.get("coverage_gate_passed"))
+    verdicts = {name: _passed(entry) for name, entry in gates.items()}
+    overall = "PASSED" if verdicts and all(verdicts.values()) else "FAILED"
 
     lines = [
         "## GLOBIN test evidence",
         "",
-        f"**{'PASSED' if passed else 'FAILED'}** - profile `{run.get('profile', '?')}` "
+        f"**{overall}** - profile `{run.get('profile', '?')}` "
         f"on {run.get('platform', '?')}, Python {run.get('python_version', '?')}",
         "",
         "| Measure | Value |",
@@ -50,9 +52,14 @@ def render(document: dict[str, object]) -> str:
         f"| Skipped | {run.get('skipped', 0)} |",
         f"| Duration | {_seconds(timing.get('duration_seconds'))} |",
         f"| Coverage | {_coverage(run)} |",
-        f"| Coverage gate | {_verdict(run.get('coverage_gate_passed'))} |",
-        f"| Test gate | {_verdict(run.get('test_gate_passed'))} |",
     ]
+
+    if gates:
+        lines.extend(["", "| Gate | Result | Findings |", "|---|---|---|"])
+        lines.extend(
+            f"| {name} | {_verdict(verdicts[name])} | {_findings(gates[name])} |"
+            for name in sorted(gates)
+        )
 
     slow = timing.get("slow_tests")
     if isinstance(slow, list) and slow:
@@ -101,6 +108,37 @@ def _coverage(run: dict[str, object]) -> str:
     threshold = run.get("coverage_threshold")
     floor = f" (floor {threshold}%)" if isinstance(threshold, int | float) else ""
     return f"{percent:.2f}%{floor}"
+
+
+def _passed(entry: object) -> bool | None:
+    """Read one gate's verdict out of its manifest entry.
+
+    Args:
+        entry: The recorded gate.
+
+    Returns:
+        Whether it passed, or ``None`` when it did not say.
+    """
+    if not isinstance(entry, dict):
+        return None
+    passed = entry.get("passed")
+    return passed if isinstance(passed, bool) else None
+
+
+def _findings(entry: object) -> str:
+    """How many things a gate found.
+
+    Args:
+        entry: The recorded gate.
+
+    Returns:
+        The count, or ``-`` where the gate does not count anything. Coverage has
+        no findings; a blank there would read as zero of them.
+    """
+    if not isinstance(entry, dict):
+        return "-"
+    findings = entry.get("findings")
+    return str(findings) if isinstance(findings, int) and not isinstance(findings, bool) else "-"
 
 
 def _verdict(value: object) -> str:

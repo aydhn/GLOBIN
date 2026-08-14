@@ -56,6 +56,7 @@ PERMITTED_IMPORTS: Final[frozenset[str]] = frozenset(
         "pathlib",
         "platform",
         "re",
+        "shutil",
         "sys",
         "tomllib",
         "typing",
@@ -192,6 +193,28 @@ def test_the_evidence_gate_does_not_modify_the_tree() -> None:
     assert "evidence" not in MUTATING_COMMANDS
 
 
+def test_no_tool_the_gate_runs_can_rewrite_the_tree() -> None:
+    """ADR-0032's fifth condition, for the three children the gate now starts.
+
+    The gate runs Ruff and mypy itself, so "it only reports" is no longer settled
+    by the command table alone. `ruff check --fix` and a bare `ruff format` would
+    each edit the working tree from inside a gate whose whole claim is that it
+    does not, and the thing that passed would no longer be the thing you have.
+    """
+    for name, _, argv in gate.tool_commands():
+        assert "--fix" not in argv, name
+        assert "--unsafe-fixes" not in argv, name
+        if "format" in argv:
+            assert "--check" in argv, "ruff format must never run without --check"
+
+
+def test_every_tool_the_gate_runs_writes_its_own_evidence_file() -> None:
+    """A gate whose result is not written down is a gate nobody can check later."""
+    written = {filename for _, filename, _ in gate.tool_commands()}
+    assert written <= set(gate.evidence_files())
+    assert len(written) == len(gate.tool_commands()), "two gates would overwrite one file"
+
+
 def test_the_reporting_commands_stay_in_order() -> None:
     """The command table's order is compared against `QUALITY_GATES.md` byte for
     byte, so a new command inserted in the wrong place fails two tests at once."""
@@ -297,9 +320,33 @@ def test_every_action_the_evidence_job_uses_is_pinned_to_a_commit(workflow: str)
 
 
 def test_the_artifact_carries_no_cache_or_environment(workflow: str) -> None:
-    """An artifact is downloaded by people. It holds evidence and nothing else."""
-    for forbidden in (".venv", "node_modules", ".mypy_cache", ".pytest_cache", "htmlcov"):
+    """An artifact is downloaded by people. It holds evidence and nothing else.
+
+    `htmlcov` was on this list until Phase 011 and is deliberately off it now:
+    ADR-0040 decided the browsable coverage tree is worth publishing, being the
+    thing somebody opens when coverage falls. It is rendered rather than
+    digested, which is a different question and is argued there.
+
+    A cache is still forbidden, and for a reason the tree does not share: a cache
+    is this machine's state rather than this run's result.
+    """
+    for forbidden in (".venv", "node_modules", ".mypy_cache", ".pytest_cache", ".ruff_cache"):
         assert forbidden not in workflow, f"{forbidden} must not be uploaded"
+
+
+def test_the_evidence_job_installs_every_tool_the_gate_starts(workflow: str) -> None:
+    """The near-miss this exists to prevent, found while writing Phase 011.
+
+    The gate runs Ruff and mypy as children, and the job installed neither. A
+    machine without them reports a missing tool and exits 127, so CI would have
+    failed on a configuration mistake rather than on anything about the code —
+    and the failure would have looked like the gate's, not the workflow's.
+    """
+    block = workflow.split("evidence:", maxsplit=1)[-1]
+    installs = block.split("python -m tools.quality evidence", maxsplit=1)[0]
+    started = {argv[argv.index("-m") + 1] for _, _, argv in gate.tool_commands()}
+    missing = sorted(name for name in started if f'"{name}==' not in installs)
+    assert not missing, f"the evidence job starts these but never installs them: {missing}"
 
 
 # --------------------------------------------------------------------------

@@ -10,6 +10,21 @@ tests failed writes its JUnit XML, its coverage, its manifest and its checksums 
 and then returns non-zero. Swallowing a failure in order to publish an artifact
 would make the artifact worthless and the gate a decoration.
 
+**Every gate runs, and then the verdict is given.** ``tools/quality/runner.py``
+stops at the first failing step, and ``QUALITY_GATES.md`` makes that normative
+for the commands it describes. This gate is deliberately the opposite: a run that
+stopped at Ruff would produce no test evidence at all, which is the one thing it
+exists to produce. Collecting every result and *then* returning non-zero is not a
+softer rule — it is the same rule applied to five gates instead of one, and the
+manifest records each separately so that "the suite failed" and "the types
+failed" are never one undifferentiated failure.
+
+**Three of the five are read into evidence, and one is only rendered.** JUnit XML,
+coverage and the two tools' diagnostics are machine-readable and digested. The
+HTML coverage tree is not: it is a rendering of ``coverage.json``, which *is*
+digested, so checksumming forty generated pages would add forty lines that prove
+nothing the one digest does not already prove.
+
 **Why the suite is run here rather than reused from another gate.** So that one
 command produces evidence, locally and in CI, from the same code. The sharded
 gate already proves that coverage survives being measured in several processes
@@ -22,11 +37,21 @@ so this changes nothing about what the working tree may contain.
 
 import os
 import platform
+import shutil
 import sys
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Final
 
-from tools.quality.evidence import checksums, coverage_report, junit, manifest, redaction, summary
+from tools.quality.evidence import (
+    checksums,
+    coverage_report,
+    diagnostics,
+    junit,
+    manifest,
+    redaction,
+    summary,
+)
 from tools.quality.evidence.junit import EvidenceError
 from tools.quality.execution.plan import child_environment, interpreter
 from tools.quality.execution.workspace import ProcessRunner, prepare, run_child, spawn
@@ -66,6 +91,29 @@ SLOW_TEST_LIMIT: Final[int] = 10
 SHA_LENGTH: Final[int] = 40
 """How long a Git object name is, named so the comparison below reads."""
 
+HTML_DIRECTORY: Final[str] = "htmlcov"
+"""Where the human-readable coverage rendering goes.
+
+A directory rather than a file, and deliberately outside :func:`evidence_files`.
+See the module docstring for why it is rendered rather than digested.
+"""
+
+COVERAGE_SUMMARY_FILE: Final[str] = "coverage-summary.txt"
+"""The per-file coverage table, as ``coverage report`` prints it.
+
+``show_missing`` is on in ``pyproject.toml``, so this carries the missing line
+numbers as well as the percentages — which is most of what somebody opens the
+HTML tree to find, in one small file that *is* digested.
+"""
+
+TOOL_TIMEOUT_SECONDS: Final[float] = 900.0
+"""How long Ruff or mypy may take.
+
+Longer than :data:`COMMAND_TIMEOUT_SECONDS` because mypy on a cold cache is
+minutes rather than seconds, and shorter than the suite's because neither tool
+runs a test.
+"""
+
 
 def junit_filename() -> str:
     """The JUnit report's name, built from what identifies the run.
@@ -92,8 +140,35 @@ def evidence_files() -> tuple[str, ...]:
         junit_filename(),
         "coverage.xml",
         "coverage.json",
+        COVERAGE_SUMMARY_FILE,
+        "lint-ruff.json",
+        "format-ruff.json",
+        "typing-mypy.json",
         "evidence-manifest.json",
         "checksums.sha256",
+    )
+
+
+def tool_commands() -> tuple[tuple[str, str, tuple[str, ...]], ...]:
+    """The three tool gates, as a name, an evidence filename and an argv.
+
+    Returns:
+        One entry per gate, in the order they run.
+
+    The argv are the ones ``tools/quality/commands.py`` already defines for
+    ``lint``, ``format`` and ``typecheck``, plus a machine-readable output flag.
+    Ruff is run **without** ``--fix`` and ``ruff format`` **with** ``--check``,
+    which is ADR-0032's fifth condition and what
+    ``tests/unit/test_quality_runner.py`` already refuses to let slip.
+    """
+    return (
+        ("lint", "lint-ruff.json", ("-m", "ruff", "check", ".", "--output-format=json")),
+        ("format", "format-ruff.json", ("-m", "ruff", "format", "--check", ".")),
+        (
+            "typing",
+            "typing-mypy.json",
+            ("-m", "mypy", "src/globin", "tests", "tools", "--output=json"),
+        ),
     )
 
 
@@ -159,8 +234,25 @@ def run_evidence(*, reports: Path | None = None, run_process: ProcessRunner = sp
         if code != 0:
             print(f"evidence: could not write {label} (exit {code})\n{output.strip()}")
 
+    _write_coverage_summary(directory, environment=environment, run_process=run_process)
+    _write_coverage_html(directory, environment=environment, run_process=run_process)
+    _strip_repository_path(directory / "coverage.xml")
+    # The raw coverage database is not evidence: every number in it is already in
+    # `coverage.json`, and being a binary store of absolute paths it is the one
+    # file here that cannot be normalised. It is removed once the reports that
+    # need it have been written, because `.globin/evidence/` is uploaded whole.
+    coverage_data.unlink(missing_ok=True)
+
+    tool_gates = _run_tools(directory, environment=environment, run_process=run_process)
+
     try:
-        document = _assemble(directory, junit_path, test_gate_passed=test_gate_passed)
+        document = _assemble(
+            directory,
+            junit_path,
+            suite_code=suite_code,
+            test_gate_passed=test_gate_passed,
+            tool_gates=tool_gates,
+        )
     except EvidenceError as fault:
         print(f"evidence: the evidence could not be assembled: {fault}")
         print(suite_output.strip()[-2000:])
@@ -168,11 +260,13 @@ def run_evidence(*, reports: Path | None = None, run_process: ProcessRunner = sp
 
     _write_summary(document)
     run = document["run"]
+    gates = document["gates"]
     assert isinstance(run, dict)  # noqa: S101 — built above, narrowing for mypy
+    assert isinstance(gates, dict)  # noqa: S101 — built above, narrowing for mypy
 
     if not test_gate_passed:
         print(suite_output.strip()[-2000:])
-    return _verdict(run, suite_code=suite_code)
+    return _verdict(run, gates, suite_code=suite_code)
 
 
 def verify_evidence(*, reports: Path | None = None) -> int:
@@ -233,6 +327,7 @@ def _prune(directory: Path) -> None:
     """
     for name in (*evidence_files(), "run.coverage"):
         (directory / name).unlink(missing_ok=True)
+    shutil.rmtree(directory / HTML_DIRECTORY, ignore_errors=True)
 
 
 def _suite_argv(junit_path: Path) -> tuple[str, ...]:
@@ -268,13 +363,167 @@ def _suite_argv(junit_path: Path) -> tuple[str, ...]:
     )
 
 
-def _assemble(directory: Path, junit_path: Path, *, test_gate_passed: bool) -> dict[str, object]:
+def _write_coverage_summary(
+    directory: Path, *, environment: Mapping[str, str], run_process: ProcessRunner
+) -> None:
+    """Write the per-file coverage table a person reads.
+
+    Args:
+        directory: Where the evidence lives.
+        environment: The child environment, carrying the coverage data file.
+        run_process: How to start a child.
+
+    ``coverage report`` prints to standard output and has no output flag, so the
+    text is captured and written here. ``--fail-under=0`` for the reason the XML
+    and JSON commands give: the threshold is applied from the manifest, so that a
+    coverage failure is recorded before it is reported.
+    """
+    code, output = run_child(
+        (interpreter(), "-m", "coverage", "report", "--fail-under=0"),
+        cwd=REPO_ROOT,
+        env=environment,
+        timeout=COMMAND_TIMEOUT_SECONDS,
+        run_process=run_process,
+    )
+    if code != 0:
+        print(f"evidence: could not write {COVERAGE_SUMMARY_FILE} (exit {code})")
+    (directory / COVERAGE_SUMMARY_FILE).write_text(output, encoding="utf-8", newline="\n")
+
+
+def _write_coverage_html(
+    directory: Path, *, environment: Mapping[str, str], run_process: ProcessRunner
+) -> None:
+    """Render the browsable coverage tree.
+
+    Args:
+        directory: Where the evidence lives.
+        environment: The child environment, carrying the coverage data file.
+        run_process: How to start a child.
+
+    Failure is reported and not fatal. This is the one output nothing else
+    depends on: the manifest reads ``coverage.json``, and a missing rendering
+    costs a reader convenience rather than evidence.
+    """
+    code, output = run_child(
+        (
+            interpreter(),
+            "-m",
+            "coverage",
+            "html",
+            "--fail-under=0",
+            "-d",
+            str(directory / HTML_DIRECTORY),
+        ),
+        cwd=REPO_ROOT,
+        env=environment,
+        timeout=COMMAND_TIMEOUT_SECONDS,
+        run_process=run_process,
+    )
+    if code != 0:
+        print(f"evidence: could not render {HTML_DIRECTORY}/ (exit {code})\n{output.strip()}")
+
+
+def _strip_repository_path(path: Path) -> None:
+    """Replace this machine's repository path with a relative one, in place.
+
+    Args:
+        path: The generated report. A file that was never written is skipped.
+
+    ``coverage xml`` writes the absolute repository root into a ``<source>``
+    element, and on this host every absolute path contains the account holder's
+    full name — so the file names a person and the artifact is published.
+
+    Rewriting afterwards rather than configuring ``relative_files`` in
+    ``pyproject.toml`` is deliberate: ADR-0036 decision 6 refuses that key
+    because it would change what the existing ``coverage`` and ``full`` gates
+    do, and this gate must not reach into theirs. Both spellings of the root are
+    replaced, because a tool may report either separator.
+    """
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    root = str(REPO_ROOT)
+    stripped = text.replace(root, ".").replace(root.replace("\\", "/"), ".")
+    if stripped != text:
+        path.write_text(stripped, encoding="utf-8", newline="\n")
+
+
+def _run_tools(
+    directory: Path, *, environment: Mapping[str, str], run_process: ProcessRunner
+) -> dict[str, object]:
+    """Run Ruff and mypy, record what they found, and report how each fared.
+
+    Args:
+        directory: Where the evidence lives.
+        environment: The child environment.
+        run_process: How to start a child.
+
+    Returns:
+        One entry per gate: its exit code, whether it passed, and how many
+        findings were recorded.
+
+    Every gate runs. A tool that fails does not stop the next, because the point
+    of collecting evidence is that one failure does not hide four other results.
+    """
+    readers: dict[str, Callable[[str], tuple[diagnostics.Diagnostic, ...]]] = {
+        "lint": lambda text: diagnostics.from_ruff(text, repo_root=str(REPO_ROOT)),
+        "format": lambda text: diagnostics.from_ruff_format(text, repo_root=str(REPO_ROOT)),
+        "typing": lambda text: diagnostics.from_mypy(text, repo_root=str(REPO_ROOT)),
+    }
+    gates: dict[str, object] = {}
+    for name, filename, argv in tool_commands():
+        code, output = run_child(
+            (interpreter(), *argv),
+            cwd=REPO_ROOT,
+            env=environment,
+            timeout=TOOL_TIMEOUT_SECONDS,
+            run_process=run_process,
+        )
+        try:
+            found = readers[name](output)
+        except EvidenceError as fault:
+            print(f"evidence: {name} output could not be read: {fault}")
+            found = ()
+            readable = False
+        else:
+            readable = True
+        document = diagnostics.build(
+            tool=name,
+            command=" ".join(argv),
+            exit_code=code,
+            diagnostics=found,
+        )
+        (directory / filename).write_text(
+            diagnostics.render(document), encoding="utf-8", newline="\n"
+        )
+        if code is None:
+            print(f"evidence: {name} did not finish; its result is unmeasured")
+        elif code != 0:
+            print(f"evidence: {name} FAILED (exit {code}), {len(found)} finding(s) recorded")
+        gates[name] = {
+            "exit_code": code,
+            "passed": None if code is None else code == 0,
+            "findings": len(found) if readable else None,
+        }
+    return gates
+
+
+def _assemble(
+    directory: Path,
+    junit_path: Path,
+    *,
+    suite_code: int | None,
+    test_gate_passed: bool,
+    tool_gates: dict[str, object],
+) -> dict[str, object]:
     """Build the manifest and write it, then the checksums beside it.
 
     Args:
         directory: Where the evidence lives.
         junit_path: The JUnit report.
+        suite_code: What pytest returned, or ``None`` if it never did.
         test_gate_passed: Whether the suite itself passed.
+        tool_gates: What Ruff and mypy did, already recorded.
 
     Returns:
         The manifest document.
@@ -317,9 +566,8 @@ def _assemble(directory: Path, junit_path: Path, *, test_gate_passed: bool) -> d
         "covered_branches": None if measured is None else measured.covered_branches,
         "branch_coverage_enabled": None if measured is None else measured.branch_enabled,
         "coverage_threshold": threshold,
-        "coverage_gate_passed": coverage_gate_passed,
-        "test_gate_passed": test_gate_passed,
         "artifacts": list(evidence_files()),
+        "renderings": [f"{HTML_DIRECTORY}/"],
     }
     timing: dict[str, object] = {
         "duration_seconds": round(outcome.duration_seconds, 3),
@@ -329,7 +577,24 @@ def _assemble(directory: Path, junit_path: Path, *, test_gate_passed: bool) -> d
         ],
     }
 
-    document = manifest.build(run=run, timing=timing)
+    gates: dict[str, object] = {
+        "tests": {
+            "exit_code": suite_code,
+            "passed": test_gate_passed,
+            "findings": outcome.failed + outcome.errors,
+        },
+        # Coverage has no exit code of its own: the report commands run with
+        # `--fail-under=0` so that a low figure is recorded before it is judged,
+        # and the judgement is made here against the threshold in the manifest.
+        "coverage": {
+            "exit_code": None,
+            "passed": coverage_gate_passed,
+            "findings": None,
+        },
+        **tool_gates,
+    }
+
+    document = manifest.build(run=run, timing=timing, gates=gates)
     (directory / "evidence-manifest.json").write_text(
         manifest.render(document), encoding="utf-8", newline="\n"
     )
@@ -395,33 +660,63 @@ def _verify_checksums(contents: dict[str, bytes]) -> tuple[str, ...]:
     return checksums.verify(recorded, described)
 
 
-def _verdict(run: dict[str, object], *, suite_code: int | None) -> int:
-    """Turn the recorded gates into an exit code.
+def _verdict(run: dict[str, object], gates: dict[str, object], *, suite_code: int | None) -> int:
+    """Turn the recorded gates into one exit code.
 
     Args:
         run: The manifest's ``run`` section.
+        gates: The manifest's ``gates`` section, one entry per gate.
         suite_code: What pytest returned, or ``None`` if it never did.
 
     Returns:
         The exit code.
+
+    Unmeasured outranks failed, as it does in ``tools/quality/execution/plan.py``
+    and for the same reason: ``QUALITY_GATES.md`` is explicit that a gate which
+    did not run never reports as one that passed, and a run reported as merely
+    failed invites somebody to fix the failure and believe the rest was checked.
+
+    Every failing gate is named. One line saying "the gate failed" after five
+    gates ran is a message that sends a reader to the wrong file half the time.
     """
-    if suite_code is None or run.get("coverage_gate_passed") is None:
-        print("evidence: the result could not be determined, which is not a pass")
+    verdicts = {name: _gate_passed(entry) for name, entry in gates.items()}
+    unmeasured = sorted(name for name, passed in verdicts.items() if passed is None)
+    failed = sorted(name for name, passed in verdicts.items() if passed is False)
+
+    if suite_code is None or unmeasured:
+        named = ", ".join(unmeasured) or "the suite"
+        print(f"evidence: UNMEASURED - {named} did not report, which is not a pass")
         return EXIT_UNMEASURED
-    if not run.get("test_gate_passed"):
-        print("evidence: FAILED - the suite did not pass. Evidence was written anyway.")
-        return EXIT_GATE_FAILED
-    if not run.get("coverage_gate_passed"):
-        print(
-            f"evidence: FAILED - coverage {run.get('percent_covered')}% is below "
-            f"{run.get('coverage_threshold')}%. Evidence was written anyway."
-        )
+    if failed:
+        print(f"evidence: FAILED - {', '.join(failed)}. Evidence was written anyway.")
+        if "coverage" in failed:
+            print(
+                f"evidence:   coverage {run.get('percent_covered')}% is below "
+                f"{run.get('coverage_threshold')}%"
+            )
         return EXIT_GATE_FAILED
     print(
-        f"evidence: passed - {run.get('collected')} tests, "
+        f"evidence: passed - {len(verdicts)} gates, {run.get('collected')} tests, "
         f"{run.get('percent_covered')}% coverage, {len(evidence_files())} files written."
     )
     return EXIT_OK
+
+
+def _gate_passed(entry: object) -> bool | None:
+    """Read one gate's verdict out of its manifest entry.
+
+    Args:
+        entry: The recorded gate.
+
+    Returns:
+        Whether it passed, or ``None`` when it did not say — which includes an
+        entry that is not the shape this module writes, because a manifest that
+        cannot be read is not one reporting success.
+    """
+    if not isinstance(entry, dict):
+        return None
+    passed = entry.get("passed")
+    return passed if isinstance(passed, bool) else None
 
 
 def _write_summary(document: dict[str, object]) -> None:

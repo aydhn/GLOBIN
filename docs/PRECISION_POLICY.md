@@ -176,7 +176,7 @@ absence of a rule.
 | Whether a ratio, such as a sizing fraction, gets its own type | 243 |
 | The numeric type indicators and models use, and their tolerance | 113-128 |
 | How a `Decimal`, an `Increment` or a `Rounding` is serialised | 012 |
-| Canonical identifiers for markets and assets | 011 |
+| Canonical identifiers for markets and assets | 011, delivered — [`IDENTIFIER_POLICY.md`](IDENTIFIER_POLICY.md) |
 | Absolute risk ceilings on position and order size | 242 |
 | Bit-identical reproducibility of a float computation across hosts | 158 |
 | Timestamps, clocks and millisecond conventions | 009, delivered — [`TIME_POLICY.md`](TIME_POLICY.md) |

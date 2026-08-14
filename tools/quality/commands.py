@@ -142,12 +142,14 @@ _MUTATION = Step("mutation", ("pytest", "hypothesis"), ("-m", "tools.quality.mut
 # pytest-spawning step inside one is the re-entrancy those harnesses avoid.
 #
 # `coverage` is declared alongside `pytest_cov` because the gate invokes
-# `python -m coverage xml` and `json` directly, and `hypothesis` because it
-# passes `--hypothesis-profile=ci` to the child itself, where the preflight
-# cannot see it.
+# `python -m coverage xml`, `json`, `report` and `html` directly, and
+# `hypothesis` because it passes `--hypothesis-profile=ci` to the child itself,
+# where the preflight cannot see it. `ruff` and `mypy` for the same reason: the
+# gate runs them as children to record what they found, so a machine without one
+# must report a missing tool rather than an unmeasured gate.
 _EVIDENCE = Step(
     "evidence",
-    ("pytest", "pytest_cov", "coverage", "hypothesis"),
+    ("pytest", "pytest_cov", "coverage", "hypothesis", "ruff", "mypy"),
     ("-m", "tools.quality.evidence"),
 )
 

@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 010 of 320 complete — foundation only
+## Current status: Phase 011 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -28,12 +28,13 @@ capability cannot be claimed here without pointing at something real.
 |---|---|
 | Repository, branch policy, engineering contract — [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) | Implemented |
 | 320-phase roadmap, every phase named — [`ROADMAP.md`](ROADMAP.md) | Implemented |
-| Architecture decision records (38) — [`docs/adr/`](docs/adr/README.md) | Implemented |
+| Architecture decision records (40) — [`docs/adr/`](docs/adr/README.md) | Implemented |
 | Research source ledgers with primary sources — [`docs/research/`](docs/research/phase_001_sources.md) | Implemented |
 | UTC-only internal time: an injected clock, aware instants, milliseconds as a floored projection — [`TIME_POLICY.md`](docs/TIME_POLICY.md) | Implemented |
 | Exact decimal arithmetic, four rounding modes, tick and step alignment — [`PRECISION_POLICY.md`](docs/PRECISION_POLICY.md) | Implemented |
+| Canonical identifiers: one registered form per kind, and no register of instances in the domain — [`IDENTIFIER_POLICY.md`](docs/IDENTIFIER_POLICY.md) | Implemented |
 | Deterministic multi-process test execution, sharded by a stable digest — [`tools/quality/execution/`](tools/quality/execution/__init__.py) | Implemented |
-| Machine-readable test evidence: JUnit XML, coverage, a digested manifest and checksums — [`tools/quality/evidence/`](tools/quality/evidence/__init__.py) | Implemented |
+| Machine-readable evidence for every gate: JUnit XML, coverage in four forms, lint and typing findings, a digested manifest and checksums — [`tools/quality/evidence/`](tools/quality/evidence/__init__.py) | Implemented |
 | Engineering contracts: done-criteria, authority order, layout, doc standard — [`DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md) | Implemented |
 | Change templates for pull requests and issues — [`pull_request_template.md`](.github/pull_request_template.md) | Implemented |
 | Architecture: five layers, inward dependency contract, C4 system and container views — [`docs/architecture/`](docs/architecture/README.md) | Implemented |

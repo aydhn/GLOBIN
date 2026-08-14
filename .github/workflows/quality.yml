@@ -181,12 +181,15 @@ jobs:
           python-version: '3.14'
 
       - name: Install what the harness launches
-        # No ruff and no mypy: the harness lints nothing and type-checks nothing.
-        # `pytest-cov` because the child passes `--cov`, and `hypothesis` because
-        # it is given `--hypothesis-profile=ci`. Same pins as every other job.
+        # Every tool the gate starts as a child, at the same pins as every other
+        # job. `pytest-cov` because the child passes `--cov`, `hypothesis`
+        # because it is given `--hypothesis-profile=ci`, and `ruff` and `mypy`
+        # because the gate runs them itself to record what they found. They are
+        # declared in the command table too, so a machine missing one reports a
+        # missing tool rather than an unmeasured gate.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "pytest==9.0.3" "pytest-cov==7.1.0" "hypothesis==6.165.7"
+          python -m pip install "ruff==0.15.14" "mypy==2.1.0" "pytest==9.0.3" "pytest-cov==7.1.0" "hypothesis==6.165.7"
 
       - name: Produce the test evidence
         # Writes the step summary itself, through $GITHUB_STEP_SUMMARY, using the
@@ -211,9 +214,11 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-evidence-windows-py314
-          # Exactly the five evidence files. No caches, no virtual environment,
-          # no HTML coverage report — that last one is large and only useful
-          # interactively, and an artifact is a thing people download.
+          # The nine evidence files and the browsable coverage tree beside them.
+          # No caches and no virtual environment. The raw coverage database is
+          # not here either: the gate deletes it once the reports are written,
+          # because it is a binary store of absolute paths and every number in it
+          # is already in coverage.json.
           path: .globin/evidence/
           # Explicit rather than inherited from the repository default, which a
           # setting nobody remembers could change under this workflow.

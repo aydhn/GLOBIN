@@ -15,11 +15,24 @@ manifest is evidence, and evidence that could be edited in one section without
 the digest noticing would be evidence about the sections somebody chose not to
 edit.
 
-**Two sections, and why.** ``run`` holds what the run *was* and what it *found* —
-the commit, the interpreter, the platform, the counts, the coverage, the verdicts.
-``timing`` holds durations. The split is for readers rather than for the digest:
-two runs of the same tree differ in ``timing`` and nowhere else, so a reader
-comparing two manifests knows immediately which differences are real.
+**Three sections, and why.** ``run`` holds what the run *was* and what it *found* —
+the commit, the interpreter, the platform, the counts, the coverage. ``gates``
+holds one entry per gate: its exit code, whether it passed, and how many findings
+were recorded. ``timing`` holds durations. The split is for readers rather than
+for the digest: two runs of the same tree differ in ``timing`` and nowhere else,
+so a reader comparing two manifests knows immediately which differences are real.
+
+``gates`` is a mapping rather than five more keys in ``run`` because the set of
+gates grows and the shape of one does not. A reader — or a later phase's
+dashboard — can enumerate them without knowing their names in advance, and
+adding a sixth costs no reader anything.
+
+**A verdict appears in exactly one place.** Version 1 kept ``test_gate_passed``
+and ``coverage_gate_passed`` in ``run``; version 2 does not, because leaving them
+there beside the ``gates`` entries saying the same thing would be two copies of
+one fact with nothing comparing them —
+``docs/engineering/SOURCE_OF_TRUTH.md`` calls that drift rather than a tripwire.
+``run`` records what was measured; ``gates`` records what was concluded.
 
 **No timestamps, and no absolute paths.** A timestamp would make every manifest
 differ from every other for no reason anybody cares about, and an absolute path
@@ -37,9 +50,17 @@ SCHEMA: Final[str] = "globin.evidence.manifest"
 """Identifies what kind of document this is, so a shard manifest fed to the
 evidence reader is refused by name rather than by a missing key."""
 
-SCHEMA_VERSION: Final[int] = 1
+SCHEMA_VERSION: Final[int] = 2
 """Bumped whenever the document changes shape. Inside the digested payload, so a
-canonicalisation change cannot collide with an older digest."""
+canonicalisation change cannot collide with an older digest.
+
+Version 2 added the ``gates`` section, when the evidence run grew from recording
+the suite and its coverage to recording lint and typing as well. :func:`load`
+refuses version 1 rather than reading it and finding the section missing, which
+is the whole reason the number is in the payload: a manifest from before the
+change is a manifest about a different set of gates, and treating it as one about
+this set would report three gates as never having failed.
+"""
 
 DIGEST_PREFIX: Final[str] = "sha256:"
 """Names the algorithm in the value, so a future change is legible in the data."""
@@ -81,11 +102,16 @@ def digest(document: dict[str, object]) -> str:
     return DIGEST_PREFIX + hashlib.sha256(render(payload).encode("utf-8")).hexdigest()
 
 
-def build(*, run: dict[str, object], timing: dict[str, object]) -> dict[str, object]:
+def build(
+    *, run: dict[str, object], gates: dict[str, object], timing: dict[str, object]
+) -> dict[str, object]:
     """Assemble a manifest and seal it.
 
     Args:
         run: What the run was and what it found.
+        gates: One entry per gate, each carrying an exit code, a verdict and a
+            count of findings. Whether the run passed is read from here, not
+            from ``run``.
         timing: What it cost. Separated so a reader comparing two manifests can
             see at once which differences are inherent.
 
@@ -96,6 +122,7 @@ def build(*, run: dict[str, object], timing: dict[str, object]) -> dict[str, obj
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
         "run": run,
+        "gates": gates,
         "timing": timing,
     }
     document[DIGEST_KEY] = digest(document)

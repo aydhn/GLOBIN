@@ -46,7 +46,7 @@ python -m tools.quality full
 | `coverage` | Full suite with branch coverage and its floor | Before delivery |
 | `shards` | The suite partitioned N ways, each shard its own process | Proving no test depends on sharing a process with another |
 | `mutation` | Mutation testing of the declared targets, against the baseline | Proving the tests would notice a change |
-| `evidence` | One run, recorded as JUnit XML, coverage reports, a digested manifest and checksums | Producing something a machine can read and a person can check later |
+| `evidence` | The suite, coverage, lint and typing in one run, recorded as JUnit XML, coverage in four forms, each tool's findings, a digested manifest and checksums | Producing something a machine can read and a person can check later |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
 
@@ -84,6 +84,23 @@ build green: appending `|| true` to a command, setting `continue-on-error` on a
 CI step, downgrading a failure to a warning, skipping a test when its
 precondition is missing, and treating an absent tool as nothing to check.
 A contract test asserts the CI workflow contains none of them.
+
+### The one deliberate exception: `evidence`
+
+`evidence` runs every gate and *then* returns non-zero, rather than stopping at
+the first failure. This is not a softer rule; it is the same rule applied to five
+gates instead of one.
+
+The reason is what the command is for. A run that stopped at `ruff` would produce
+no test evidence at all — which is the one thing it exists to produce, and the
+thing somebody wants most when something has just failed. Every gate's result is
+recorded separately in the manifest's `gates` section, so "the suite failed" and
+"the types failed" are never one undifferentiated failure, and the command's own
+exit code still reports the worst of them.
+
+Nothing else changes. Failure is never masked, "not run" still outranks "failed"
+in the verdict, and `full` — the gate this repository actually blocks on — still
+stops at its first failing step.
 
 ---
 

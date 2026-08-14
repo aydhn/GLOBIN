@@ -103,6 +103,8 @@ a future reader can judge whether the reason still holds.
 | [0036](0036-test-execution-is-sharded-by-a-stable-digest-not-by-a-plugin.md) | Test execution is sharded by a stable digest, not by a plugin | Accepted |
 | [0037](0037-arithmetic-is-exact-or-refused-under-an-explicit-context.md) | Arithmetic is exact or refused, under an explicitly built context, and rounding is always an argument | Accepted |
 | [0038](0038-a-tick-size-and-a-step-size-are-one-undenominated-increment.md) | A tick size and a step size are one undenominated `Increment`, aligned by `divmod` | Accepted |
+| [0039](0039-identifiers-register-kinds-not-instances.md) | Identifiers register kinds, not instances, and the registry is a function | Accepted |
+| [0040](0040-evidence-records-every-gate-and-its-schema-version-is-a-contract.md) | Evidence records every gate, and its schema version is a compatibility contract | Accepted |
 
 ## Relationship to other documents
 
