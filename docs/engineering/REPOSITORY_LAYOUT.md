@@ -130,8 +130,10 @@ There is one machine-readable configuration file. `pytest`, `ruff`, `mypy` and
 already has one — see [`SOURCE_OF_TRUTH.md`](SOURCE_OF_TRUTH.md).
 
 `config/` is reserved for non-secret runtime configuration when a later phase
-genuinely needs it. **Phase 007** owns the configuration model. Creating the
-directory before then would be premature.
+genuinely needs it. Phase 007 delivered the configuration *model* — see
+[`../CONFIGURATION_POLICY.md`](../CONFIGURATION_POLICY.md) — and deliberately did
+not create the directory: a source is handed a path and never searches for one,
+so where configuration files live is still **Phase 026**'s question to answer.
 
 ---
 

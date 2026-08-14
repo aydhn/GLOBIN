@@ -20,9 +20,12 @@ Two things are deliberately absent.
 serialises, which keeps this module testable without freezing anything and
 leaves Phase 009 a clean seam rather than a competing scheme to remove.
 
-*There is no severity threshold.* Deciding which events are worth emitting is a
-sink's concern, and filtering configuration belongs to Phase 007. Severity here
-only says how bad something is.
+*There is no severity threshold.* Deciding which events are worth keeping is a
+sink's concern, and Phase 007 settled it there:
+:class:`globin.adapters.observability.ThresholdLogSink` compares against a
+minimum supplied by :class:`globin.domain.configuration.LoggingConfig`. Severity
+here only says how bad something is, which is what lets two sinks hold different
+thresholds over the same events.
 
 This module imports nothing outside :mod:`globin.errors`, performs no I/O and
 holds no module-level call — ``docs/architecture/dependency-rules.toml`` lists

@@ -41,6 +41,7 @@ python -m tools.quality full
 | `smoke` | The smoke level only | Fastest possible signal |
 | `unit` | The unit level only | While writing a unit |
 | `architecture` | Contract and architecture levels | The repository guards |
+| `integration` | The integration level only | While wiring components together |
 | `property` | The property level, exploratory Hypothesis profile | Searching for a new counter-example |
 | `coverage` | Full suite with branch coverage and its floor | Before delivery |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |

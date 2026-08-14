@@ -70,6 +70,15 @@ _ARCHITECTURE = Step(
     ("pytest",),
     ("-m", "pytest", "-q", "-m", "(contract or architecture) and not external"),
 )
+# The integration level had no selection of its own until Phase 007, so the only
+# way to run it was the whole-suite sweep in `_COVERAGE`. That is a slow edit
+# loop for the level whose tests are most often the ones being written, and a
+# level nothing selects is a level whose marker is decorative.
+_INTEGRATION = Step(
+    "integration",
+    ("pytest",),
+    ("-m", "pytest", "-q", "-m", "integration and not external"),
+)
 # The exploratory property run: the `dev` profile, which keeps the example
 # database so that a failure replays on the next run.
 _PROPERTY = Step(
@@ -128,6 +137,7 @@ COMMANDS: Final[tuple[Command, ...]] = (
     Command("smoke", "The smallest set of checks that would catch a broken tree.", (_SMOKE,)),
     Command("unit", "Unit tests only.", (_UNIT,)),
     Command("architecture", "Contract and architecture tests.", (_ARCHITECTURE,)),
+    Command("integration", "Several components together, still entirely local.", (_INTEGRATION,)),
     Command("property", "Property tests under the exploratory Hypothesis profile.", (_PROPERTY,)),
     Command("coverage", "The full suite with branch coverage and its threshold.", (_COVERAGE,)),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),

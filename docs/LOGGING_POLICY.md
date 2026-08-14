@@ -81,8 +81,17 @@ continue doing its job, which is a different claim from a piece of work having
 failed. A system where routine failures are logged as `CRITICAL` cannot be
 alerted on.
 
-Severity carries no threshold and no filtering. Deciding which records are worth
-keeping is a sink's concern, and configuring that is Phase 007.
+Severity itself carries no threshold. Deciding which records are worth keeping is
+a sink's concern, and Phase 007 settled it there: `ThresholdLogSink` wraps another
+sink and forwards a record only when its severity reaches a configured minimum.
+
+The minimum is the `logging.min_severity` setting in
+[`CONFIGURATION_POLICY.md`](CONFIGURATION_POLICY.md), and it defaults to the
+lowest level, so nothing is discarded until an operator asks for it. Two sinks may
+hold different thresholds over the same events — a file keeping everything beside
+a console keeping only what went wrong — which is why the comparison lives in a
+sink rather than in the logger. The reasoning is
+[ADR-0029](adr/0029-a-severity-threshold-is-a-decorating-sink.md).
 
 ---
 

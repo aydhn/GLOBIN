@@ -106,7 +106,12 @@ needs to be testable. The full clock discipline is **Phase 009**.
 Behaviour comes from configuration that is declared, validated and visible.
 Nothing important is decided by an environment variable read at an arbitrary
 depth of the call stack, and nothing important is hard-coded where it cannot be
-seen. The typed configuration model is **Phase 007**.
+seen. The typed configuration model is
+[`globin.domain.configuration`](../../src/globin/domain/configuration.py), and
+what may be configured is registered in
+[`../CONFIGURATION_POLICY.md`](../CONFIGURATION_POLICY.md). A setting that is not
+in that register is refused by name rather than ignored. Which files and
+environment variables feed it remains **Phases 026-027**.
 
 ### 5. No hidden global state
 

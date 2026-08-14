@@ -23,6 +23,7 @@ from typing import Final, NamedTuple
 import pytest
 
 from globin.domain.architecture import LAYER_ORDER, ArchitectureContract, Layer, LayerPolicy
+from globin.domain.configuration import ResolvedConfig, config_layer, default_layer, resolve
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
 
@@ -213,6 +214,29 @@ def architecture_contract(
         shared_modules=frozenset(shared_modules),
         io_capable_modules=frozenset(io_capable_modules),
     )
+
+
+def resolved_configuration(origin: str = "test", /, **settings: object) -> ResolvedConfig:
+    """Resolve the declared defaults with one override layer on top.
+
+    Args:
+        origin: What the override layer calls itself. Worth setting when a test
+            asserts that a refusal names the document at fault. Positional-only,
+            so that a caller forwarding ``**settings`` cannot bind it by accident
+            with a setting that happens to be called ``origin``.
+        settings: Dotted keys and the values to override them with. Keys are not
+            Python identifiers, so callers pass them as ``**{KEY: value}``.
+
+    Returns:
+        The resolved settings, ready for
+        :func:`~globin.domain.configuration.as_config`.
+
+    Defaults underneath is the arrangement every real resolution uses, so a test
+    that assembled the sequence by hand would be testing a shape no caller
+    produces — and would get an ``InternalError`` about a setting it never
+    touched if it forgot them.
+    """
+    return resolve((default_layer(), config_layer(origin, settings)))
 
 
 def git_committable_files() -> tuple[str, ...]:

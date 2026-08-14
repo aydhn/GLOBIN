@@ -35,7 +35,8 @@ from datetime import UTC, datetime
 from typing import Final, TextIO
 from uuid import uuid4
 
-from globin.domain.observability import LogEvent
+from globin.domain.observability import LogEvent, Severity
+from globin.ports.observability import LogSink
 
 ENVELOPE_KEYS: Final[tuple[str, ...]] = ("timestamp", "severity", "event", "correlation_id")
 """The keys every record carries, in the order they are written.
@@ -158,3 +159,49 @@ class StreamLogSink:
         """
         record = as_record(event, datetime.now(UTC).isoformat())
         self.stream.write(json.dumps(record, ensure_ascii=True, separators=(",", ":")) + "\n")
+
+
+@dataclass(frozen=True, slots=True)
+class ThresholdLogSink:
+    """Passes records at or above a minimum severity to another sink.
+
+    Args:
+        inner: Where records that clear the threshold go.
+        minimum: The lowest severity worth keeping.
+
+    Filtering is a decorator rather than a field on :class:`StreamLogSink`
+    because ``docs/LOGGING_POLICY.md`` makes it a sink's concern: two sinks may
+    legitimately want different thresholds — a file at ``DEBUG`` beside a console
+    at ``WARNING`` — and a threshold living inside a writing sink would have to be
+    reimplemented by every sink written afterwards. That is the argument ADR-0025
+    used to reject sink-side redaction, and it applies unchanged here.
+
+    Nor does it live in :class:`~globin.application.observability.Logger`, which
+    would be faster because the :class:`~globin.domain.observability.LogEvent`
+    would never be built. A logger that filtered would decide for every sink it
+    writes to, and the sentence in ``LOGGING_POLICY.md`` that hands this job to
+    Phase 007 is the same sentence that calls it a sink's concern.
+
+    **Dropping a record is deliberate data loss.**
+    ``ENGINEERING_CONTRACT.md`` invariant 22 permits that only as an explicit
+    decision, and it is explicit here: the default configured threshold is
+    :attr:`~globin.domain.observability.Severity.DEBUG`, the lowest member, so
+    nothing is discarded until an operator asks for it in writing.
+    """
+
+    inner: LogSink
+    minimum: Severity
+
+    def emit(self, event: LogEvent) -> None:
+        """Forward the record if it is severe enough to keep.
+
+        Args:
+            event: The record, already redacted.
+
+        The comparison is why :class:`~globin.domain.observability.Severity` is
+        an :class:`~enum.IntEnum` borrowing the standard library's numbers — a
+        promise its docstring has carried since Phase 006, that thresholds would
+        be comparisons rather than a lookup table.
+        """
+        if event.severity >= self.minimum:
+            self.inner.emit(event)

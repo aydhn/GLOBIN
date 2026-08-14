@@ -170,7 +170,13 @@ Stated so that a later phase does not assume the question was settled here.
   [`globin.errors`](../../src/globin/errors.py), which sits above the layer stack
   in the `[shared]` table for the same reason `globin.project_contract` does. See
   [ADR-0022](../adr/0022-error-taxonomy-rooted-in-one-type.md).
-- **The configuration model** — Phase 007.
+- **The configuration model** — settled since, in Phase 007. It is a frozen
+  dataclass in [`globin.domain.configuration`](../../src/globin/domain/configuration.py),
+  resolved from ordered layers whose only concrete source so far reads TOML from
+  a path it is given. The layer stack held: validation is domain, the parser is
+  an adapter, and [`globin.runtime.composition`](../../src/globin/runtime/composition.py)
+  wires them. See [ADR-0027](../adr/0027-configuration-is-a-frozen-dataclass-validated-at-the-boundary.md)
+  and [ADR-0028](../adr/0028-configuration-layers-override-last-wins-and-carry-their-origin.md).
 - **Naming, docstring and typing conventions, and the lint and type
   configuration** — Phase 013, by
   [ADR-0012](../adr/0012-phase-003-delivers-architecture-boundaries.md).

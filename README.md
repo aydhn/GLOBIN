@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 006 of 320 complete — foundation only
+## Current status: Phase 007 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -23,7 +23,7 @@ Binance Global, built over a fixed programme of 320 phases.
 |---|---|
 | Repository, branch policy, engineering contract | Implemented |
 | 320-phase roadmap, every phase named | Implemented |
-| Architecture decision records (26) | Implemented |
+| Architecture decision records (29) | Implemented |
 | Research source ledgers with primary sources | Implemented |
 | Engineering contracts: done-criteria, authority order, layout, doc standard | Implemented |
 | Change templates for pull requests and issues | Implemented |
@@ -34,6 +34,7 @@ Binance Global, built over a fixed programme of 320 phases.
 | Error taxonomy: one root, five categories by who must act | Implemented |
 | Property-based testing, enforced offline tests, process isolation | Implemented |
 | Structured logging: correlation-aware records that redact secrets by construction | Implemented |
+| Typed configuration model: declared defaults, layered overrides, unknown settings refused | Implemented |
 | Everything else | Not started |
 
 ### What does not exist

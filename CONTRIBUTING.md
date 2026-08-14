@@ -28,9 +28,9 @@ scheduled for Phase 182, requires 3.12 while the rest of the planned stack
 requires 3.10. Choosing the strictest known constraint now avoids a breaking
 change later. See `docs/research/phase_001_sources.md`.
 
-The development toolchain is `pytest`, `pytest-cov`, `ruff`, `mypy` and
-`pre-commit`, declared
-under the `dev` extra in `pyproject.toml`. All four are free and open source, as
+The development toolchain is `pytest`, `pytest-cov`, `hypothesis`, `ruff`, `mypy`
+and `pre-commit`, declared
+under the `dev` extra in `pyproject.toml`. All six are free and open source, as
 required by [ADR-0003](docs/adr/0003-zero-budget-open-source-dependency-policy.md).
 
 Tests import the package straight from `src/` because `pythonpath = ["src"]` is

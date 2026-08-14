@@ -235,7 +235,38 @@ matches a known sensitive fragment. Happens when the record is constructed, not
 when it is written, so no sink can emit an unredacted record.
 
 **Sink** — an implementation of the logging port; somewhere records are written.
-GLOBIN ships one, which writes JSON Lines to a stream.
+GLOBIN ships two: one writes JSON Lines to a stream, and one decorates another
+sink with a severity threshold.
+
+**Severity threshold** — the lowest severity a sink keeps. A comparison, not a
+category: `Severity` borrows the standard library's ordered numbers so that a
+threshold needs no lookup table.
+
+---
+
+## Configuration
+
+Full descriptions live in [`CONFIGURATION_POLICY.md`](CONFIGURATION_POLICY.md);
+these are the one-line definitions.
+
+**Setting** — one named, typed value an operator may vary, with a declared
+default. What settings exist is registered in
+[`CONFIGURATION_POLICY.md`](CONFIGURATION_POLICY.md); a key that is not in the
+register is refused by name rather than ignored.
+
+**Configuration layer** ⚠ *commonly confused* — one source's contribution to the
+configuration: a flat set of dotted keys plus where they came from. **Not** an
+architectural *layer*, which is one of the five divisions of the `globin`
+package. The two are unrelated, and the only thing they share is the word.
+
+**Origin** — the human-readable name of where a value came from, carried
+alongside the value so that a refusal can say which document is wrong.
+
+**Precedence** — the rule deciding which layer wins when two set the same key.
+Layers are folded weakest first, and the last layer that *mentions* a key wins.
+
+**Defaults layer** — the weakest layer, derived from the model's own declared
+defaults rather than from any document. Every resolution starts with it.
 
 **Severity** — how bad an event is, from `DEBUG` to `CRITICAL`. Describes the
 outcome of the work, not how dramatic the code path was: a fault that was

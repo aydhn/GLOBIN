@@ -91,6 +91,9 @@ a future reader can judge whether the reason still holds.
 | [0024](0024-tests-are-offline-and-isolated-by-construction.md) | Tests are offline and process-isolated by construction, not by convention | Accepted |
 | [0025](0025-structured-logging-is-a-redacted-domain-event.md) | A log record is a domain event that redacts itself, emitted through a port | Accepted |
 | [0026](0026-correlation-is-bound-explicitly-not-ambiently.md) | Correlation is bound explicitly, and the timestamp belongs to the adapter | Accepted |
+| [0027](0027-configuration-is-a-frozen-dataclass-validated-at-the-boundary.md) | Configuration is a frozen dataclass validated at one boundary, and the dataclass is the schema | Accepted |
+| [0028](0028-configuration-layers-override-last-wins-and-carry-their-origin.md) | Configuration layers are flat, override last-wins, carry their origin, and cannot remove a setting | Accepted |
+| [0029](0029-a-severity-threshold-is-a-decorating-sink.md) | A severity threshold is a decorating sink, not a field on a sink or a check in the logger | Accepted |
 
 ## Relationship to other documents
 

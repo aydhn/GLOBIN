@@ -26,14 +26,15 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Fact | Value |
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
-| Completed phases | **001-006** |
+| Completed phases | **001-007** |
 | Phase 001 | **Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
 | Phase 002 | **Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Commit `9c46313`, pushed. |
 | Phase 003 | **Architecture Boundaries and Dependency Direction.** Five layers under `src/globin/`, the inward dependency contract in `docs/architecture/dependency-rules.toml`, C4 system context and container views, the ADR lifecycle with supersession rules, and `tests/architecture/test_architecture_contract.py` enforcing all of it. Commit `990e5f4`, pushed. |
 | Phase 004 | **Test Architecture and Quality Gates.** Five test levels as directories under `tests/`, markers derived from the directory, `tests` as a package with helpers in `tests/support.py`; explicit mypy flags in place of `strict = true`; branch coverage gated at 95; `.pre-commit-config.yaml`; the canonical entrypoint `tools/quality`; and a SHA-pinned, least-privilege, verification-only CI workflow. Commit `abb96a9`, pushed. **CI is confirmed working:** the first run on that commit succeeded on both Python 3.12 and 3.14, and the pre-commit job passed. The phase was reported before that run existed, so ADR-0020 and the Phase 004 research ledger still describe the workflow as never executed — correct for their date, and superseded by this row. |
 | Phase 005 | **Error Taxonomy and Deterministic Test Foundations.** `globin.errors` — one root, five categories divided by who must act — replacing the ad-hoc `ValueError` scheme in the adapters and domain layers. Plus a `property` taxonomy level with Hypothesis, autouse fixtures that refuse outbound sockets and fail a test leaking process state, the `create_autospec` rule for mocks, and the `external` deselection that Phase 004's marker description had promised but nothing performed. ADR-0021 to ADR-0024. Commit `7f65d25`, pushed. |
-| Last completed | **006 — Structured Logging Foundation.** `observability.py` in all four layers plus `build_logger` in the composition root: a `LogEvent` domain value that redacts itself in `__post_init__`, a one-method `LogSink` port, an immutable `Logger` whose `bind` returns a new logger, and a `StreamLogSink` writing JSON Lines. Correlation is explicit, never a context variable; the timestamp is stamped by the adapter so Phase 009 keeps the clock decision. `docs/LOGGING_POLICY.md` owns the severity meanings and the redacted-name list, and a contract test compares that document against the code in both directions. ADR-0025 and ADR-0026. Commit `9913edb`, pushed. |
-| Next phase | **007 — Configuration Model and Schema Contract.** Not started. |
+| Phase 006 | **Structured Logging Foundation.** `observability.py` in all four layers plus `build_logger` in the composition root: a `LogEvent` domain value that redacts itself in `__post_init__`, a one-method `LogSink` port, an immutable `Logger` whose `bind` returns a new logger, and a `StreamLogSink` writing JSON Lines. Correlation is explicit, never a context variable; the timestamp is stamped by the adapter so Phase 009 keeps the clock decision. `docs/LOGGING_POLICY.md` owns the severity meanings and the redacted-name list, and a contract test compares that document against the code in both directions. ADR-0025 and ADR-0026. Commit `9913edb`, pushed. |
+| Last completed | **007 — Configuration Model and Schema Contract.** `configuration.py` in all four layers plus `build_configuration` in the composition root. The model is frozen dataclasses and *is* the schema: the key register and the defaults layer are both derived from `dataclasses.fields()`, so a setting cannot be half-added. Layers are flat dotted keys carrying an origin; `resolve` folds them last-wins and **never raises**, so every refusal lives in `as_config` where the origin can be named. `docs/CONFIGURATION_POLICY.md` owns the settings register, and its contract test feeds each documented default back through the binding rather than comparing strings. The one setting is `logging.min_severity`, honoured by a decorating `ThresholdLogSink` — `StreamLogSink` and `Logger` are untouched. ADR-0027 to ADR-0029. |
+| Next phase | **008 — Domain Value Types and Units.** Not started. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
 
 **The roadmap has been amended three times.** Band ranges, phase numbers and band
@@ -84,6 +85,29 @@ written. Two decisions were taken with it, both deliberate and both his:
   target and ADR-0021 already recorded that gap as deliberate.
 
 Do not re-open either as though it were an oversight.
+
+**A fifth was proposed in Phase 007 and refused, on the same grounds.** The
+owner's brief for the phase described deterministic test architecture, fixture
+isolation, property-based testing and a default-deny network guard — the scope
+Phase 004 and Phase 005 already own, both `Complete`. ADR-0021 records that this
+same brief arrived once before, at Phase 005, and was delivered then. An audit
+found every item present, and six live forward references pinned Phase 007 to the
+configuration model, one of them a comment in `domain/observability.py`. The
+conflict was put to the owner with four options; he chose the roadmap's phase
+plus the brief's genuine residue. One decision was taken with it:
+
+- **The offline guard was left exactly as it is.** The brief asked for
+  `bind`/`listen`/`accept`/`sendto` and DNS to be blocked as well.
+  [ADR-0024](docs/adr/0024-tests-are-offline-and-isolated-by-construction.md)
+  evaluated lower-level blocking and rejected it as "too broad", and records the
+  remaining bypass routes as knowingly accepted risk. Those are decisions, not
+  gaps; widening the guard would need an ADR superseding ADR-0024, which would be
+  the repository's first supersession. Not worth spending out of a configuration
+  phase. Do not re-open it as an oversight either.
+
+The residue that *was* delivered — an `integration` command in the quality table,
+and a written test-data and factory contract in `TESTING_STRATEGY.md` — is defect
+repair against Phases 004 and 005, not a widening of Phase 007.
 
 **Nothing so far implements trading.** No exchange connection, no credentials,
 no market data, no strategy, no models. Anything claiming otherwise is wrong.
@@ -170,6 +194,26 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
   until Phase 004 tested it. A configuration that is present and spelled
   correctly can still be inert, which is why gates are exercised rather than
   asserted to exist.
+- **A layer package may perform no call at import, and the check follows class
+  bodies.** That rules out `frozenset({...})`, `auto()`, `field(default_factory=...)`
+  and — the one that catches people — a nested dataclass default such as
+  `logging: LoggingConfig = LoggingConfig()`, which is why `GlobinConfig.logging`
+  is a required field and `default_config()` is a function.
+- **Configuration validation lives in `globin.domain.configuration`, never in an
+  adapter.** An adapter parses and flattens; it never interprets a value. Phase
+  027 adds sources, and each must inherit these rules rather than write a second
+  copy (ADR-0027).
+- **`resolve` never raises, and a property test asserts it.** Refusal belongs to
+  `as_config`, where the origin of a value can be named. Adding a schema check
+  inside the fold breaks that test, which is the intended enforcement (ADR-0028).
+- **`tests/contract/test_observability_contract.py` parses `LOGGING_POLICY.md`
+  with a regex matching any table row whose first cell is an all-caps backticked
+  token**, and compares the set to `Severity`. Adding such a row to that document
+  fails a test whose message is about severities and names nothing to do with the
+  change.
+- **A deliberately malformed fixture cannot be committed.** `check-toml` and
+  `check-yaml` run over every file in the tree, so an invalid document is written
+  into `tmp_path` at run time instead.
 - **Every completed phase** ends with tests passing, documentation synchronized,
   a commit on `master`, a successful push, matching local and remote hashes, and
   an empty `git status --porcelain`. The canonical checklist is

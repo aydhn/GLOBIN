@@ -148,6 +148,41 @@ holds for most of the suite is not a guarantee. They are described under
 Anything that merely saves typing is not autouse. Request it by name, so that a
 reader of the test can see what it depends on.
 
+## Test data and factories
+
+Later phases will need a great deal of Binance-shaped data, and the habits that
+make that bearable are cheaper to establish now than to retrofit. Four rules.
+
+**Build data with a factory, not a literal repeated in twenty tests.** A factory
+supplies safe defaults and lets a test override only the field it is actually
+about, so the test reads as the one thing that distinguishes it. `layer_policy`
+and `architecture_contract` in [`../tests/support.py`](../tests/support.py) are
+the worked examples: both default to the strictest possible value, so a test that
+permits something has to say so, and a reader learns what the test is about from
+the arguments it passes.
+
+Factories are plain functions with keyword arguments. No builder classes, no
+inheritance hierarchy, no registry — a factory that needs its own documentation
+has become a second system to understand before reading a test.
+
+**Fixture data is small, synthetic and deterministic.** Timestamps are fixed
+values, never `now()`. Numeric edge cases — zero, negative, the boundary either
+side of a limit — are written out rather than left to be inferred. Nothing is a
+captured production payload: a real response is large, mostly irrelevant, and
+carries whatever happened to be true on the day it was captured.
+
+**No fixture contains anything credential-shaped**, including a realistic-looking
+fake. `test_repository_contract.py` rejects credential-shaped filenames, but a
+convincing key inside a document is exactly the thing a future reader copies. Use
+an obviously synthetic value such as `SENTINEL-VALUE-4f2a`, which is also what
+makes finding it in output unambiguous.
+
+**A document written to be invalid is written at run time, into `tmp_path`.**
+`.pre-commit-config.yaml` runs `check-toml` and `check-yaml` over every file in
+the tree, so a committed malformed fixture fails the hygiene gate rather than the
+test it was written for. `test_architecture_contract.py` and
+`test_configuration.py` both write theirs inline.
+
 ## Isolation and the offline guarantee
 
 Two rules in this document used to be things a contributor had to remember.
@@ -247,6 +282,10 @@ represents.
 | `test_observability.py` | A sensitive name is recognised however it is written; an event redacts itself even when built directly; binding returns a new logger; a value JSON cannot represent is rendered rather than refused; a failed write propagates |
 | `test_observability_properties.py` | Over generated input: a value survives exactly when its name is not sensitive, at any nesting depth; redaction is idempotent; no field value can make the sink emit something that is not JSON |
 | `test_logging_end_to_end.py` | The wired logger writes parseable records that share a correlation id, and a planted credential does not reach the stream |
+| `test_configuration_contract.py` | The settings register in `CONFIGURATION_POLICY.md` and the model declare the same settings, in both directions; each documented default, written back through the binding, resolves to the value the model would have used anyway |
+| `test_configuration.py` | A layer refuses an empty origin and a repeated key, and orders itself; the fold never refuses; the key register and the defaults are derived from the dataclass; an unknown key, a misspelled severity and a numeric one are each refused by name; a quoted TOML key containing a dot is refused rather than collided |
+| `test_configuration_properties.py` | Over generated layers: resolving never raises; no key is lost or invented; the strongest layer wins whatever came before; silence preserves; an empty layer is the identity; a threshold forwards a record exactly when the record clears it |
+| `test_configuration_end_to_end.py` | A severity written in a document actually stops a record being written; a caller configuring nothing sees Phase 006's behaviour unchanged; an unknown setting is refused wherever it sits in the source order, and a value a stronger layer replaces is deliberately not validated |
 
 The architecture tests are contract-level despite reading source files, because
 they assert a project invariant rather than a behaviour. They parse the syntax
