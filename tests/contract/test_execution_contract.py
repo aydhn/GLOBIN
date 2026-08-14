@@ -170,3 +170,42 @@ def test_the_entry_point_works_as_a_process() -> None:
         check=False,
     )
     assert refused.returncode == EXIT_USAGE
+
+
+def test_everything_the_gate_prints_is_ascii() -> None:
+    """A Windows console is frequently not UTF-8, and a CI log proved it.
+
+    The first CI log this gate produced rendered its em dashes as replacement
+    characters. `docs/LOGGING_POLICY.md` reached the same conclusion for log
+    records and escapes non-ASCII for exactly this reason; this is the same
+    constraint arrived at from the other direction, so it is checked rather than
+    remembered.
+
+    Only strings that actually reach a stream are examined — the arguments of a
+    `print` call and anything bound to `msg` before being raised. Docstrings and
+    comments are read in an editor and may say what they like.
+    """
+    import ast
+
+    from tools.quality.execution.gate import REPO_ROOT
+
+    offenders: list[str] = []
+    for module in sorted((REPO_ROOT / "tools" / "quality" / "execution").glob("*.py")):
+        tree = ast.parse(module.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            emitted: list[ast.AST] = []
+            if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "print":
+                emitted = list(node.args)
+            elif isinstance(node, ast.Assign) and any(
+                getattr(target, "id", None) == "msg" for target in node.targets
+            ):
+                emitted = [node.value]
+            offenders += [
+                f"{module.name}:{piece.lineno}"
+                for part in emitted
+                for piece in ast.walk(part)
+                if isinstance(piece, ast.Constant)
+                and isinstance(piece.value, str)
+                and not piece.value.isascii()
+            ]
+    assert not offenders, f"non-ASCII in a string a Windows console must render: {offenders}"

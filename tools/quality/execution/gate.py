@@ -1,5 +1,12 @@
 """Collect once, partition, run each shard as its own process, compare.
 
+**Everything this module prints is ASCII.** GLOBIN's host is Windows, where a
+console stream is frequently not UTF-8: an em dash written here arrives in a CI
+log as a replacement character. ``docs/LOGGING_POLICY.md`` reached the same
+conclusion for log records and escapes non-ASCII for it; this is the same
+constraint reached from the other direction, and it was found by reading the
+first CI log this gate produced.
+
 Four exit states, never two, matching the mutation gate: passed, failed, asked
 for something impossible, and *ran but measured nothing*. The fourth is the one
 a boolean design loses, and it is the one that matters most in a partition — a
@@ -185,7 +192,7 @@ def _run_one(
         run_process=run_process,
     )
     verdict = plan.classify(code)
-    print(f"execution: shard {index} of {shard_count} — {len(node_ids)} tests — {verdict}")
+    print(f"execution: shard {index} of {shard_count}, {len(node_ids)} tests: {verdict}")
 
     if verdict is not plan.Verdict.PASSED:
         _report_failure(
@@ -202,13 +209,13 @@ def _report_failure(
     if code == plan.PYTEST_NO_TESTS_COLLECTED:
         print(
             f"the shard collected nothing although the manifest assigned it {size} tests. "
-            f"The manifest is stale relative to the tree — regenerate it.",
+            "The manifest is stale relative to the tree; regenerate it.",
             file=sys.stderr,
         )
     if code == plan.PYTEST_USAGE_ERROR:
         print(
             "pytest refused an argument. A node ID in the args file no longer exists, "
-            "which is collection drift — regenerate the manifest.",
+            "which is collection drift; regenerate the manifest.",
             file=sys.stderr,
         )
     print(output, file=sys.stderr)
