@@ -119,9 +119,16 @@ Run the full local gate before committing:
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 ```
 
-It runs the import check, `pytest`, `ruff check`, `ruff format --check` and
-`mypy --strict`. All must pass. Because a master-only workflow has no review
+It delegates to `python -m tools.quality full`, which runs `ruff check`,
+`ruff format --check`, `mypy`, and then the whole suite under branch coverage
+against its floor. All must pass. Because a master-only workflow has no review
 gate, this script is the gate.
+
+The steps are defined in `tools/quality/commands.py` and nowhere else, so the
+sentence above describes what that table currently contains rather than
+duplicating it. Note that `mypy` is invoked without `--strict`: ADR-0018
+replaced the alias with the flags it stands for, so that upgrading mypy cannot
+silently change what this repository's type contract means.
 
 Then follow [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) exactly:
 

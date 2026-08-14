@@ -243,6 +243,10 @@ represents.
 | `test_isolation_contract.py` | A connection attempt is refused and a `network`-marked test is not; the drift detector reports added, removed, altered, moved and deleted-directory cases, and stays quiet otherwise |
 | `test_import_surface.py` | The package and every layer import cleanly; the declared public surface exists; no trading surface has appeared |
 | `test_architecture_review_end_to_end.py` | The composition root wires a review over the real package rather than an empty directory, and that review is clean |
+| `test_observability_contract.py` | The redacted-name list and the severity levels in `LOGGING_POLICY.md` and in the code are the same, in both directions; the documented record shape is the emitted one |
+| `test_observability.py` | A sensitive name is recognised however it is written; an event redacts itself even when built directly; binding returns a new logger; a value JSON cannot represent is rendered rather than refused; a failed write propagates |
+| `test_observability_properties.py` | Over generated input: a value survives exactly when its name is not sensitive, at any nesting depth; redaction is idempotent; no field value can make the sink emit something that is not JSON |
+| `test_logging_end_to_end.py` | The wired logger writes parseable records that share a correlation id, and a planted credential does not reach the stream |
 
 The architecture tests are contract-level despite reading source files, because
 they assert a project invariant rather than a behaviour. They parse the syntax

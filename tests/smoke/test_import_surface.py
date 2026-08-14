@@ -25,12 +25,16 @@ IMPORTABLE_MODULES: tuple[str, ...] = (
     "globin.roadmap",
     "globin.domain",
     "globin.domain.architecture",
+    "globin.domain.observability",
     "globin.ports",
     "globin.ports.architecture",
+    "globin.ports.observability",
     "globin.application",
     "globin.application.architecture_review",
+    "globin.application.observability",
     "globin.adapters",
     "globin.adapters.architecture",
+    "globin.adapters.observability",
     "globin.runtime",
     "globin.runtime.composition",
 )
@@ -53,9 +57,10 @@ def test_the_public_surface_matches_what_is_declared() -> None:
 
 def test_the_composition_root_is_reachable() -> None:
     """If this fails, nothing that wires the application together can run."""
-    from globin.runtime.composition import build_architecture_review
+    from globin.runtime.composition import build_architecture_review, build_logger
 
     assert callable(build_architecture_review)
+    assert callable(build_logger)
 
 
 def test_the_package_still_exposes_no_trading_surface() -> None:

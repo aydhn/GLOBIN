@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-005 are complete. Phase 006 is next and has not started.**
-> Nothing beyond Phase 005 is implemented. GLOBIN does not trade, does not
+> **Phases 001-006 are complete. Phase 007 is next and has not started.**
+> Nothing beyond Phase 006 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
 
@@ -83,7 +83,7 @@ written down.
 | 003 | Architecture Boundaries and Dependency Direction | Establish the layer contract, the inward dependency direction, the ports and adapters boundary, the composition root, the C4 system and container views, and the ADR lifecycle. | Complete |
 | 004 | Test Architecture and Quality Gates | Define test layers, directory structure, fixture scope rules and naming; enforce them with a lint, typing and branch-coverage contract, a pre-commit gate, one canonical quality entrypoint and a verification-only CI workflow. | Complete |
 | 005 | Error Taxonomy and Deterministic Test Foundations | Design the project-wide exception hierarchy separating configuration, transport, exchange, validation and internal faults, and establish the deterministic testing foundation that proves it: a property level, an enforced offline guarantee, process-state isolation and the test-double rule. | Complete |
-| 006 | Structured Logging Foundation | Establish structured, correlation-aware logging with severity policy and redaction of sensitive fields. | Planned |
+| 006 | Structured Logging Foundation | Establish structured, correlation-aware logging with severity policy and redaction of sensitive fields. | Complete |
 | 007 | Configuration Model and Schema Contract | Define the typed configuration model, validation rules, defaults and layered override precedence. | Planned |
 | 008 | Domain Value Types and Units | Introduce explicit types for prices, quantities, symbols, sides and currencies to prevent unit confusion. | Planned |
 | 009 | Time, Clock and Timezone Discipline | Establish UTC-only internal time, millisecond conventions, monotonic clocks and an injectable clock abstraction. | Planned |

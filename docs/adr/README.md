@@ -89,6 +89,8 @@ a future reader can judge whether the reason still holds.
 | [0022](0022-error-taxonomy-rooted-in-one-type.md) | One error root, five categories chosen by who must act, and no builtin inheritance | Accepted |
 | [0023](0023-property-based-testing-as-a-sixth-taxonomy-level.md) | Property-based testing is a sixth taxonomy level, with two Hypothesis profiles | Accepted |
 | [0024](0024-tests-are-offline-and-isolated-by-construction.md) | Tests are offline and process-isolated by construction, not by convention | Accepted |
+| [0025](0025-structured-logging-is-a-redacted-domain-event.md) | A log record is a domain event that redacts itself, emitted through a port | Accepted |
+| [0026](0026-correlation-is-bound-explicitly-not-ambiently.md) | Correlation is bound explicitly, and the timestamp belongs to the adapter | Accepted |
 
 ## Relationship to other documents
 

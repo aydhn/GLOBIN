@@ -77,9 +77,34 @@ def test_the_full_command_covers_lint_format_type_and_coverage() -> None:
     full = find("full")
     assert full is not None
     modules = {module for step in full.steps for module in step.modules}
-    assert {"ruff", "mypy", "pytest", "hypothesis"} <= modules
+    assert {"ruff", "mypy", "pytest", "pytest_cov", "hypothesis"} <= modules
     names = {step.name for step in full.steps}
     assert {"lint", "format", "typecheck", "coverage"} <= names
+
+
+def test_every_plugin_a_step_argument_needs_is_declared() -> None:
+    """Regression, Phase 006: a step must name the plugin its flags come from.
+
+    ``Step.modules`` exists so that a missing tool is reported by name before
+    anything launches. A flag contributed by a plugin therefore has to have that
+    plugin in ``modules``, or the preflight passes, the subprocess starts, and
+    the failure arrives as an unrecognised-argument error naming neither the
+    plugin nor the cause — the exact outcome the field was introduced to prevent.
+
+    ``--cov`` was in the coverage step for two phases without ``pytest_cov``
+    beside it. This checks the rule rather than that one instance.
+    """
+    contributed_by = {"--cov": "pytest_cov", "--hypothesis-profile": "hypothesis"}
+
+    for command in COMMANDS:
+        for step in command.steps:
+            for argument in step.argv:
+                for flag, plugin in contributed_by.items():
+                    if argument.startswith(flag):
+                        assert plugin in step.modules, (
+                            f"{command.name}/{step.name} passes {argument!r} "
+                            f"but does not declare {plugin!r}"
+                        )
 
 
 def test_only_the_declared_commands_modify_the_tree() -> None:

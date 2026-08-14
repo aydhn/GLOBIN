@@ -210,3 +210,33 @@ Docker container; GLOBIN uses no containerisation.
 
 **Import-time side effect** — work performed merely by importing a module.
 Prohibited in every layer: importing must declare, never act.
+
+---
+
+## Observability
+
+Full descriptions live in [`LOGGING_POLICY.md`](LOGGING_POLICY.md); these are the
+one-line definitions.
+
+**Structured event** ⚠ *commonly confused* — a log record consisting of an event
+*name* plus named *fields*. **Not** a formatted sentence with values
+interpolated into it. The distinction is load-bearing rather than stylistic: it
+is what makes redaction by field name possible at all.
+
+**Event name** — a lowercase dotted identifier such as `order.submitted`,
+constant at the call site. Never built from a value.
+
+**Correlation ID** — the identifier tying together every record produced by one
+piece of work. Passed explicitly and bound to a logger; GLOBIN uses no ambient
+context variable for it.
+
+**Redaction** — replacing a field's *value* with `[redacted]` because its *name*
+matches a known sensitive fragment. Happens when the record is constructed, not
+when it is written, so no sink can emit an unredacted record.
+
+**Sink** — an implementation of the logging port; somewhere records are written.
+GLOBIN ships one, which writes JSON Lines to a stream.
+
+**Severity** — how bad an event is, from `DEBUG` to `CRITICAL`. Describes the
+outcome of the work, not how dramatic the code path was: a fault that was
+handled and recovered from is a `WARNING`, not an `ERROR`.

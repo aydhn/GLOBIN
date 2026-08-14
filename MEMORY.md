@@ -26,13 +26,14 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Fact | Value |
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
-| Completed phases | **001-005** |
+| Completed phases | **001-006** |
 | Phase 001 | **Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
 | Phase 002 | **Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Commit `9c46313`, pushed. |
 | Phase 003 | **Architecture Boundaries and Dependency Direction.** Five layers under `src/globin/`, the inward dependency contract in `docs/architecture/dependency-rules.toml`, C4 system context and container views, the ADR lifecycle with supersession rules, and `tests/architecture/test_architecture_contract.py` enforcing all of it. Commit `990e5f4`, pushed. |
-| Last completed | **004 — Test Architecture and Quality Gates.** Five test levels as directories under `tests/`, markers derived from the directory, `tests` as a package with helpers in `tests/support.py`; explicit mypy flags in place of `strict = true`; branch coverage gated at 95; `.pre-commit-config.yaml`; the canonical entrypoint `tools/quality`; and a SHA-pinned, least-privilege, verification-only CI workflow. Commit `abb96a9`, pushed. **CI is confirmed working:** the first run on that commit succeeded on both Python 3.12 and 3.14, and the pre-commit job passed. The phase was reported before that run existed, so ADR-0020 and the Phase 004 research ledger still describe the workflow as never executed — correct for their date, and superseded by this row. |
+| Phase 004 | **Test Architecture and Quality Gates.** Five test levels as directories under `tests/`, markers derived from the directory, `tests` as a package with helpers in `tests/support.py`; explicit mypy flags in place of `strict = true`; branch coverage gated at 95; `.pre-commit-config.yaml`; the canonical entrypoint `tools/quality`; and a SHA-pinned, least-privilege, verification-only CI workflow. Commit `abb96a9`, pushed. **CI is confirmed working:** the first run on that commit succeeded on both Python 3.12 and 3.14, and the pre-commit job passed. The phase was reported before that run existed, so ADR-0020 and the Phase 004 research ledger still describe the workflow as never executed — correct for their date, and superseded by this row. |
 | Phase 005 | **Error Taxonomy and Deterministic Test Foundations.** `globin.errors` — one root, five categories divided by who must act — replacing the ad-hoc `ValueError` scheme in the adapters and domain layers. Plus a `property` taxonomy level with Hypothesis, autouse fixtures that refuse outbound sockets and fail a test leaking process state, the `create_autospec` rule for mocks, and the `external` deselection that Phase 004's marker description had promised but nothing performed. ADR-0021 to ADR-0024. Commit `7f65d25`, pushed. |
-| Next phase | **006 — Structured Logging Foundation.** Not started. |
+| Last completed | **006 — Structured Logging Foundation.** `observability.py` in all four layers plus `build_logger` in the composition root: a `LogEvent` domain value that redacts itself in `__post_init__`, a one-method `LogSink` port, an immutable `Logger` whose `bind` returns a new logger, and a `StreamLogSink` writing JSON Lines. Correlation is explicit, never a context variable; the timestamp is stamped by the adapter so Phase 009 keeps the clock decision. `docs/LOGGING_POLICY.md` owns the severity meanings and the redacted-name list, and a contract test compares that document against the code in both directions. ADR-0025 and ADR-0026. |
+| Next phase | **007 — Configuration Model and Schema Contract.** Not started. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
 
 **The roadmap has been amended three times.** Band ranges, phase numbers and band
@@ -64,6 +65,25 @@ conditions holding at once — nothing displaced, nothing deferred, no phase own
 the work, and the two halves needing each other — and an amendment that cannot
 state all four is not covered by it. **A fourth before Phase 016 should be
 refused rather than argued.**
+
+**A fourth was proposed in Phase 006 and refused.** The owner's brief for the
+phase described deterministic quality gates, static analysis, typing, branch
+coverage and a cross-platform CI backbone — the scope `ROADMAP.md` assigns to
+Phase 004 (`Complete`) and Phase 013. An audit against the brief found every
+item already delivered except a Linux CI runner. Redefining Phase 006 would have
+displaced *Structured Logging Foundation* from a band whose sixteen slots are
+all occupied, failing three of ADR-0021's four conditions. The conflict was put
+to the owner with four options; he chose to deliver the roadmap's phase as
+written. Two decisions were taken with it, both deliberate and both his:
+
+- **CI stays Windows-only.** The brief asked for at least one Linux runner.
+  `quality.yml` argues Windows is the only platform GLOBIN declares (ADR-0009)
+  and the only one exercising the `.gitattributes` CRLF rules. Left standing.
+- **The coverage floor stays at 95** while measured coverage is far higher,
+  because `QUALITY_GATES.md` calls the floor a regression detector rather than a
+  target and ADR-0021 already recorded that gap as deliberate.
+
+Do not re-open either as though it were an oversight.
 
 **Nothing so far implements trading.** No exchange connection, no credentials,
 no market data, no strategy, no models. Anything claiming otherwise is wrong.

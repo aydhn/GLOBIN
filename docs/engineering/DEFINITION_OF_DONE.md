@@ -84,11 +84,12 @@ Run it. Do not infer its result.
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 ```
 
-- [ ] **Package import** succeeds.
-- [ ] **`pytest`** passes in full.
 - [ ] **`ruff check`** is clean.
 - [ ] **`ruff format --check`** is clean.
-- [ ] **`mypy --strict`** is clean.
+- [ ] **`mypy`** is clean, at the strictness `pyproject.toml` enumerates flag by
+      flag. The `--strict` alias is deliberately not used (ADR-0018).
+- [ ] **`pytest`** passes in full, under branch coverage, and the floor holds.
+      The package import check is part of this: it is the smoke level.
 
 Because GLOBIN has no pull request and no reviewer (ADR-0005), this script is the
 only gate between a change and the repository.

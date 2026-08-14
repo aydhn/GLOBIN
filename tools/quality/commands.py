@@ -83,7 +83,11 @@ _PROPERTY = Step(
 # space on each machine could pass here and fail there for no visible reason.
 _COVERAGE = Step(
     "coverage",
-    ("pytest", "hypothesis"),
+    # `pytest_cov` is listed for the same reason `hypothesis` is, and was missing
+    # until Phase 006: `--cov=globin` is contributed by the pytest-cov plugin, so
+    # without it the preflight confirms pytest is present, launches, and fails on
+    # an unrecognised-argument error that names neither the plugin nor the cause.
+    ("pytest", "pytest_cov", "hypothesis"),
     (
         "-m",
         "pytest",

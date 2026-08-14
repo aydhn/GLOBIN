@@ -12,11 +12,14 @@ to be installed. Passing it in keeps the dependency visible and lets a test
 point the review at a fixture tree instead.
 """
 
+import sys
 from pathlib import Path
-from typing import Final
+from typing import Final, TextIO
 
 from globin.adapters.architecture import AstModuleImportSource, TomlArchitectureContractSource
+from globin.adapters.observability import StreamLogSink, new_correlation_id
 from globin.application.architecture_review import ArchitectureReview
+from globin.application.observability import Logger
 
 CONTRACT_RELATIVE_PATH: Final[str] = "docs/architecture/dependency-rules.toml"
 """Where the declared contract lives, relative to the repository root."""
@@ -46,4 +49,30 @@ def build_architecture_review(repo_root: Path) -> ArchitectureReview:
     return ArchitectureReview(
         contract_source=TomlArchitectureContractSource(repo_root / CONTRACT_RELATIVE_PATH),
         module_source=AstModuleImportSource(repo_root / PACKAGE_RELATIVE_PATH, ROOT_PACKAGE),
+    )
+
+
+def build_logger(stream: TextIO | None = None, correlation_id: str | None = None) -> Logger:
+    """Wire a logger writing JSON Lines to a stream.
+
+    Args:
+        stream: Where records go. Defaults to :data:`sys.stderr`, so that log
+            output does not contaminate whatever a program writes to standard
+            output.
+        correlation_id: Ties every record this logger produces to one unit of
+            work. Defaults to a fresh one. A test passes its own, and so does a
+            caller continuing work that already has an id.
+
+    Returns:
+        A :class:`~globin.application.observability.Logger`.
+
+    Both arguments default to ``None`` rather than to the value they resolve to.
+    ``sys.stderr`` as a default argument would be captured when this module is
+    imported, which is both work at import time and the wrong stream if anything
+    later replaces it — and reading it here keeps this function the only place
+    that knows which stream GLOBIN logs to.
+    """
+    return Logger(
+        sink=StreamLogSink(sys.stderr if stream is None else stream),
+        correlation_id=new_correlation_id() if correlation_id is None else correlation_id,
     )

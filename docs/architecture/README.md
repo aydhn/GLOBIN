@@ -170,7 +170,6 @@ Stated so that a later phase does not assume the question was settled here.
   [`globin.errors`](../../src/globin/errors.py), which sits above the layer stack
   in the `[shared]` table for the same reason `globin.project_contract` does. See
   [ADR-0022](../adr/0022-error-taxonomy-rooted-in-one-type.md).
-- **Structured logging** — Phase 006. No layer configures logging.
 - **The configuration model** — Phase 007.
 - **Naming, docstring and typing conventions, and the lint and type
   configuration** — Phase 013, by
