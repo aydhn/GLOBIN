@@ -301,6 +301,28 @@ def test_adr_set_is_complete_and_well_formed(repo_root: Path) -> None:
             assert section in text, f"{adr.name} is missing section {section}"
 
 
+#: The README's count of decision records: `Architecture decision records (26)`.
+README_ADR_COUNT_RE = re.compile(r"Architecture decision records \((?P<count>\d+)\)")
+
+
+def test_the_readme_adr_count_matches_the_adr_set(repo_root: Path) -> None:
+    """A hand-maintained number is a number that goes stale.
+
+    The README tells a first-time reader how much decision history exists. That
+    is worth stating and worth being true: a count that has drifted teaches the
+    reader to distrust the rest of the table, and nothing else on that table is
+    checkable by eye either.
+
+    The regular expression failing to match is itself a failure rather than a
+    silent pass, so removing the claim to avoid maintaining it is not available
+    without editing this test.
+    """
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    stated = README_ADR_COUNT_RE.search(readme)
+    assert stated is not None, "README no longer states how many ADRs exist"
+    assert int(stated.group("count")) == len(_adr_paths(repo_root))
+
+
 def test_adr_index_references_every_adr(repo_root: Path) -> None:
     adr_dir = repo_root / "docs" / "adr"
     index = (adr_dir / "README.md").read_text(encoding="utf-8")

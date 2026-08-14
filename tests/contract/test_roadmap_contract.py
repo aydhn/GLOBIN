@@ -9,8 +9,11 @@ Two things are checked, and the distinction matters:
    is never snapshotted; only its structural invariants are asserted.
 """
 
+from pathlib import Path
+
 import pytest
 
+import globin
 from globin.errors import ValidationError
 from globin.project_contract import ROADMAP_TOTAL_PHASES
 from globin.roadmap import PHASE_BAND_WIDTH, PHASE_BANDS, PhaseBand, band_for_phase
@@ -162,6 +165,42 @@ def test_no_future_phase_is_marked_complete(roadmap_rows: list[RoadmapRow]) -> N
 def test_completed_frontier_is_within_the_programme() -> None:
     """A frontier outside 1..320 would silently disable the check above."""
     assert 1 <= LAST_COMPLETED_PHASE <= ROADMAP_TOTAL_PHASES
+
+
+# --------------------------------------------------------------------------
+# Everything that states the frontier in prose
+#
+# Four artefacts tell a reader how far the programme has got, and until Phase
+# 007 only one of them was checked. A maturity claim that has drifted is the
+# worst kind of stale documentation in this repository, because the whole point
+# of `README.md`'s status section is that somebody can trust it without reading
+# the code. Each is bound to `LAST_COMPLETED_PHASE`, which is itself the
+# tripwire a phase must edit deliberately.
+# --------------------------------------------------------------------------
+
+
+def test_the_readme_states_the_delivered_frontier(repo_root: Path) -> None:
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    expected = f"Phase {LAST_COMPLETED_PHASE:03d} of {ROADMAP_TOTAL_PHASES} complete"
+    assert expected in readme, f"README does not state {expected!r}"
+
+
+def test_the_package_docstring_states_the_delivered_frontier() -> None:
+    """The claim a reader meets first if they open the package rather than the
+    repository."""
+    assert globin.__doc__ is not None
+    expected = f"Phase {LAST_COMPLETED_PHASE} of {ROADMAP_TOTAL_PHASES}"
+    assert expected in globin.__doc__, f"globin.__doc__ does not state {expected!r}"
+
+
+def test_the_roadmap_banner_states_the_delivered_frontier(roadmap_text: str) -> None:
+    """The banner is what stops a reader inferring maturity from the table."""
+    for claim in (
+        f"Phases 001-{LAST_COMPLETED_PHASE:03d} are complete",
+        f"Phase {LAST_COMPLETED_PHASE + 1:03d} is next",
+        f"Nothing beyond Phase {LAST_COMPLETED_PHASE:03d} is implemented",
+    ):
+        assert claim in roadmap_text, f"ROADMAP.md banner does not state {claim!r}"
 
 
 def test_roadmap_statuses_are_from_the_known_vocabulary(roadmap_rows: list[RoadmapRow]) -> None:

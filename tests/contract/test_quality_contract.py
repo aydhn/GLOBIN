@@ -7,8 +7,8 @@ safe while something fails when they disagree, which is what this module is
 (`SOURCE_OF_TRUTH.md` on tripwires versus drift).
 
 The workflow and the hook configuration are checked as text rather than parsed
-as YAML. That is not laziness: adding a YAML parser would mean a fifth entry in
-a development toolchain that `test_packaging_contract.py` pins to four, and the
+as YAML. That is not laziness: adding a YAML parser would mean another entry in
+the development toolchain that `test_packaging_contract.py` pins exactly, and the
 properties worth asserting here — that an action reference is a forty-character
 SHA, that no step is allowed to fail silently — are textual anyway.
 """
@@ -23,7 +23,8 @@ from typing import Any
 
 import pytest
 
-from tests.support import TAXONOMY_LEVELS
+from tests.support import TAXONOMY_LEVELS, spelled_size
+from tools.quality.commands import command_names
 
 #: Attribute markers that are registered but not applied by directory. They
 #: describe a property of a test, not its level, so a test may carry none of
@@ -33,6 +34,17 @@ ATTRIBUTE_MARKERS: tuple[str, ...] = ("slow", "network", "external", "windows")
 #: A pinned GitHub Actions reference: `uses: owner/repo@<40 hex characters>`.
 ACTION_USE_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*(?P<ref>\S+)", re.MULTILINE)
 SHA_PINNED_RE = re.compile(r"^[\w.\-]+/[\w.\-]+(?:/[\w.\-]+)*@[0-9a-f]{40}$")
+
+#: A table row whose whole first cell is one lowercase backticked word. Used for
+#: the command table in `QUALITY_GATES.md` and the marker table in
+#: `TESTING_STRATEGY.md`. Requiring the closing backtick to be followed
+#: immediately by the cell separator is what keeps it from also matching rows
+#: such as ``| `if TYPE_CHECKING:` bodies |``.
+BACKTICKED_FIRST_CELL_RE = re.compile(r"^\| `(?P<name>[a-z]+)` \|", re.MULTILINE)
+
+#: A test-module row of the "What the suite enforces" table in
+#: `TESTING_STRATEGY.md`.
+STRATEGY_MODULE_ROW_RE = re.compile(r"^\| `(?P<module>test_[a-z0-9_]+\.py)` \|", re.MULTILINE)
 
 
 @pytest.fixture(scope="module")
@@ -337,4 +349,100 @@ def test_the_lint_hook_does_not_rewrite_code(precommit: str) -> None:
     assert "--unsafe-fixes" not in precommit
     assert re.search(r"id:\s*ruff-check\s*\n(?:\s*#.*\n)*\s*args:.*--fix", precommit) is None, (
         "the ruff-check hook must not apply fixes"
+    )
+
+
+# --------------------------------------------------------------------------
+# The documents that restate the machinery
+#
+# `QUALITY_GATES.md` and `TESTING_STRATEGY.md` each carry a table restating
+# something the code already knows. Both were hand-maintained and unchecked
+# until Phase 007, and both had already drifted: the strategy table was missing
+# two property modules. A table that lists most of the truth is worse than no
+# table, because a reader treats an absent row as evidence rather than as an
+# omission.
+# --------------------------------------------------------------------------
+
+
+def test_the_quality_gates_document_lists_every_command(repo_root: Path) -> None:
+    """The command table is defined once, in `tools/quality/commands.py`.
+
+    `QUALITY_GATES.md` restates it for a reader who wants to know what to run
+    without reading Python. Order is compared too: the document presents the
+    commands as a progression from the inner edit loop outwards, and a new
+    command appended to the wrong end of one list and not the other would be a
+    silent disagreement about what that progression is.
+    """
+    document = (repo_root / "docs" / "engineering" / "QUALITY_GATES.md").read_text(encoding="utf-8")
+    documented = tuple(match.group("name") for match in BACKTICKED_FIRST_CELL_RE.finditer(document))
+    assert documented, "no command rows parsed from QUALITY_GATES.md"
+    assert documented == command_names()
+
+
+def test_the_testing_strategy_describes_every_test_module(repo_root: Path) -> None:
+    """Every test module says, in one sentence, what it would catch.
+
+    That table is the only place the suite is legible as a whole rather than as
+    546 individual assertions, and its value depends entirely on being complete.
+    A module with no row is a module nobody has had to justify.
+    """
+    document = (repo_root / "docs" / "TESTING_STRATEGY.md").read_text(encoding="utf-8")
+    documented = {match.group("module") for match in STRATEGY_MODULE_ROW_RE.finditer(document)}
+    present = {path.name for path in (repo_root / "tests").rglob("test_*.py")}
+
+    assert not present - documented, (
+        f"test modules with no row in TESTING_STRATEGY.md: {sorted(present - documented)}"
+    )
+    assert not documented - present, (
+        f"TESTING_STRATEGY.md describes modules that do not exist: {sorted(documented - present)}"
+    )
+
+
+def _section(document: str, heading: str) -> str:
+    """Return the body under ``heading``, stopping at the next heading of any level.
+
+    Args:
+        document: The Markdown source.
+        heading: The exact heading line, including its leading hashes.
+
+    Returns:
+        Everything between that heading and the next one.
+
+    Raises:
+        AssertionError: If the heading does not appear exactly once. A reader
+            that silently returned nothing would make its caller compare two
+            empty sets and pass.
+    """
+    occurrences = document.count(f"\n{heading}\n")
+    assert occurrences == 1, f"expected one {heading!r} heading, found {occurrences}"
+    body = document.split(f"\n{heading}\n", 1)[1]
+    return re.split(r"^#{1,6} ", body, maxsplit=1, flags=re.MULTILINE)[0]
+
+
+def test_the_section_reader_finds_its_own_failing_case() -> None:
+    """Guard the guard, for the reader the marker check below depends on."""
+    document = "\n## One\n\n| `alpha` | x |\n\n## Two\n\n| `beta` | y |\n"
+    section = _section(document, "## One")
+    assert [m.group("name") for m in BACKTICKED_FIRST_CELL_RE.finditer(section)] == ["alpha"]
+    with pytest.raises(AssertionError):
+        _section(document, "## Absent")
+
+
+def test_the_testing_strategy_documents_every_attribute_marker(repo_root: Path) -> None:
+    """The four hand-applied markers are registered in one place and explained in another.
+
+    Registration without an explanation teaches nobody when to apply a marker,
+    and an explanation for a marker that is no longer registered is worse: a
+    contributor who follows it gets a collection error, because `strict_markers`
+    turns an unregistered marker into a failure rather than a typo.
+    """
+    document = (repo_root / "docs" / "TESTING_STRATEGY.md").read_text(encoding="utf-8")
+    section = _section(document, "### Markers")
+
+    documented = tuple(match.group("name") for match in BACKTICKED_FIRST_CELL_RE.finditer(section))
+    assert documented == ATTRIBUTE_MARKERS
+
+    spelled = spelled_size(len(ATTRIBUTE_MARKERS)).capitalize()
+    assert f"{spelled} **attribute** markers" in section, (
+        f"TESTING_STRATEGY.md must say '{spelled} **attribute** markers'"
     )

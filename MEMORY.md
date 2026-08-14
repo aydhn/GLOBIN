@@ -214,6 +214,15 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
 - **A deliberately malformed fixture cannot be committed.** `check-toml` and
   `check-yaml` run over every file in the tree, so an invalid document is written
   into `tmp_path` at run time instead.
+- **A number written in prose is bound to its source.** The README's ADR count
+  and phase line, the package docstring's maturity line, the `ROADMAP.md` banner,
+  the `QUALITY_GATES.md` command table, the `TESTING_STRATEGY.md` marker and
+  test-module tables, and the `CONTRIBUTING.md` toolchain list are each compared
+  against the thing they describe. Two of them had already drifted when the
+  checks were added in Phase 007 — the strategy table was missing the Phase 003
+  and 005 property modules, and `CONTRIBUTING.md` had called a five-item list
+  "four" since Phase 005. Adding a document that restates something the code
+  knows means adding the comparison with it.
 - **Every completed phase** ends with tests passing, documentation synchronized,
   a commit on `master`, a successful push, matching local and remote hashes, and
   an empty `git status --porcelain`. The canonical checklist is

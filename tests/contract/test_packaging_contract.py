@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 import globin
+from tests.support import spelled_size
 
 
 @pytest.fixture(scope="session")
@@ -46,6 +47,31 @@ def test_development_extra_is_a_free_toolchain(pyproject: dict[str, Any]) -> Non
     dev = pyproject["project"]["optional-dependencies"]["dev"]
     names = {entry.split(">")[0].split("=")[0].split("[")[0].strip() for entry in dev}
     assert names == {"pytest", "pytest-cov", "ruff", "mypy", "pre-commit", "hypothesis"}
+
+
+def test_contributing_names_every_development_dependency(
+    repo_root: Path, pyproject: dict[str, Any]
+) -> None:
+    """`CONTRIBUTING.md` restates the toolchain, and restatements go stale.
+
+    This one had. `hypothesis` joined the dev extra in Phase 005 and the document
+    went on listing five tools and calling them "four" until Phase 007 read it —
+    which is the whole argument for binding a restatement rather than trusting
+    it. The spelled size is checked as well as the names, because the number is
+    the half a reader believes without counting.
+    """
+    document = (repo_root / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    dev = pyproject["project"]["optional-dependencies"]["dev"]
+    names = sorted({entry.split(">")[0].split("=")[0].split("[")[0].strip() for entry in dev})
+
+    unnamed = [name for name in names if f"`{name}`" not in document]
+    assert not unnamed, f"CONTRIBUTING.md does not name the development tools: {unnamed}"
+
+    spelled = spelled_size(len(names))
+    assert f"All {spelled} are free and open source" in document, (
+        f"CONTRIBUTING.md must say 'All {spelled} are free and open source' "
+        f"for a toolchain of {len(names)}"
+    )
 
 
 def test_requires_python_floor_supports_the_planned_stack(pyproject: dict[str, Any]) -> None:

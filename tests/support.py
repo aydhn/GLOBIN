@@ -216,6 +216,42 @@ def architecture_contract(
     )
 
 
+#: How a small count is written out in prose. Bounded deliberately: a list long
+#: enough to fall off this map is one worth arguing about rather than spelling.
+SPELLED_SIZES: Final[dict[int, str]] = {
+    2: "two",
+    3: "three",
+    4: "four",
+    5: "five",
+    6: "six",
+    7: "seven",
+    8: "eight",
+}
+
+
+def spelled_size(count: int) -> str:
+    """Return how ``count`` is written out in this repository's prose.
+
+    Args:
+        count: How many things there are.
+
+    Returns:
+        The English word for it.
+
+    Raises:
+        AssertionError: If no spelling is recorded. A test asking for one is
+            asserting that a document's count is right, so a missing spelling
+            must fail rather than quietly skip the comparison.
+
+    Documents say "all six are free and open source" and "four attribute
+    markers", and both had drifted at least once before anything compared them.
+    Spelling the number is the half a reader believes without counting.
+    """
+    spelled = SPELLED_SIZES.get(count)
+    assert spelled is not None, f"no spelling recorded for {count}; extend SPELLED_SIZES"
+    return spelled
+
+
 def resolved_configuration(origin: str = "test", /, **settings: object) -> ResolvedConfig:
     """Resolve the declared defaults with one override layer on top.
 
