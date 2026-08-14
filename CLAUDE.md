@@ -40,6 +40,7 @@ phase before assuming any capability exists.
 | What sources may I trust? | [`docs/SOURCE_POLICY.md`](docs/SOURCE_POLICY.md) |
 | How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 | Which error do I raise? | [`src/globin/errors.py`](src/globin/errors.py), [ADR-0022](docs/adr/0022-error-taxonomy-rooted-in-one-type.md) |
+| How do I express a price or a quantity? | [`docs/VALUE_TYPES_POLICY.md`](docs/VALUE_TYPES_POLICY.md) |
 | Which checks must pass? | [`docs/engineering/QUALITY_GATES.md`](docs/engineering/QUALITY_GATES.md) |
 | Why these lint and type rules? | [`docs/engineering/STATIC_ANALYSIS.md`](docs/engineering/STATIC_ANALYSIS.md) |
 | How do I commit? | [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) |
@@ -132,6 +133,18 @@ python -m tools.quality typecheck
 
 Only `fix` and `reformat` modify the tree. Every other command reports and
 changes nothing.
+
+One gate sits outside `full`, because it takes minutes rather than seconds:
+
+```bash
+python -m tools.quality mutation
+```
+
+It rewrites one module at a time inside a temporary copy of the tree and checks
+whether the tests notice, then compares the survivors against
+[`docs/engineering/mutation-baseline.toml`](docs/engineering/mutation-baseline.toml).
+Nothing writes that file. Read a survivor's recorded argument before changing it
+([ADR-0033](docs/adr/0033-mutation-testing-is-a-repository-native-ast-harness.md)).
 
 Tests run against the source tree with no install step, because
 `pythonpath = ["src"]` is set in `pyproject.toml`. There is no build in Phase 1.

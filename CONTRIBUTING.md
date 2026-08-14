@@ -64,6 +64,14 @@ hook and CI read it too. The rows above say what the table currently contains.
 workflow with no pull request and no reviewer, so this script is the only gate
 between a change and the repository.
 
+One gate is deliberately outside it. `python -m tools.quality mutation` measures
+whether the tests would notice the code being different, which takes minutes
+rather than seconds and so belongs neither in `fast` nor in `full`. Run it when
+you change a module the baseline covers, and read
+[`mutation-baseline.toml`](docs/engineering/mutation-baseline.toml) before
+editing it — a survivor recorded there is an argument somebody made, not a line
+to append to.
+
 To iterate on one check, run it directly:
 
 ```bash

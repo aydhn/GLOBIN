@@ -117,10 +117,34 @@ git status --porcelain
 Output must be empty. Anything printed means work is uncommitted or a generated
 file is untracked and unignored.
 
+### 8. Read the continuous integration result
+
+The push is not the end of verification. The workflow runs the same gate on a
+hosted Windows runner with none of this machine's advantages — no user-level
+toolchain, no warm cache, no developer environment — and it runs the mutation
+job, which the local `full` gate deliberately does not.
+
+Find the run for the commit just pushed and report what it concluded. `gh` is the
+intended way:
+
+```bash
+gh run list --limit 1
+```
+
+```bash
+gh run view --log-failed
+```
+
+The repository is private, so an unauthenticated API request returns `404` rather
+than a result. If `gh` is absent or unauthenticated, **say the run was not read**
+rather than leaving it out — an omitted CI result is indistinguishable from a
+passing one, and Phase 004 was already reported once before its run existed.
+
 ## Definition of done
 
-The Git-facing half of "done" is steps 1-7 above: verified, committed on
-`master`, pushed, local and remote agreeing, working tree clean.
+The Git-facing half of "done" is steps 1-8 above: verified, committed on
+`master`, pushed, local and remote agreeing, working tree clean, and the
+continuous integration result read.
 
 That is not the whole definition. The canonical checklist — scope, tests,
 documentation, the diff review and the reporting obligation — is

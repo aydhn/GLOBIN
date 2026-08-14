@@ -138,10 +138,15 @@ Then follow [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) exactly:
 4. Push to `origin/master`.
 5. Confirm local and remote point at the same commit.
 6. Confirm `git status --porcelain` is empty.
+7. Look at the continuous integration run for that commit and report its
+   conclusion.
 
-**Every completed phase ends pushed and clean.** If a push fails for external
-reasons such as authentication, report it as an unresolved blocker rather than
-describing the phase as complete.
+**Every completed phase ends pushed, clean, and with its CI result read.** If a
+push fails for external reasons such as authentication, report it as an
+unresolved blocker rather than describing the phase as complete. The same applies
+to step 7: a CI run that could not be reached is reported as unread, never
+omitted. The local gate and a hosted runner are different machines, and Phase 004
+was already reported once before its run existed.
 
 The full criteria — scope, tests, documentation, diff review, delivery and
 reporting — are

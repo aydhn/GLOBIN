@@ -38,7 +38,7 @@ GLOBIN/
 │   ├── GLOSSARY.md
 │   ├── adr/                    Architecture Decision Records + TEMPLATE.md
 │   ├── architecture/           System views and the dependency contract
-│   ├── engineering/            Process contracts — how work is done
+│   ├── engineering/            Process contracts, and the mutation baseline
 │   └── research/               Per-phase source ledgers
 ├── scripts/
 │   └── verify.ps1              The single verification gate
@@ -81,7 +81,7 @@ responsibilities and the test that enforces them.
 | `docs/` | Project-level documentation: what GLOBIN is and why | Process rules, decision records |
 | `docs/adr/` | One decision per file, numbered, immutable once Accepted or Rejected | Ongoing reasoning that is not a decision |
 | `docs/architecture/` | System views and the machine-readable dependency contract | Decisions and their rationale, which belong in `docs/adr/` |
-| `docs/engineering/` | Process contracts: how work is done | Domain reasoning, decisions |
+| `docs/engineering/` | Process contracts: how work is done, and the measured evidence a gate compares against | Domain reasoning, decisions |
 | `docs/research/` | One source ledger per phase, `phase_NNN_sources.md` | Copied vendor documentation |
 | `scripts/` | Host-specific entry points that must not be importable — currently the PowerShell gate | Logic worth testing; that belongs in `tools/` |
 | `tools/` | Importable, typed, tested development tooling that acts on the repository | Anything the application imports, or that ships in a distribution |
@@ -124,10 +124,20 @@ finished all the work and only wanted to understand the system, it belongs in
 
 ### Configuration lives in `pyproject.toml`
 
-There is one machine-readable configuration file. `pytest`, `ruff`, `mypy` and
-`coverage` are all configured there and nowhere else. Do not add `setup.cfg`,
-`tox.ini`, `.flake8`, `mypy.ini`, `pytest.ini` or a second table for a tool that
-already has one — see [`SOURCE_OF_TRUTH.md`](SOURCE_OF_TRUTH.md).
+There is one machine-readable **configuration** file. `pytest`, `ruff`, `mypy`,
+`coverage` and the mutation gate are all configured there and nowhere else. Do
+not add `setup.cfg`, `tox.ini`, `.flake8`, `mypy.ini`, `pytest.ini` or a second
+table for a tool that already has one — see
+[`SOURCE_OF_TRUTH.md`](SOURCE_OF_TRUTH.md).
+
+Two other `.toml` files exist and neither is configuration, which is the
+distinction to hold on to. `docs/architecture/dependency-rules.toml` is a
+**contract**: it states what is permitted, and the suite reads it. Since Phase
+008, `docs/engineering/mutation-baseline.toml` is **evidence**: it records what
+was measured and why each exception was accepted. Settings say how a tool should
+behave; a contract says what the code must satisfy; evidence says what was found.
+A file that is not the first belongs beside the document explaining it, not in
+`pyproject.toml`.
 
 `config/` is reserved for non-secret runtime configuration when a later phase
 genuinely needs it. Phase 007 delivered the configuration *model* — see

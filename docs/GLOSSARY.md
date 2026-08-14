@@ -271,3 +271,35 @@ defaults rather than from any document. Every resolution starts with it.
 **Severity** — how bad an event is, from `DEBUG` to `CRITICAL`. Describes the
 outcome of the work, not how dramatic the code path was: a fault that was
 handled and recovered from is a `WARNING`, not an `ERROR`.
+
+---
+
+## Value types
+
+Full descriptions live in [`VALUE_TYPES_POLICY.md`](VALUE_TYPES_POLICY.md);
+these are the one-line definitions.
+
+**Currency** — an asset code, validated for shape and never for membership.
+`Currency("ZZZQ")` succeeds: whether a venue lists an asset is a capability
+question, and the register of canonical identifiers is Phase 011.
+
+**Symbol** ⚠ *commonly confused* — a market, held as a pair of currencies. **Not**
+the venue's concatenated spelling: `BTCUSDT` cannot be split without knowing
+which assets a venue quotes in, so it is an encoding rather than a value, and it
+arrives with Phases 033-048.
+
+**Price** — what one unit of the base asset costs, denominated by the whole
+`Symbol` rather than by the quote currency alone, so that a BTC price and an ETH
+price are refused rather than compared. Strictly positive.
+
+**Quantity** — an amount of one asset. Also the money type: every balance, fee and
+order size in GLOBIN is an amount of an asset, so there is deliberately no
+separate `Money`. Zero is permitted; negative is not.
+
+**Denominated** — carrying the unit alongside the magnitude. It is what makes
+"a price in USDT compared against a price in EUR" refusable, as distinct from
+"a price where a quantity belongs", which a bare wrapper would already catch.
+
+**Side** — which way round a piece of work goes, `BUY` or `SELL`. Direction lives
+here and never in the sign of a number, which is what lets an amount refuse to be
+negative.

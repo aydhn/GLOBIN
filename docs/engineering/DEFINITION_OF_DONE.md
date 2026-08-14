@@ -120,11 +120,25 @@ only gate between a change and the repository.
 - [ ] **Local and remote agree:** `git rev-parse HEAD` equals
       `git rev-parse origin/master`.
 - [ ] **The working tree is clean:** `git status --porcelain` prints nothing.
+- [ ] **The continuous integration run for that commit has been looked at**, and
+      its conclusion reported. Not "CI should pass" — the run, by its commit.
 
 Procedure in [`GIT_WORKFLOW.md`](../GIT_WORKFLOW.md). Commit and push at phase
 end are pre-authorized by the owner ([`AGENTS.md`](../../AGENTS.md)) — that
 authorization covers delivery, not verification. Establishing that the work is
 actually ready remains the contributor's responsibility.
+
+The last item exists because it has already gone wrong once. Phase 004 was
+reported before its CI run existed, and `ADR-0020` and that phase's research
+ledger still describe the workflow as never executed — correct on their date and
+misleading afterwards, which `MEMORY.md` had to correct by hand. A local gate and
+a hosted runner are different machines: the local one has the toolchain installed
+at user level, a warm cache and a developer's environment, and CI has none of
+those.
+
+**If the run cannot be reached, say so rather than omitting it.** An unreported
+CI result reads as a passing one, and section 7 already forbids treating silence
+as confirmation.
 
 ## 7. Reporting
 

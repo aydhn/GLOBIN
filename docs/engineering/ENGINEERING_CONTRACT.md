@@ -165,7 +165,12 @@ Prices, quantities, balances and fees are values where representation error is a
 correctness problem, not a rounding curiosity. Exchange-facing quantities must
 respect tick and step sizes exactly. Where precision matters, use exact
 arithmetic and say so; do not let a `float` reach a place where a cent can
-disappear. The precision policy is **Phase 010**.
+disappear. Since Phase 008 the types that carry those values live in
+[`globin.domain.values`](../../src/globin/domain/values.py), and constructing one
+from a `float` is refused rather than discouraged
+([`VALUE_TYPES_POLICY.md`](../VALUE_TYPES_POLICY.md)). The precision policy —
+rounding, tick and step sizes, and where exact arithmetic is mandatory — is still
+**Phase 010**.
 
 ---
 
