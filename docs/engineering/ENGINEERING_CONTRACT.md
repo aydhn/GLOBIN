@@ -211,8 +211,9 @@ an output stream. Secret handling policy is **Phase 015**.
 
 Code is written so it can be tested without a network, without a real clock and
 without live credentials. If a unit can only be exercised against the exchange,
-it is built wrong. Conventions live in
-[`TESTING_STRATEGY.md`](../TESTING_STRATEGY.md); test architecture is **Phase 004**.
+it is built wrong. The levels, fixture scope rules and naming conventions live in
+[`TESTING_STRATEGY.md`](../TESTING_STRATEGY.md); which checks are mandatory and
+what a failure means is [`QUALITY_GATES.md`](QUALITY_GATES.md).
 
 ---
 

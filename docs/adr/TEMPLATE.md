@@ -12,7 +12,7 @@ Records 0001-0010 predate this template and carry no `## Alternatives
 Considered` section. Records 0001-0011 predate the lifecycle sections added in
 Phase 003: `## Risks and Trade-offs`, `## References`, `## Supersedes` and
 `## Superseded By`. All of them are Accepted and therefore immutable; do not
-retrofit them. `tests/test_documentation_contract.py` requires the full set from
+retrofit them. `tests/contract/test_documentation_contract.py` requires the full set from
 ADR-0012 onwards.
 -->
 

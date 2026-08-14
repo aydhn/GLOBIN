@@ -13,7 +13,7 @@ empty when Phase 1 initialised it, so the first push established `master` as the
 default branch and no alternative has ever existed.
 
 `REQUIRED_GIT_BRANCH = "master"` is asserted by
-`tests/test_project_contract.py`, and `tests/test_documentation_contract.py`
+`tests/contract/test_project_contract.py`, and `tests/contract/test_documentation_contract.py`
 scans this document and the other Git-authoritative documents for instructions
 that would contradict the rule.
 

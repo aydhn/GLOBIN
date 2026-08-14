@@ -28,7 +28,7 @@ either true or the work is not done.
 - [ ] **New dependencies are justified.** Any addition satisfies
       [ADR-0003](../adr/0003-zero-budget-open-source-dependency-policy.md) and
       says in writing why it is necessary. Adding one also means updating
-      `tests/test_packaging_contract.py`, which asserts the runtime dependency
+      `tests/contract/test_packaging_contract.py`, which asserts the runtime dependency
       list is empty — that is deliberate friction, not an obstacle to route
       around.
 
@@ -89,7 +89,7 @@ only gate between a change and the repository.
 - [ ] **No unrelated reformatting** and no mass line-ending change. A large diff
       in files you did not touch means something went wrong.
 - [ ] **Repository-relative links resolve.** Enforced by
-      `tests/test_repository_contract.py`.
+      `tests/contract/test_repository_contract.py`.
 - [ ] **`git diff --check`** reports nothing.
 
 ## 6. Delivery

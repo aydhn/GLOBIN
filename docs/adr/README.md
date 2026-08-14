@@ -15,7 +15,7 @@ still applies.
    updated, so the reasoning history survives.
 3. **Every ADR has four sections**, in this order: `## Status`, `## Context`,
    `## Decision`, `## Consequences`. This is checked by
-   `tests/test_documentation_contract.py`. Records from 0012 onwards additionally
+   `tests/contract/test_documentation_contract.py`. Records from 0012 onwards additionally
    carry `## Alternatives Considered`, `## Risks and Trade-offs`,
    `## References`, `## Supersedes` and `## Superseded By`, and that is checked
    too. Earlier records predate those sections and are immutable, so they are
@@ -80,6 +80,11 @@ a future reader can judge whether the reason still holds.
 | [0013](0013-modular-monolith-as-the-initial-architecture.md) | GLOBIN is a modular monolith in a single Python distribution | Accepted |
 | [0014](0014-layered-ports-and-adapters-and-inward-dependencies.md) | Five layers with dependencies pointing inward, enforced by a machine-readable contract | Accepted |
 | [0015](0015-single-composition-root-and-no-import-time-side-effects.md) | Dependencies are wired in one composition root, and importing performs no work | Accepted |
+| [0016](0016-phase-004-absorbs-the-quality-gate-scope.md) | Phase 004 absorbs the quality-gate scope from Phase 013 | Accepted |
+| [0017](0017-test-taxonomy-as-directories.md) | Test level is decided by directory, and `tests` is a package | Accepted |
+| [0018](0018-quality-toolchain-and-explicit-strictness.md) | The quality toolchain is pinned, and strictness is written out flag by flag | Accepted |
+| [0019](0019-single-quality-entrypoint.md) | One command table defines the checks, and every caller reads it | Accepted |
+| [0020](0020-verification-only-continuous-integration.md) | Continuous integration verifies, with least privilege and pinned actions | Accepted |
 
 ## Relationship to other documents
 

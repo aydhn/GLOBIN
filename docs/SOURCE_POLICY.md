@@ -81,7 +81,7 @@ Every phase that relies on external behaviour records its sources in
 
 Summarise. Do not copy documentation into the repository: copies go stale
 invisibly, and the whole point is to know the source rather than a snapshot of
-it. The format is enforced by `tests/test_documentation_contract.py`.
+it. The format is enforced by `tests/contract/test_documentation_contract.py`.
 
 ## When sources disagree or fall silent
 

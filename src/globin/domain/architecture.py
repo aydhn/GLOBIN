@@ -27,7 +27,7 @@ class Layer(StrEnum):
 
     Deliberately duplicated: the same five names are declared in
     ``docs/architecture/dependency-rules.toml``, and
-    ``tests/test_architecture_contract.py`` compares the two. That is the only
+    ``tests/architecture/test_architecture_contract.py`` compares the two. That is the only
     form of duplication ``docs/engineering/SOURCE_OF_TRUTH.md`` permits — a
     copy with a test that fails when the copies diverge.
 

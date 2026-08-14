@@ -11,7 +11,7 @@ A domain module must be describable without mentioning Binance, HTTP, Windows,
 a database or a file. If explaining one requires naming a technology, it
 belongs in an outer layer. The permitted set is declared in
 ``docs/architecture/dependency-rules.toml`` and enforced by
-``tests/test_architecture_contract.py``.
+``tests/architecture/test_architecture_contract.py``.
 
 This package deliberately re-exports nothing. Importing
 :mod:`globin.domain.architecture` directly keeps the dependency visible in the

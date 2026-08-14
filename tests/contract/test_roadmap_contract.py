@@ -11,9 +11,9 @@ Two things are checked, and the distinction matters:
 
 import pytest
 
-from conftest import RoadmapRow
 from globin.project_contract import ROADMAP_TOTAL_PHASES
 from globin.roadmap import PHASE_BAND_WIDTH, PHASE_BANDS, PhaseBand, band_for_phase
+from tests.support import RoadmapRow
 
 #: The immutable band boundaries from the project charter, restated literally.
 #: This is duplication on purpose — it is the tripwire.
@@ -130,7 +130,7 @@ def test_roadmap_band_headings_match_the_code_skeleton(roadmap_text: str) -> Non
 #: diff. Raise it only when the phase genuinely satisfies
 #: ``docs/engineering/DEFINITION_OF_DONE.md`` — never in advance, and never to
 #: make a failing test pass.
-LAST_COMPLETED_PHASE: int = 3
+LAST_COMPLETED_PHASE: int = 4
 
 
 def test_no_future_phase_is_marked_complete(roadmap_rows: list[RoadmapRow]) -> None:

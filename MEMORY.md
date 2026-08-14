@@ -26,19 +26,30 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Fact | Value |
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
-| Completed phases | **001-003** |
+| Completed phases | **001-004** |
 | Phase 001 | **Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
 | Phase 002 | **Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Commit `9c46313`, pushed. |
-| Last completed | **003 — Architecture Boundaries and Dependency Direction.** Five layers under `src/globin/`, the inward dependency contract in `docs/architecture/dependency-rules.toml`, C4 system context and container views, the ADR lifecycle with supersession rules, and `tests/test_architecture_contract.py` enforcing all of it. Delivered under the standard procedure: gate green, single commit on `master`, pushed to `origin/master`, tree clean. |
-| Next phase | **004 — Test Architecture and Fixture Conventions.** Not started. |
+| Phase 003 | **Architecture Boundaries and Dependency Direction.** Five layers under `src/globin/`, the inward dependency contract in `docs/architecture/dependency-rules.toml`, C4 system context and container views, the ADR lifecycle with supersession rules, and `tests/architecture/test_architecture_contract.py` enforcing all of it. Commit `990e5f4`, pushed. |
+| Last completed | **004 — Test Architecture and Quality Gates.** Five test levels as directories under `tests/`, markers derived from the directory, `tests` as a package with helpers in `tests/support.py`; explicit mypy flags in place of `strict = true`; branch coverage gated at 95; `.pre-commit-config.yaml`; the canonical entrypoint `tools/quality`; and a SHA-pinned, least-privilege, verification-only CI workflow. Delivered under the standard procedure: gate green, single commit on `master`, pushed to `origin/master`, tree clean. |
+| Next phase | **005 — Error Taxonomy and Exception Hierarchy.** Not started. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
 
-**Phase 003 amended the roadmap, and this is the only such amendment.** Phase 003
-originally read *Coding Standards and Static Analysis Baseline*; that scope moved
-into Phase 013, which now reads *Coding Standards, Static Analysis and Quality
-Gates*. Band ranges, phase numbers and band width are unchanged. Reasoning in
-[ADR-0012](docs/adr/0012-phase-003-delivers-architecture-boundaries.md); amending
-phase scope requires an ADR.
+**The roadmap has been amended twice.** Band ranges, phase numbers and band width
+are unchanged by either; amending phase scope requires an ADR.
+
+- **Phase 003** originally read *Coding Standards and Static Analysis Baseline*;
+  that scope moved into Phase 013.
+  [ADR-0012](docs/adr/0012-phase-003-delivers-architecture-boundaries.md).
+- **Phase 004** originally read *Test Architecture and Fixture Conventions*; it
+  additionally absorbed the quality gates from Phase 013, which now reads
+  *Coding Standards and Documentation Conventions* and keeps the conventions
+  those gates enforce.
+  [ADR-0016](docs/adr/0016-phase-004-absorbs-the-quality-gate-scope.md).
+
+ADR-0012 warned that a second amendment without strong justification would be
+the signal the first was wrong. ADR-0016 is that second amendment and answers the
+warning directly rather than ignoring it. **A third before Phase 016 should be
+treated as evidence the roadmap is being used as a backlog.**
 
 **Nothing so far implements trading.** No exchange connection, no credentials,
 no market data, no strategy, no models. Anything claiming otherwise is wrong.
@@ -113,8 +124,18 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
 ## Working rules
 
 - **Verify before committing:** `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`
-  runs import, `pytest`, `ruff check`, `ruff format --check` and `mypy --strict`.
-  There is no reviewer on a master-only workflow, so this is the gate.
+  runs `python -m tools.quality full` — lint, format check, type check and the
+  branch-coverage suite — then inspects the branch and working tree. There is no
+  reviewer on a master-only workflow, so this is the gate.
+- **The checks are defined in one place**, `tools/quality/commands.py`. The local
+  gate, the pre-commit hook and CI all read that table; none keeps its own list.
+  Adding a check means editing the table, not three callers.
+- **`--strict-markers` in `addopts` does not work.** pytest downgrades an
+  unregistered marker to a warning in that form; only the `strict_markers` ini
+  option is enforced. The repository carried the ineffective form from Phase 001
+  until Phase 004 tested it. A configuration that is present and spelled
+  correctly can still be inert, which is why gates are exercised rather than
+  asserted to exist.
 - **Every completed phase** ends with tests passing, documentation synchronized,
   a commit on `master`, a successful push, matching local and remote hashes, and
   an empty `git status --porcelain`. The canonical checklist is
@@ -124,7 +145,7 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
   code and its tests rank highest for behaviour, ADRs for permission. A conflict
   is a defect to fix, not merely to route around (ADR-0011).
 - **Marking a phase complete requires two edits**, deliberately: the status in
-  `ROADMAP.md` and `LAST_COMPLETED_PHASE` in `tests/test_roadmap_contract.py`.
+  `ROADMAP.md` and `LAST_COMPLETED_PHASE` in `tests/contract/test_roadmap_contract.py`.
   The constant is a tripwire — raise it only for a phase genuinely delivered.
 - **Commit and push at phase end are pre-authorized by the owner.** Do not ask
   for permission to deliver a completed, verified phase — just do it. The
@@ -143,7 +164,10 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
   untouched.
 - The system Git config sets `core.autocrlf=true`; `.gitattributes` overrides it
   so the repository always stores LF while Windows scripts check out as CRLF.
-- `pytest`, `pytest-cov`, `ruff` and `mypy` are installed at user level; no
-  virtual environment exists yet by design (Phases 17-32).
+- `pytest`, `pytest-cov`, `ruff`, `mypy` and `pre-commit` are installed at user
+  level; no virtual environment exists yet by design (Phases 17-32). The
+  `pre-commit` executable is not on `PATH`; invoke it as `python -m pre_commit`.
+- The CI workflow pins exact tool versions matching this machine. Those pins are
+  a reproducibility measure, not a lockfile; Phase 020 owns the real one.
 - No packaging build has been run. Build verification is deferred to Phases
   17-32 and must not be described as verified before then.

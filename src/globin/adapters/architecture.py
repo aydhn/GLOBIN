@@ -229,7 +229,12 @@ def _layer(name: str, where: str) -> Layer:
 def _table(value: object, where: str) -> dict[str, object]:
     if not isinstance(value, dict):
         msg = f"{where} is missing or is not a table"
-        raise ValueError(msg)
+        # TRY004 asks for TypeError. Every malformed-contract path in this module
+        # raises ValueError on purpose, so that Phase 005 inherits one scheme to
+        # replace rather than two (docs/architecture/README.md; ENGINEERING_
+        # CONTRACT.md invariant 9). The choice is pinned by test_contract_loading_
+        # refuses_malformed_input.
+        raise ValueError(msg)  # noqa: TRY004
     return {str(key): item for key, item in value.items()}
 
 
@@ -243,7 +248,7 @@ def _text(value: object, where: str) -> str:
 def _flag(value: object, where: str) -> bool:
     if not isinstance(value, bool):
         msg = f"{where} is missing or is not a boolean"
-        raise ValueError(msg)
+        raise ValueError(msg)  # noqa: TRY004 — see `_table`; one scheme, not two
     return value
 
 

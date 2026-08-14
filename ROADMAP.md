@@ -8,7 +8,7 @@ suggestion.
 The programme is divided into **twenty bands of exactly sixteen phases**. The
 band boundaries are immutable and are additionally encoded in
 [`src/globin/roadmap.py`](src/globin/roadmap.py) so that this document and the
-codebase cannot drift apart — `tests/test_roadmap_contract.py` checks one
+codebase cannot drift apart — `tests/contract/test_roadmap_contract.py` checks one
 against the other.
 
 Every phase row is machine-parsed. The table shape below is therefore part of
@@ -33,18 +33,28 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-003 are complete. Phase 004 is next and has not started.**
-> Nothing beyond Phase 003 is implemented. GLOBIN does not trade, does not
+> **Phases 001-004 are complete. Phase 005 is next and has not started.**
+> Nothing beyond Phase 004 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
 
-> **Scope amendment.** Phase 003 originally read *Coding Standards and Static
-> Analysis Baseline*, and Phase 013 read *Continuous Verification Script and
-> Quality Gates*. Phase 003 now delivers architecture boundaries, and the
-> coding-standards scope has moved into Phase 013. Band ranges, phase numbers
-> and the sixteen-phase band width are unchanged. The reasoning is recorded in
-> [ADR-0012](docs/adr/0012-phase-003-delivers-architecture-boundaries.md);
-> amending phase scope requires an ADR, and this is the only such amendment.
+> **Scope amendments.** Two have been made. Both cost an ADR, and each is
+> recorded here so that the programme's history is visible without opening the
+> decision log. Band ranges, phase numbers and the sixteen-phase band width are
+> unchanged by either.
+>
+> **First.** Phase 003 originally read *Coding Standards and Static Analysis
+> Baseline*, and Phase 013 read *Continuous Verification Script and Quality
+> Gates*. Phase 003 now delivers architecture boundaries, and the
+> coding-standards scope moved into Phase 013. Reasoning in
+> [ADR-0012](docs/adr/0012-phase-003-delivers-architecture-boundaries.md).
+>
+> **Second.** Phase 004 originally read *Test Architecture and Fixture
+> Conventions*. It now also delivers the quality gates — lint, typing, coverage,
+> the pre-commit hook and continuous integration — which Phase 013 previously
+> owned. Phase 013 retains the *conventions* those gates enforce. Reasoning in
+> [ADR-0016](docs/adr/0016-phase-004-absorbs-the-quality-gate-scope.md), which
+> also states plainly what a second amendment costs.
 
 ---
 
@@ -59,7 +69,7 @@ written down.
 | 001 | Repository Foundation and Engineering Contract | Create the repository, master-only workflow, living documentation, ADR set, project contract module and invariant test suite. | Complete |
 | 002 | Documentation System and Style Guide | Define document types, ownership, review cadence and the writing conventions all later documentation follows. | Complete |
 | 003 | Architecture Boundaries and Dependency Direction | Establish the layer contract, the inward dependency direction, the ports and adapters boundary, the composition root, the C4 system and container views, and the ADR lifecycle. | Complete |
-| 004 | Test Architecture and Fixture Conventions | Define test layers, directory structure, fixture scope rules, naming and the boundary between unit, contract and integration tests. | Planned |
+| 004 | Test Architecture and Quality Gates | Define test layers, directory structure, fixture scope rules and naming; enforce them with a lint, typing and branch-coverage contract, a pre-commit gate, one canonical quality entrypoint and a verification-only CI workflow. | Complete |
 | 005 | Error Taxonomy and Exception Hierarchy | Design the project-wide exception hierarchy separating configuration, transport, exchange, validation and internal faults. | Planned |
 | 006 | Structured Logging Foundation | Establish structured, correlation-aware logging with severity policy and redaction of sensitive fields. | Planned |
 | 007 | Configuration Model and Schema Contract | Define the typed configuration model, validation rules, defaults and layered override precedence. | Planned |
@@ -68,7 +78,7 @@ written down.
 | 010 | Decimal and Numeric Precision Policy | Decide where decimal arithmetic is mandatory versus floating point, and define rounding and tick-size behaviour. | Planned |
 | 011 | Identifier and Naming Registry | Define canonical identifiers for symbols, products, environments, runs, models and orders across the system. | Planned |
 | 012 | Serialization and Persistence Contracts | Establish schema evolution rules and forward and backward compatibility guarantees for persisted structures. | Planned |
-| 013 | Coding Standards, Static Analysis and Quality Gates | Fix naming, structure, docstring and typing conventions, tighten the lint and type configuration to match, and consolidate the local verification pathway into a single authoritative gate with explicit pass criteria. | Planned |
+| 013 | Coding Standards and Documentation Conventions | Fix naming, structure, docstring and typing conventions, and tighten the existing lint and type configuration to match them, including the docstring rules Phase 004 deliberately left unselected. | Planned |
 | 014 | Dependency Review and Licence Audit Process | Define how a candidate dependency is reviewed for cost, licence, maintenance health and supply-chain risk. | Planned |
 | 015 | Security Baseline and Secret Handling Rules | Specify secret storage, redaction, least-privilege API key usage and the prohibition on committing credentials. | Planned |
 | 016 | Foundation Consolidation and Phase Gate Review | Reconcile the foundation band, resolve inconsistencies and certify readiness for environment work. | Planned |
@@ -581,4 +591,3 @@ These hold for every phase and are enforced by tests where practical:
 - No prediction is presented as a guarantee. The objective is a measurable
   probabilistic edge after realistic costs and out-of-sample validation.
 - Autonomous adaptation may never raise the system's absolute risk ceilings.
-

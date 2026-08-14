@@ -38,7 +38,9 @@ phase before assuming any capability exists.
 | Why is the architecture like this? | [`docs/ARCHITECTURE_PRINCIPLES.md`](docs/ARCHITECTURE_PRINCIPLES.md) |
 | Why was X decided? | [`docs/adr/README.md`](docs/adr/README.md) |
 | What sources may I trust? | [`docs/SOURCE_POLICY.md`](docs/SOURCE_POLICY.md) |
-| How do I test? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
+| How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
+| Which checks must pass? | [`docs/engineering/QUALITY_GATES.md`](docs/engineering/QUALITY_GATES.md) |
+| Why these lint and type rules? | [`docs/engineering/STATIC_ANALYSIS.md`](docs/engineering/STATIC_ANALYSIS.md) |
 | How do I commit? | [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) |
 | What does this term mean? | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
 
@@ -56,20 +58,27 @@ GLOBIN/
 │   ├── application/          Use cases, coordinating domain through ports
 │   ├── adapters/             Concrete implementations; the only I/O
 │   └── runtime/              Composition root
-├── tests/               Contract and architecture tests enforcing the rules
+├── tests/               The suite; a test's directory decides its marker
+│   ├── support.py       Importable helpers (conftest.py holds fixtures only)
+│   ├── smoke/           Fastest signal that the tree is not broken
+│   ├── contract/        Project rules asserted executably
+│   ├── architecture/    The layer contract against the real import graph
+│   ├── unit/            One unit, dependencies substituted
+│   └── integration/     Several components together, still local
+├── tools/quality/       The canonical quality entrypoint; CI runs this too
 ├── docs/
 │   ├── architecture/    Layer contract, C4 system context and container views
 │   ├── engineering/     How work is done: contracts and standards
 │   ├── adr/             Architecture Decision Records + TEMPLATE.md
 │   └── research/        Per-phase source ledgers
-├── .github/             Pull request and issue templates
+├── .github/             Templates, and the verification-only CI workflow
 └── scripts/verify.ps1   The single verification gate
 ```
 
 Dependencies point **inward only**: `runtime` → `adapters` → `application` →
 `ports` → `domain`. The permitted directions are declared in
 [`docs/architecture/dependency-rules.toml`](docs/architecture/dependency-rules.toml)
-and enforced by `tests/test_architecture_contract.py`. Do not add a second copy
+and enforced by `tests/architecture/test_architecture_contract.py`. Do not add a second copy
 of that matrix anywhere.
 
 There is deliberately no scaffolding for future components. Directories appear
@@ -89,19 +98,33 @@ The full gate, which is what you must run before committing:
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 ```
 
+It delegates to the canonical quality command, which is also what CI runs. Every
+check is a name in `tools/quality/commands.py`; do not add a check anywhere else.
+
+```bash
+python -m tools.quality full
+```
+
 Individual checks, when iterating:
+
+```bash
+python -m tools.quality fast
+```
 
 ```bash
 python -m pytest -q
 ```
 
 ```bash
-python -m ruff check .
+python -m tools.quality lint
 ```
 
 ```bash
-python -m mypy src/globin tests
+python -m tools.quality typecheck
 ```
+
+Only `fix` and `reformat` modify the tree. Every other command reports and
+changes nothing.
 
 Tests run against the source tree with no install step, because
 `pythonpath = ["src"]` is set in `pyproject.toml`. There is no build in Phase 1.

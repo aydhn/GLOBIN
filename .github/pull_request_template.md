@@ -53,7 +53,7 @@ Which parts are least certain:
 
 - [ ] No new runtime dependency
 - [ ] A dependency was added, justified below against ADR-0003 (zero-budget),
-      with `tests/test_packaging_contract.py` updated accordingly
+      with `tests/contract/test_packaging_contract.py` updated accordingly
 
 Justification:
 
@@ -79,12 +79,17 @@ did not execute.
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 ```
 
-- [ ] Package import
-- [ ] `pytest`
 - [ ] `ruff check`
 - [ ] `ruff format --check`
-- [ ] `mypy --strict`
+- [ ] `mypy`
+- [ ] `pytest` with branch coverage, meeting the threshold
+- [ ] `pre-commit run --all-files`
 - [ ] `git diff --check` reports nothing
+
+A new test is in the directory for its level, and a new check was added to
+`tools/quality/commands.py` rather than to a caller:
+
+- [ ] Not applicable, or done
 
 Output or summary:
 

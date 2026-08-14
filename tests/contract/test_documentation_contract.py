@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import REPO_ROOT, markdown_prose
+from tests.support import REPO_ROOT, markdown_prose
 
 #: Documents that must exist for the engineering contract to be coherent.
 REQUIRED_DOCS: tuple[str, ...] = (
@@ -36,11 +36,14 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/engineering/SOURCE_OF_TRUTH.md",
     "docs/engineering/REPOSITORY_LAYOUT.md",
     "docs/engineering/DOCUMENTATION_STANDARD.md",
+    "docs/engineering/QUALITY_GATES.md",
+    "docs/engineering/STATIC_ANALYSIS.md",
     "docs/adr/README.md",
     "docs/adr/TEMPLATE.md",
     "docs/research/phase_001_sources.md",
     "docs/research/phase_002_sources.md",
     "docs/research/phase_003_sources.md",
+    "docs/research/phase_004_sources.md",
 )
 
 #: Minimum byte length for a document to count as substantive rather than a
@@ -101,6 +104,21 @@ REQUIRED_CONCEPTS: dict[str, tuple[str, ...]] = {
         "guarantee",
         "adr",
         "relative link",
+    ),
+    "docs/engineering/QUALITY_GATES.md": (
+        "exit code",
+        "coverage",
+        "branch",
+        "least privilege",
+        "pre-commit",
+        "deferred",
+    ),
+    "docs/engineering/STATIC_ANALYSIS.md": (
+        "ruff",
+        "mypy",
+        "noqa",
+        "type: ignore",
+        "exception",
     ),
     "docs/adr/TEMPLATE.md": (
         "## status",

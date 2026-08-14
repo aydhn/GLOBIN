@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 003 of 320 complete — foundation only
+## Current status: Phase 004 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -30,6 +30,7 @@ Binance Global, built over a fixed programme of 320 phases.
 | Architecture: five layers, inward dependency contract, C4 system and container views | Implemented |
 | `globin` package — project contract constants and the architecture review | Implemented |
 | Contract test suite and verification gate | Implemented |
+| Test taxonomy, quality gates, pre-commit hooks and CI | Implemented |
 | Everything else | Not started |
 
 ### What does not exist
@@ -127,7 +128,8 @@ GLOBIN/
 │   └── research/                 Per-phase source ledgers
 ├── scripts/verify.ps1     The single verification gate
 ├── src/globin/            The Python package, in five architectural layers
-└── tests/                 Contract and architecture tests
+├── tests/                 The suite, one directory per taxonomy level
+└── tools/quality/         The canonical quality entrypoint
 ```
 
 Placement rules are in
@@ -138,15 +140,31 @@ Placement rules are in
 ## Running the checks
 
 Requires Python 3.12 or later. The development toolchain is `pytest`,
-`pytest-cov`, `ruff` and `mypy`.
+`pytest-cov`, `ruff`, `mypy` and `pre-commit`.
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 ```
 
-This runs the import check, the test suite, lint, format verification and strict
-type checking. Tests read the package directly from `src/`, so no build or
-install step is needed.
+This runs lint, format verification, strict type checking and the test suite
+with branch coverage, then reports working-tree state. Tests read the package
+directly from `src/`, so no build or install step is needed.
+
+The same checks, invoked directly — this is what continuous integration runs:
+
+```bash
+python -m tools.quality full
+```
+
+For a faster inner loop:
+
+```bash
+python -m tools.quality fast
+```
+
+Which checks are mandatory, what a failure means and what is deliberately
+deferred are in
+[`QUALITY_GATES.md`](docs/engineering/QUALITY_GATES.md).
 
 ---
 
@@ -165,6 +183,9 @@ the charter, principles and decision records.
 | Which document wins a conflict? | [`SOURCE_OF_TRUTH.md`](docs/engineering/SOURCE_OF_TRUTH.md) |
 | Where does a new file go? | [`REPOSITORY_LAYOUT.md`](docs/engineering/REPOSITORY_LAYOUT.md) |
 | How is documentation written? | [`DOCUMENTATION_STANDARD.md`](docs/engineering/DOCUMENTATION_STANDARD.md) |
+| Which checks must pass? | [`QUALITY_GATES.md`](docs/engineering/QUALITY_GATES.md) |
+| Why these lint and type rules? | [`STATIC_ANALYSIS.md`](docs/engineering/STATIC_ANALYSIS.md) |
+| Where does a new test go? | [`TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 
 This file is orientation only. It links to policy rather than restating it, so
 that a rule has exactly one home — see

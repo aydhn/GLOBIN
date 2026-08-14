@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import markdown_prose
+from tests.support import markdown_prose
 
 # --------------------------------------------------------------------------
 # What must exist
@@ -41,6 +41,9 @@ ENGINEERING_DOCS: tuple[str, ...] = (
     "docs/engineering/SOURCE_OF_TRUTH.md",
     "docs/engineering/REPOSITORY_LAYOUT.md",
     "docs/engineering/DOCUMENTATION_STANDARD.md",
+    # Added in Phase 004 with the quality gates they describe.
+    "docs/engineering/QUALITY_GATES.md",
+    "docs/engineering/STATIC_ANALYSIS.md",
 )
 
 #: Change templates. Paths are fixed by GitHub, not chosen — see

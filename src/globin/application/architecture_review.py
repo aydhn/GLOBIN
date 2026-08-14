@@ -27,7 +27,7 @@ class ArchitectureReview:
 
     Both are ports. Neither names a file, and swapping either for a fake
     requires no change here — which is what
-    ``tests/test_architecture_contract.py`` relies on to prove the review can
+    ``tests/architecture/test_architecture_contract.py`` relies on to prove the review can
     actually fail.
     """
 

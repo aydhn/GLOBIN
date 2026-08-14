@@ -1,0 +1,87 @@
+# ---------------------------------------------------------------------------
+# GLOBIN pre-commit configuration.
+#
+# This is the fast local gate, not the authoritative one. `scripts/verify.ps1`
+# and CI both run `python -m tools.quality full`; what runs here is the subset
+# worth paying for on every commit.
+#
+# AUTOFIXING HOOKS. Four hooks below REWRITE files rather than only reporting:
+# `trailing-whitespace`, `end-of-file-fixer`, `fix-byte-order-marker` and
+# `ruff-format`. When one of them changes a file, pre-commit aborts the commit
+# and leaves the change unstaged for review — it never commits on your behalf.
+# Inspect the diff, stage it, and commit again. Nothing else here modifies
+# anything; `ruff-check` runs WITHOUT `--fix` on purpose, so a lint failure is
+# read and understood rather than silently rewritten.
+#
+# `mixed-line-ending` is deliberately absent. `.gitattributes` checks Windows
+# scripts out as CRLF on purpose, and a hook normalising them to LF would fight
+# that contract on every commit.
+#
+# Revisions are pinned. `ruff-pre-commit` is pinned to the SAME version as the
+# `ruff` the quality gate runs, so the hook and the gate cannot disagree about
+# whether a file is clean. Dependency locking as a general mechanism belongs to
+# Phases 017-032; this is one version pin, not a second dependency system.
+#
+# Install the hooks once:
+#   python -m pre_commit install
+# Run them over everything:
+#   python -m pre_commit run --all-files
+# ---------------------------------------------------------------------------
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # --- file hygiene (these four rewrite files) -----------------------
+      - id: trailing-whitespace
+        # Markdown uses two trailing spaces as a hard line break, and
+        # `.editorconfig` preserves them. Stripping them would silently change
+        # how documents render.
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: fix-byte-order-marker
+        # A UTF-8 BOM in a Python source file is a syntax hazard and shows up as
+        # an invisible diff. Windows editors and PowerShell's default UTF-8
+        # encoding both add one; this removes it.
+
+      # --- structural checks (these only report) --------------------------
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-case-conflict
+        # The target host is Windows, whose filesystem is case-insensitive. Two
+        # paths differing only in case are indistinguishable there.
+      - id: check-illegal-windows-names
+      - id: forbid-submodules
+        # GLOBIN is one self-contained repository. A submodule would put part of
+        # the source outside the verification gate.
+
+      # --- secrets -------------------------------------------------------
+      - id: detect-private-key
+      - id: check-added-large-files
+        # Datasets, models and backtest output are generated artefacts and
+        # belong in the `.gitignore`d runtime directories, never in history.
+        args: [--maxkb=512]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.14
+    hooks:
+      - id: ruff-check
+        # No `--fix`. A verification hook that edits the code makes the thing
+        # that passed different from the thing that was reviewed.
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: globin-repository-guards
+        name: GLOBIN repository and architecture guards
+        # The contract and architecture levels: documentation links resolve, no
+        # credential-shaped file is committable, tool configuration is not
+        # duplicated, and no import crosses a layer boundary. Roughly half a
+        # second, which is what makes it affordable per commit. The full suite,
+        # type checking and coverage run in `verify.ps1` and in CI.
+        entry: python -m tools.quality architecture
+        language: system
+        pass_filenames: false
+        always_run: true

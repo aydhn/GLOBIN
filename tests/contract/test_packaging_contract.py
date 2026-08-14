@@ -39,7 +39,7 @@ def test_there_are_no_runtime_dependencies(pyproject: dict[str, Any]) -> None:
 def test_development_extra_is_a_free_toolchain(pyproject: dict[str, Any]) -> None:
     dev = pyproject["project"]["optional-dependencies"]["dev"]
     names = {entry.split(">")[0].split("=")[0].split("[")[0].strip() for entry in dev}
-    assert names == {"pytest", "pytest-cov", "ruff", "mypy"}
+    assert names == {"pytest", "pytest-cov", "ruff", "mypy", "pre-commit"}
 
 
 def test_requires_python_floor_supports_the_planned_stack(pyproject: dict[str, Any]) -> None:
@@ -76,10 +76,61 @@ def test_no_licence_is_asserted(pyproject: dict[str, Any]) -> None:
 
 def test_src_layout_is_configured(repo_root: Path, pyproject: dict[str, Any]) -> None:
     assert pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"] == ["src/globin"]
-    assert pyproject["tool"]["pytest"]["ini_options"]["pythonpath"] == ["src"]
+    # `"."` joined `"src"` in Phase 004, when `tests` became a package and the
+    # quality entrypoint arrived under `tools/`. Both are imported by name, so
+    # the repository root has to be on the path deliberately rather than by
+    # accident of where pytest happens to start.
+    assert pyproject["tool"]["pytest"]["ini_options"]["pythonpath"] == ["src", "."]
     assert (repo_root / "src" / "globin" / "__init__.py").is_file()
 
 
-def test_strict_typing_and_linting_are_enabled(pyproject: dict[str, Any]) -> None:
-    assert pyproject["tool"]["mypy"]["strict"] is True
+#: The flags `mypy --strict` expanded to on the version Phase 004 was written
+#: against, restated literally. This is a tripwire in the sense
+#: `SOURCE_OF_TRUTH.md` permits: the copy exists so that quietly dropping a flag
+#: from `pyproject.toml` fails here rather than silently weakening the contract.
+STRICT_MYPY_FLAGS: tuple[str, ...] = (
+    "disallow_any_generics",
+    "disallow_subclassing_any",
+    "disallow_untyped_calls",
+    "disallow_untyped_defs",
+    "disallow_incomplete_defs",
+    "check_untyped_defs",
+    "disallow_untyped_decorators",
+    "warn_redundant_casts",
+    "warn_unused_ignores",
+    "warn_return_any",
+    "strict_equality",
+    "extra_checks",
+)
+
+
+def test_strict_typing_is_declared_flag_by_flag(pyproject: dict[str, Any]) -> None:
+    """Typing strictness must be spelled out, not delegated to `strict = true`.
+
+    `--strict` is an alias mypy owns. Its membership has changed between
+    releases and will change again, so under the alias a mypy upgrade can add or
+    remove a check with no diff to read and no decision to review. Writing the
+    flags out costs a dozen lines and makes the contract mean the same thing
+    tomorrow as it does today.
+    """
+    mypy = pyproject["tool"]["mypy"]
+    assert "strict" not in mypy, (
+        "`strict = true` is back in pyproject.toml; it hides which checks are actually on"
+    )
+    missing = [flag for flag in STRICT_MYPY_FLAGS if mypy.get(flag) is not True]
+    assert not missing, f"typing strictness weakened; these flags are not enabled: {missing}"
+    assert mypy["implicit_reexport"] is False, "implicit re-export must stay disabled"
+
+
+def test_untyped_ignores_are_rejected(pyproject: dict[str, Any]) -> None:
+    """A bare `# type: ignore` silences errors nobody has seen yet.
+
+    Requiring the code makes each suppression name the thing it suppresses,
+    which is the difference between an exception and a blind spot.
+    """
+    enabled = pyproject["tool"]["mypy"]["enable_error_code"]
+    assert "ignore-without-code" in enabled
+
+
+def test_line_length_is_configured_once(pyproject: dict[str, Any]) -> None:
     assert pyproject["tool"]["ruff"]["line-length"] == 100

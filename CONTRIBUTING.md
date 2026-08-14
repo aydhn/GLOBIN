@@ -28,7 +28,8 @@ scheduled for Phase 182, requires 3.12 while the rest of the planned stack
 requires 3.10. Choosing the strictest known constraint now avoids a breaking
 change later. See `docs/research/phase_001_sources.md`.
 
-The development toolchain is `pytest`, `pytest-cov`, `ruff` and `mypy`, declared
+The development toolchain is `pytest`, `pytest-cov`, `ruff`, `mypy` and
+`pre-commit`, declared
 under the `dev` extra in `pyproject.toml`. All four are free and open source, as
 required by [ADR-0003](docs/adr/0003-zero-budget-open-source-dependency-policy.md).
 
@@ -48,12 +49,16 @@ This runs, in order and failing fast:
 
 | Check | Command |
 |---|---|
-| Package import | `python -c "import globin"` |
-| Tests and coverage | `python -m pytest -q --cov=globin` |
 | Lint | `python -m ruff check .` |
 | Formatting | `python -m ruff format --check .` |
-| Strict typing | `python -m mypy src/globin tests` |
+| Strict typing | `python -m mypy src/globin tests tools` |
+| Tests and branch coverage | `python -m pytest -q --cov=globin --cov=tools --cov-branch` |
 | Working tree | `git status --porcelain` |
+
+The first four are not listed here as a second source of truth: `verify.ps1`
+delegates to `python -m tools.quality full`, which reads the command table in
+`tools/quality/commands.py`. That table is the definition, and the pre-commit
+hook and CI read it too. The rows above say what the table currently contains.
 
 **Run it before staging, not after committing.** GLOBIN uses a master-only
 workflow with no pull request and no reviewer, so this script is the only gate

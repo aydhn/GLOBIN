@@ -6,7 +6,7 @@ Python source. Both are filesystem reads, so both are expressed here as
 contracts and implemented in :mod:`globin.adapters.architecture`.
 
 The split is not ceremony. It is what lets
-``tests/test_architecture_contract.py`` feed the review a synthetic graph
+``tests/architecture/test_architecture_contract.py`` feed the review a synthetic graph
 containing a deliberate violation and confirm the checker reports it. A checker
 whose failing case is never exercised tends to quietly stop matching anything —
 the repository already guards its Markdown link checker the same way.

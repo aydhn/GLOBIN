@@ -96,7 +96,7 @@ invisible would leave a documented way to hide a violation.
 
 The reasoning is in [ADR-0014](../adr/0014-layered-ports-and-adapters-and-inward-dependencies.md).
 The enforcement is
-[`tests/test_architecture_contract.py`](../../tests/test_architecture_contract.py),
+[`tests/architecture/test_architecture_contract.py`](../../tests/architecture/test_architecture_contract.py),
 which reads the TOML and checks the real import graph against it.
 
 ---

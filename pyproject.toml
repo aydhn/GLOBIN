@@ -46,6 +46,11 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "mypy>=1.11",
+    # Added in Phase 004 with the hook gate it runs. These are lower bounds, not
+    # a lockfile; the CI workflow pins exact versions so that the hook, the local
+    # gate and CI cannot return different verdicts. Real dependency resolution
+    # and locking is Phase 020.
+    "pre-commit>=4.0",
 ]
 
 [tool.hatch.version]
@@ -64,13 +69,61 @@ testpaths = ["tests"]
 # `pythonpath` lets the whole suite run against the source tree with no build
 # and no install step. Phase 1 intentionally performs no packaging build; that
 # verification belongs to Phases 17-32.
-pythonpath = ["src"]
+#
+# `"."` is what makes `tests` and `tools` importable by name. Phase 004 turned
+# `tests/` into a package so that test modules get stable, fully-qualified names
+# and shared helpers are imported explicitly from `tests.support`. Declaring the
+# root here is the alternative to relying on pytest inserting a directory into
+# `sys.path` as a side effect of where a test happens to live.
+pythonpath = ["src", "."]
+# Strictness is declared as ini options, NOT as `--strict-markers` in `addopts`.
+#
+# That distinction is load-bearing and was found by test, not by reading: with
+# the flag in `addopts`, pytest 9 downgrades an unregistered marker to a
+# `PytestUnknownMarkWarning` and the run passes. The repository had carried that
+# configuration since Phase 001, so the marker guard it believed it had was not
+# in force. As ini options both are enforced at collection, which
+# `tests/contract/test_quality_contract.py` now proves against a throwaway
+# project built from these very settings.
+strict_markers = true
+strict_config = true
 addopts = [
-    "--strict-markers",
-    "--strict-config",
+    # `importlib` imports test modules without mutating `sys.path` at all. With
+    # the package layout above it also means two test modules may share a
+    # basename in different taxonomy directories without colliding. There is no
+    # ini key for this; pytest exposes it as a command-line option only.
+    "--import-mode=importlib",
     "-ra",
 ]
 filterwarnings = ["error"]
+# Discovery is stated rather than inherited. These are pytest's defaults today,
+# but a default is a decision someone else gets to change; naming them means a
+# future pytest cannot silently start or stop collecting something.
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# An xfail that unexpectedly passes is a failure, not a curiosity. Without this
+# a fixed bug leaves its test permanently green-but-lying.
+xfail_strict = true
+
+# The taxonomy. The first five are levels and are mutually exclusive: a test's
+# directory under `tests/` decides which one it carries, applied automatically in
+# `tests/conftest.py` and asserted by `tests/contract/test_quality_contract.py`.
+#
+# The remaining four are orthogonal attributes, applied by hand. They are
+# registered now, before anything uses them, because `--strict-markers` means an
+# unregistered marker is an error rather than a typo that silently deselects.
+markers = [
+    "unit: one module, function or class, with its dependencies substituted",
+    "contract: a project rule asserted executably rather than merely written down",
+    "architecture: the layer contract checked against the real import graph",
+    "integration: several GLOBIN components together, still entirely local",
+    "smoke: the smallest set of checks that would catch a broken tree",
+    "slow: takes long enough to be worth deselecting during a tight edit loop",
+    "network: requires network access; never permitted below the external level",
+    "external: talks to a real external system; skipped by default (Phases 033-048)",
+    "windows: depends on behaviour specific to the Windows host",
+]
 
 # ---------------------------------------------------------------------------
 # ruff — linting and formatting
@@ -97,10 +150,40 @@ select = [
     "TID",  # flake8-tidy-imports
     "RET",  # flake8-return
     "TC",   # flake8-type-checking
+    # --- added in Phase 004 -------------------------------------------------
+    # Selected against a stated priority order: correctness, import hygiene,
+    # unused code, obvious bug patterns, modern Python, maintainability. Each
+    # family below earns its place; the rationale is in
+    # docs/engineering/STATIC_ANALYSIS.md and is not restated here.
+    "S",    # flake8-bandit — subprocess and shell safety, needed by tools/quality
+    "PGH",  # pygrep-hooks — blanket `noqa` and `type: ignore` without a code
+    "PT",   # flake8-pytest-style — consistent test idiom
+    "FURB", # refurb — modern Python constructs
+    "TRY",  # tryceratops — exception antipatterns
+    "EM",   # flake8-errmsg — exception messages readable in a traceback
+    "DTZ",  # flake8-datetimez — naive datetimes; load-bearing for a trading system
+    "A",    # flake8-builtins — shadowed builtins
+    "ERA",  # eradicate — commented-out code
+    "SLF",  # flake8-self — private member access across objects
+    "INP",  # flake8-no-pep420 — implicit namespace packages
 ]
+# Deliberately NOT selected, so the omissions are decisions rather than oversights:
+#   ISC001 conflicts with the formatter and would fight `ruff format`.
+#   ANN duplicates what mypy already enforces more precisely.
+#   PLR magic-value rules are noise against a codebase built from constants.
+#   D (pydocstyle) is Phase 013's call, with the rest of the docstring conventions.
+
+[tool.ruff.lint.per-file-ignores]
+# Every entry here is an exemption, and an unexplained exemption is how a rule
+# set quietly stops meaning anything. State the reason or do not add the line.
+# The procedure for adding one is in docs/engineering/STATIC_ANALYSIS.md.
+#
+# S101 forbids `assert`, on the grounds that `python -O` strips it. In a test
+# module `assert` *is* the assertion mechanism, and pytest is never run with -O.
+"tests/**" = ["S101"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["globin"]
+known-first-party = ["globin", "tests", "tools"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -113,9 +196,56 @@ docstring-code-format = true
 # ---------------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.12"
-strict = true
-files = ["src/globin", "tests"]
+files = ["src/globin", "tests", "tools"]
+
+# Phase 004 replaced `strict = true` with the flags it stands for.
+#
+# `--strict` is an alias whose membership is decided by mypy, not by GLOBIN. Its
+# contents have grown between releases, and they will grow again. Under the
+# alias, upgrading mypy silently changes what this repository's type contract
+# *means* — a check appears or disappears with no diff, no ADR and no test. That
+# is precisely the drift `SOURCE_OF_TRUTH.md` exists to prevent.
+#
+# The thirteen flags below are what `mypy --strict` expanded to on the version
+# this was written against (2.1.0), read from `mypy --help` rather than from
+# memory. A future mypy that adds a flag to `--strict` will not add it here; it
+# will be adopted deliberately, in a change someone can read.
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+implicit_reexport = false
+strict_equality = true
+extra_checks = true
+
+# Beyond `--strict`.
+#
+# `disallow_any_explicit` is deliberately NOT enabled. The contract tests parse
+# TOML with `tomllib`, whose return type is genuinely `dict[str, Any]`; banning
+# explicit `Any` would be satisfied by casting the same values through a lie.
+# `Any` is controlled here by review and by the boundary typing rule in
+# ENGINEERING_CONTRACT.md invariant 8, not by a flag that invites laundering.
+warn_unused_configs = true
 warn_unreachable = true
+
+# `ignore-without-code` is what turns "a `# type: ignore` must be justified"
+# from advice into a build failure: a bare ignore silences every error on the
+# line, including ones nobody has seen yet.
+enable_error_code = [
+    "ignore-without-code",
+    "redundant-expr",
+    "truthy-bool",
+    "truthy-iterable",
+    "possibly-undefined",
+    "unused-awaitable",
+]
+
 show_error_codes = true
 pretty = true
 
@@ -123,12 +253,31 @@ pretty = true
 # coverage
 # ---------------------------------------------------------------------------
 [tool.coverage.run]
-source = ["globin"]
+# `tools` is measured too. The quality entrypoint decides whether a gate ran and
+# what its exit code was; untested, it could report success for a check that
+# never executed, which is the one failure this whole phase exists to prevent.
+source = ["globin", "tools"]
+# Branch coverage, not line coverage. A line-covered `if` whose false arm is
+# never taken reads as tested and is not; for policy code made almost entirely
+# of conditionals, the line number on its own is close to meaningless.
 branch = true
 
 [tool.coverage.report]
 show_missing = true
-exclude_lines = [
-    "pragma: no cover",
+# A floor, not a target. It exists to catch a regression — a module quietly
+# losing its tests — and deliberately sits below the current figure so that
+# ordinary refactoring does not fail the build. It is not a score to raise, and
+# padding it with tests that assert nothing would make the number better and the
+# suite worse. See docs/engineering/QUALITY_GATES.md.
+fail_under = 95
+# `exclude_also` ADDS to coverage's own defaults; `exclude_lines` would replace
+# them, silently dropping the built-in `pragma: no cover` handling.
+exclude_also = [
+    # A `if TYPE_CHECKING:` body never executes at runtime by construction.
     "if TYPE_CHECKING:",
+    # The body of a Protocol method or an abstract stub. `globin.ports` is
+    # entirely these: `...` is the whole declaration, and there is nothing there
+    # to test.
+    "^\\s*\\.\\.\\.$",
+    "@(abc\\.)?abstractmethod",
 ]

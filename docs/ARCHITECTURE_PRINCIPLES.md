@@ -191,7 +191,7 @@ identity, branch policy and phase count live in `src/globin/project_contract.py`
 under test. The zero-budget rule is enforced by a test asserting the runtime
 dependency list is empty. Documentation presence, structure and branch-policy
 consistency are enforced by
-`tests/test_documentation_contract.py`. The roadmap document is checked against
+`tests/contract/test_documentation_contract.py`. The roadmap document is checked against
 the code skeleton rather than snapshotted.
 
 This is why Phase 1 is a test-heavy phase that ships almost no behaviour: it

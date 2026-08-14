@@ -45,6 +45,8 @@ Every class of fact has exactly one document that owns it. Others link.
 | When work is finished | [`DEFINITION_OF_DONE.md`](DEFINITION_OF_DONE.md) |
 | Which sources may be trusted | [`SOURCE_POLICY.md`](../SOURCE_POLICY.md) |
 | What is tested and why | [`TESTING_STRATEGY.md`](../TESTING_STRATEGY.md) |
+| Which checks are mandatory, and what a failure means | [`QUALITY_GATES.md`](QUALITY_GATES.md) |
+| Lint and type rules, and how to obtain an exception | [`STATIC_ANALYSIS.md`](STATIC_ANALYSIS.md) |
 | Git procedure | [`GIT_WORKFLOW.md`](../GIT_WORKFLOW.md) |
 | Where files live | [`REPOSITORY_LAYOUT.md`](REPOSITORY_LAYOUT.md) |
 | Precedence between artefacts | [`SOURCE_OF_TRUTH.md`](SOURCE_OF_TRUTH.md) |
@@ -82,7 +84,7 @@ describes changes.
 ### Structure
 
 - Open with a level-1 heading naming the document. Enforced by
-  `tests/test_documentation_contract.py`.
+  `tests/contract/test_documentation_contract.py`.
 - One sentence under the heading saying what the document is for.
 - Use `##` and `###`; do not skip levels.
 - Prefer tables for enumerable facts, prose for reasoning. A table of reasoning
@@ -112,7 +114,7 @@ describes changes.
   `.editorconfig`.
 - **Relative links** between repository documents, never absolute URLs to the
   GitHub web interface. They must resolve from the containing file's directory —
-  enforced by `tests/test_repository_contract.py`.
+  enforced by `tests/contract/test_repository_contract.py`.
 - **Language-tagged fenced code blocks** (` ```bash `, ` ```python `,
   ` ```text `), one command per block so it can be copied and run.
 - Reference code as `` `path/to/file.py` `` in backticks.
@@ -152,7 +154,7 @@ two places, that is a signal the owner is in the wrong document, not a licence t
 copy it.
 
 **`TODO`, `FIXME`, `XXX`, `TBD` and placeholder text.** Rejected by
-`tests/test_documentation_contract.py`. Unfinished thinking is recorded as a
+`tests/contract/test_documentation_contract.py`. Unfinished thinking is recorded as a
 roadmap phase or an issue, not as a marker that will be read as a promise and
 then forgotten. Template files use angle-bracket guidance
 (`<what forces this decision?>`) instead.

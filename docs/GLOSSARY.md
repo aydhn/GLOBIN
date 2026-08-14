@@ -156,6 +156,24 @@ before the next band builds on top of it.
 **Contract test** — a test asserting a project rule rather than behaviour, so
 that policy is enforced rather than merely documented.
 
+**Test level** — one of `smoke`, `contract`, `architecture`, `unit` and
+`integration`, plus `external` when it arrives. A test's level is decided by the
+directory it lives in and applied as a marker automatically. Full definitions in
+[`TESTING_STRATEGY.md`](TESTING_STRATEGY.md).
+
+**Unit test** ⚠ commonly confused — a test whose collaborators are substituted.
+The distinction from an integration test is *substitution*, not size or speed: a
+long test with fakes is still a unit test, and a three-line test that wires real
+components is not.
+
+**Integration test** — several GLOBIN components exercised together, normally
+through the composition root, with no network involved. Something on the far
+side of a socket makes it an **external** test instead.
+
+**Quality gate** — a check that must pass, run by `tools/quality`. A gate either
+passed, failed, or did not run; "did not run" never reports as passed. See
+[`engineering/QUALITY_GATES.md`](engineering/QUALITY_GATES.md).
+
 ---
 
 ## Architecture

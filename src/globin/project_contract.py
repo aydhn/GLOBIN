@@ -3,7 +3,7 @@
 This module is deliberately the smallest possible executable surface for
 Phase 1. Its purpose is to make the project's binding rules *testable* rather
 than merely *documented*: every constant here is asserted by
-``tests/test_project_contract.py``.
+``tests/contract/test_project_contract.py``.
 
 Nothing in this module performs I/O, networking, trading, or computation. It
 must stay that way. Behavioural code belongs to the phases that own it (see

@@ -1,0 +1,119 @@
+# ---------------------------------------------------------------------------
+# GLOBIN quality workflow.
+#
+# CI VERIFIES; IT DOES NOT REPAIR. No step here commits, pushes, formats,
+# applies a fix, or writes to the repository in any way. A pipeline that
+# corrects what it is measuring cannot tell you whether the thing you committed
+# was correct.
+#
+# It also runs no secret, reaches no exchange, uses no credential and deploys
+# nothing. GLOBIN does not trade (ROADMAP.md), and the day it does, exchange
+# access will still not belong in a pull-request check.
+#
+# The gate itself is NOT defined here. `python -m tools.quality full` reads the
+# command table in `tools/quality/commands.py`, which is the same table
+# `scripts/verify.ps1` and the pre-commit hook use. That is deliberate: when CI
+# keeps its own list of checks, the list drifts from the developer's, and the
+# difference surfaces as a failure nobody can reproduce locally.
+# ---------------------------------------------------------------------------
+
+name: Quality
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# Least privilege. The quality jobs read the repository and write nothing back,
+# so the token they are handed can do exactly that and no more. Declaring it at
+# workflow level means a job added later starts read-only rather than inheriting
+# whatever the repository default happens to be.
+permissions:
+  contents: read
+
+# Supersede an in-flight run when a newer commit arrives on the same ref. The
+# older run's verdict is about code nobody will merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality (Python ${{ matrix.python-version }})
+    # Windows is the only platform GLOBIN declares (ADR-0009, and the
+    # `Operating System :: Microsoft :: Windows` classifier). It is also the
+    # platform that actually exercises the CRLF/LF rules in `.gitattributes`,
+    # which a Linux runner would never test.
+    runs-on: windows-latest
+
+    strategy:
+      # Run every interpreter even after one fails. Knowing a break is
+      # version-specific is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        # PROVISIONAL, and owned by Phases 017-032. 3.12 is the floor
+        # `requires-python` declares; 3.14 is what development actually happens
+        # on. Testing both endpoints catches drift between them without
+        # pretending to be the final runtime matrix — interpreter selection and
+        # pinning is Phase 018, dependency locking is Phase 020.
+        python-version: ['3.12', '3.14']
+
+    steps:
+      # Actions are pinned to full commit SHAs, not tags. A tag is mutable: the
+      # owner of the action can move it, and a moved tag silently changes what
+      # runs against this repository. The trailing comment records which release
+      # each SHA was, for humans; the SHA is what executes.
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the quality toolchain
+        # Exact versions, so CI's verdict changes only when someone changes it.
+        # A floating range means a lint rule can appear overnight and fail a
+        # build nobody touched. These pins mirror the `dev` extra in
+        # `pyproject.toml` and the `ruff-pre-commit` revision, so the hook, the
+        # local gate and CI all run the same tools.
+        #
+        # The GLOBIN package itself is deliberately NOT installed. `pythonpath`
+        # in `pyproject.toml` runs the suite straight from `src/`, and building
+        # a distribution is Phase 017-032 work that must not be described as
+        # verified before then.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "ruff==0.15.14" "mypy==2.1.0" "pytest==9.0.3" "pytest-cov==7.1.0"
+
+      - name: Run the canonical quality gate
+        run: python -m tools.quality full
+
+  hygiene:
+    name: Pre-commit hooks
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Install pre-commit and the tools its local hook needs
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pre-commit==4.6.2" "pytest==9.0.3" "pytest-cov==7.1.0"
+
+      - name: Run every hook over every file
+        # `--show-diff-on-failure` prints what an autofixing hook WOULD change.
+        # The change is shown, never committed: the fix is the author's to make
+        # and to look at.
+        run: python -m pre_commit run --all-files --show-diff-on-failure

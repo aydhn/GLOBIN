@@ -19,7 +19,9 @@ GLOBIN/
 ├── .gitignore                  Secrets, generated artefacts, local state
 ├── .github/
 │   ├── ISSUE_TEMPLATE/         Bug report and engineering task templates
-│   └── pull_request_template.md
+│   ├── pull_request_template.md
+│   └── workflows/              Continuous integration; verification only
+├── .pre-commit-config.yaml     The fast local hook gate
 ├── AGENTS.md                   Binding instruction contract for coding agents
 ├── CLAUDE.md                   Convenience layer for one agent family
 ├── CONTRIBUTING.md             How a person makes a change
@@ -47,7 +49,15 @@ GLOBIN/
 │       ├── application/        Use cases coordinating domain through ports
 │       ├── adapters/           Concrete implementations of ports
 │       └── runtime/            Composition root
-└── tests/                      Contract and architecture tests
+├── tests/                      The suite, one directory per taxonomy level
+│   ├── support.py              Importable helpers; conftest.py holds fixtures
+│   ├── smoke/                  Fastest signal that the tree is not broken
+│   ├── contract/               Project rules asserted executably
+│   ├── architecture/           The layer contract against the real import graph
+│   ├── unit/                   One unit, dependencies substituted
+│   └── integration/            Several components together, still local
+└── tools/                      Development tooling that acts on the repository
+    └── quality/                The canonical quality entrypoint
 ```
 
 The five packages under `src/globin/` are architectural layers, and which of
@@ -65,14 +75,35 @@ responsibilities and the test that enforces them.
 |---|---|---|
 | `src/globin/` | All production Python | Tests, scripts, generated code |
 | `src/globin/<layer>/` | Only what that layer's responsibility permits | Anything an outer layer owns; see the dependency contract |
-| `tests/` | All automated tests and their fixtures | Production code, test *data* of meaningful size |
+| `tests/` | All automated tests and their fixtures, one directory per taxonomy level | Production code, test *data* of meaningful size, a test outside a level directory |
 | `docs/` | Project-level documentation: what GLOBIN is and why | Process rules, decision records |
 | `docs/adr/` | One decision per file, numbered, immutable once Accepted or Rejected | Ongoing reasoning that is not a decision |
 | `docs/architecture/` | System views and the machine-readable dependency contract | Decisions and their rationale, which belong in `docs/adr/` |
 | `docs/engineering/` | Process contracts: how work is done | Domain reasoning, decisions |
 | `docs/research/` | One source ledger per phase, `phase_NNN_sources.md` | Copied vendor documentation |
-| `scripts/` | Maintenance and development helpers that genuinely earn their place | Anything importable by the package |
+| `scripts/` | Host-specific entry points that must not be importable — currently the PowerShell gate | Logic worth testing; that belongs in `tools/` |
+| `tools/` | Importable, typed, tested development tooling that acts on the repository | Anything the application imports, or that ships in a distribution |
 | `.github/` | Repository templates | Configuration that belongs in `pyproject.toml` |
+
+### The `scripts/` and `tools/` split
+
+Both hold things that act on the repository rather than being part of the
+product, so the boundary needs stating.
+
+- `tools/` is **importable Python**: typed, unit-tested, and type-checked by the
+  same gate as everything else. `tools/quality` decides whether a check passed,
+  which is exactly the kind of logic that must not be untestable.
+- `scripts/` is **host-specific glue that cannot be imported**: today one
+  PowerShell file that resolves the repository root, invokes the gate and
+  inspects the working tree. It is thin on purpose.
+
+The test: if it contains a decision worth getting wrong, it belongs in `tools/`
+where a test can pin it. If it only exists because the host needs a particular
+kind of file to start from, it belongs in `scripts/`.
+
+Neither is `src/globin/`. That holds the application, ships in a distribution,
+and is bound by the layer contract — which forbids the inner layers from
+importing `subprocess` at all.
 
 ### The `docs/` and `docs/engineering/` split
 

@@ -5,7 +5,7 @@ readable statement of its *skeleton* — the twenty immutable sixteen-phase
 bands defined by the project charter.
 
 Encoding the bands in code rather than parsing them out of prose is what makes
-``tests/test_roadmap_contract.py`` a meaningful test instead of a snapshot. The
+``tests/contract/test_roadmap_contract.py`` a meaningful test instead of a snapshot. The
 test checks ``ROADMAP.md`` **against this module**, so the document and the
 contract cannot drift apart silently: editing one without the other fails the
 suite.

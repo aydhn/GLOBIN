@@ -70,7 +70,7 @@ system allowed to do?"*. Never let the first quietly redefine the second.
 There is exactly one place where the line length, the lint rule set, the type
 checking strictness, the interpreter floor and the test paths are configured.
 Any document that restates one of those values is a copy that will fall out of
-date, and `tests/test_packaging_contract.py` asserts several of them precisely so
+date, and `tests/contract/test_packaging_contract.py` asserts several of them precisely so
 that drift breaks the build.
 
 Documents should name the setting and point at the file rather than repeat the
@@ -86,7 +86,7 @@ Tier 3 looks like a violation of "do not copy". It is not, and the exception is
 worth understanding.
 
 `src/globin/roadmap.py` holds the twenty band boundaries.
-`tests/test_roadmap_contract.py` restates those same boundaries as a literal
+`tests/contract/test_roadmap_contract.py` restates those same boundaries as a literal
 tuple. That duplication is the entire point: editing the module alone cannot
 silently redefine the programme, because the test still holds the original. The
 copy is a **tripwire**, not a second source of truth, and it is only ever
