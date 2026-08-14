@@ -15,22 +15,25 @@ lint or coverage step from inside the suite would be slow, recursive, and would
 couple this test to whether the repository happens to be clean right now.
 """
 
+import subprocess
 import sys
+from unittest.mock import create_autospec
 
 import pytest
 
+from tests.support import REPO_ROOT
 from tools import quality
 from tools.quality.__main__ import main, usage
 from tools.quality.commands import COMMANDS, MUTATING_COMMANDS, Command, Step, command_names, find
 from tools.quality.runner import EXIT_TOOL_MISSING, EXIT_USAGE, execute, missing_modules, run
 
 #: A step that always succeeds, using only the interpreter already running.
-_OK = Step("ok", "sys", ("-c", "raise SystemExit(0)"))
+_OK = Step("ok", ("sys",), ("-c", "raise SystemExit(0)"))
 
 
 def _exits(code: int) -> Step:
     """Return a step whose subprocess exits with ``code``."""
-    return Step(f"exit-{code}", "sys", ("-c", f"raise SystemExit({code})"))
+    return Step(f"exit-{code}", ("sys",), ("-c", f"raise SystemExit({code})"))
 
 
 # --------------------------------------------------------------------------
@@ -73,8 +76,8 @@ def test_the_full_command_covers_lint_format_type_and_coverage() -> None:
     """`full` is what CI runs. If a check leaves it, CI stops checking it."""
     full = find("full")
     assert full is not None
-    modules = {step.module for step in full.steps}
-    assert {"ruff", "mypy", "pytest"} <= modules
+    modules = {module for step in full.steps for module in step.modules}
+    assert {"ruff", "mypy", "pytest", "hypothesis"} <= modules
     names = {step.name for step in full.steps}
     assert {"lint", "format", "typecheck", "coverage"} <= names
 
@@ -108,8 +111,42 @@ def test_no_command_applies_unsafe_fixes() -> None:
 
 
 def test_missing_modules_reports_an_absent_tool() -> None:
-    step = Step("phantom", "globin_tool_that_does_not_exist", ("-c", "pass"))
+    step = Step("phantom", ("globin_tool_that_does_not_exist",), ("-c", "pass"))
     assert missing_modules([step]) == ("globin_tool_that_does_not_exist",)
+
+
+@pytest.mark.parametrize(
+    "module",
+    [".relative", "globin_absent_parent.child"],
+    ids=["relative-name", "absent-parent"],
+)
+def test_a_module_name_find_spec_refuses_counts_as_absent(module: str) -> None:
+    """``find_spec`` raises for some names rather than returning ``None``.
+
+    A relative name raises :exc:`ImportError`, and a dotted name whose parent
+    package is missing raises :exc:`ModuleNotFoundError` while importing the
+    parent. Letting either escape would abort the whole gate with a traceback
+    about ``find_spec``, when the honest answer is the one every other absent
+    tool gets: this step cannot run.
+    """
+    step = Step("phantom", (module,), ("-c", "pass"))
+    assert missing_modules([step]) == (module,)
+
+
+def test_a_step_may_require_more_than_one_tool() -> None:
+    """Both are reported at once, so a second run does not discover the second gap."""
+    step = Step("pair", ("globin_absent_a", "globin_absent_b"), ("-c", "pass"))
+    assert missing_modules([step]) == ("globin_absent_a", "globin_absent_b")
+
+
+def test_a_command_with_no_steps_passes_without_running_anything() -> None:
+    """Vacuous, and deliberately not an error here.
+
+    ``test_every_command_has_at_least_one_step`` is what forbids an empty command
+    in the real table. Keeping the runner tolerant means that guarantee lives in
+    one place instead of being half-enforced in two.
+    """
+    assert run(Command("empty", "Nothing to do.", ()), echo=False) == 0
 
 
 def test_missing_modules_is_quiet_when_everything_is_present() -> None:
@@ -124,7 +161,7 @@ def test_a_command_needing_an_absent_tool_fails_without_running_it(
     command = Command(
         "phantom",
         "Not a real command.",
-        (Step("phantom", "globin_tool_that_does_not_exist", ("-c", "raise SystemExit(0)")),),
+        (Step("phantom", ("globin_tool_that_does_not_exist",), ("-c", "raise SystemExit(0)")),),
     )
     assert run(command, echo=False) == EXIT_TOOL_MISSING
     message = capsys.readouterr().err
@@ -143,7 +180,7 @@ def test_a_missing_tool_is_not_installed_automatically(
     command = Command(
         "phantom",
         "Not a real command.",
-        (Step("phantom", "globin_tool_that_does_not_exist", ("-c", "raise SystemExit(0)")),),
+        (Step("phantom", ("globin_tool_that_does_not_exist",), ("-c", "raise SystemExit(0)")),),
     )
     run(command, echo=False)
     assert "pip install" not in capsys.readouterr().err
@@ -182,7 +219,9 @@ def test_run_names_the_step_that_failed(capsys: pytest.CaptureFixture[str]) -> N
 
 def test_execute_uses_the_running_interpreter() -> None:
     """A step must not silently run under a different Python from its caller."""
-    step = Step("which", "sys", ("-c", "import sys; raise SystemExit(0 if sys.executable else 1)"))
+    step = Step(
+        "which", ("sys",), ("-c", "import sys; raise SystemExit(0 if sys.executable else 1)")
+    )
     assert execute(step) == 0
     assert sys.executable, "the interpreter path is what execute() builds argv from"
 
@@ -218,17 +257,31 @@ def test_main_dispatches_to_the_named_command(monkeypatch: pytest.MonkeyPatch) -
 
     Substituting the runner keeps this a unit test: dispatching correctly and
     lint passing are different questions, and only the first one is asked here.
+
+    The double is built with :func:`~unittest.mock.create_autospec` rather than
+    written by hand, which is the one place in the suite where a mock is the
+    right tool. A hand-written stub encodes ``run``'s signature a second time and
+    keeps accepting the old one after the real signature changes, so the test
+    goes on passing while ``main`` calls something that no longer exists.
+    ``spec_set`` additionally refuses attributes the real function does not have,
+    so a typo in an assertion fails instead of silently creating a mock.
+
+    Patching happens at ``tools.quality.__main__.run`` — where the name is used —
+    rather than at ``tools.quality.runner.run`` where it is defined. ``main``
+    resolved it at import time, so patching the definition would leave the
+    already-bound reference untouched.
     """
-    seen: list[tuple[str, bool]] = []
+    runner = create_autospec(run, spec_set=True, return_value=17)
+    monkeypatch.setattr("tools.quality.__main__.run", runner)
 
-    def fake_run(command: Command, *, echo: bool = True) -> int:
-        seen.append((command.name, echo))
-        return 17
-
-    monkeypatch.setattr("tools.quality.__main__.run", fake_run)
     assert main(["lint"]) == 17, "main() must return the runner's exit code unchanged"
-    assert [name for name, _ in seen] == ["lint"], f"main() dispatched to {seen}"
-    assert all(echo for _, echo in seen), "the command line should show progress by default"
+
+    runner.assert_called_once()
+    dispatched = runner.call_args.args[0]
+    assert dispatched.name == "lint", f"main() dispatched to {dispatched.name!r}"
+    assert runner.call_args.kwargs.get("echo", True) is True, (
+        "the command line should show progress by default"
+    )
 
 
 def test_run_reports_progress_when_echoing(capsys: pytest.CaptureFixture[str]) -> None:
@@ -243,6 +296,36 @@ def test_usage_lists_every_command() -> None:
     text = usage()
     missing = [name for name in command_names() if name not in text]
     assert not missing, f"commands absent from the help text: {missing}"
+
+
+def test_the_package_runs_as_a_module() -> None:
+    """``python -m tools.quality`` is the documented entry point, so it is run as one.
+
+    Every other test here calls :func:`main` directly, which never reaches the
+    ``if __name__ == "__main__"`` guard that turns a return value into a process
+    exit code. CI, ``scripts/verify.ps1`` and the pre-commit hook all depend on
+    that guard, and if it were deleted they would report success unconditionally
+    while this file stayed green.
+
+    A subprocess rather than :mod:`runpy`. Running the module in this
+    interpreter, which has already imported ``tools.quality.__main__``, makes
+    :mod:`runpy` warn that the result "may result in unpredictable behaviour" —
+    and a test the runtime describes as unpredictable is worse than no test. The
+    cost is that the guard line is invisible to coverage, since the work happens
+    in another process. That is honest: the line is covered by every real
+    invocation and by nothing in the suite, and pinning a ``pragma`` on it to
+    make the number look better would be a lie in the other direction.
+    """
+    completed = subprocess.run(
+        [sys.executable, "-m", "tools.quality", "--help"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "usage: python -m tools.quality" in completed.stdout
 
 
 def test_the_package_exports_everything_it_declares() -> None:

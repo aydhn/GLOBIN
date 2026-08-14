@@ -64,9 +64,19 @@ swallowing with extra steps.
 ### 9. Structured error handling
 
 Errors carry structure, not just prose: what failed, which operation, whether a
-retry is safe. The project-wide exception hierarchy is designed in **Phase 005**
-and is not invented ahead of it; until then, do not introduce a competing
-ad-hoc scheme.
+retry is safe. The project-wide exception hierarchy lives in
+[`globin.errors`](../../src/globin/errors.py), designed in Phase 005: one root,
+and five categories divided by **who must act** — configuration, validation,
+transport, exchange and internal. Every fault GLOBIN raises deliberately
+descends from `GlobinError`, and nothing in the tree inherits a builtin
+exception type.
+
+Do not introduce a competing scheme, and do not add a sixth category without the
+argument that goes with it — the axis is the decision, and
+[ADR-0022](../adr/0022-error-taxonomy-rooted-in-one-type.md) records why it is
+"who must act" rather than "where it was raised". Whether a fault is retryable is
+deliberately not modelled; that depends on idempotency (Phase 083) and
+reconciliation (Phase 086), not on the exception's class.
 
 ---
 

@@ -39,6 +39,7 @@ phase before assuming any capability exists.
 | Why was X decided? | [`docs/adr/README.md`](docs/adr/README.md) |
 | What sources may I trust? | [`docs/SOURCE_POLICY.md`](docs/SOURCE_POLICY.md) |
 | How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
+| Which error do I raise? | [`src/globin/errors.py`](src/globin/errors.py), [ADR-0022](docs/adr/0022-error-taxonomy-rooted-in-one-type.md) |
 | Which checks must pass? | [`docs/engineering/QUALITY_GATES.md`](docs/engineering/QUALITY_GATES.md) |
 | Why these lint and type rules? | [`docs/engineering/STATIC_ANALYSIS.md`](docs/engineering/STATIC_ANALYSIS.md) |
 | How do I commit? | [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) |
@@ -53,6 +54,7 @@ GLOBIN/
 ├── src/globin/          Python package, in five architectural layers.
 │   ├── project_contract.py   Identity and policy invariants
 │   ├── roadmap.py            The 20 immutable phase bands
+│   ├── errors.py             The error taxonomy; above the layer stack
 │   ├── domain/               Pure concepts, values and rules
 │   ├── ports/                Abstract contracts, as typing.Protocol
 │   ├── application/          Use cases, coordinating domain through ports
@@ -64,6 +66,7 @@ GLOBIN/
 │   ├── contract/        Project rules asserted executably
 │   ├── architecture/    The layer contract against the real import graph
 │   ├── unit/            One unit, dependencies substituted
+│   ├── property/        Invariants over generated input (Hypothesis)
 │   └── integration/     Several components together, still local
 ├── tools/quality/       The canonical quality entrypoint; CI runs this too
 ├── docs/
@@ -116,6 +119,10 @@ python -m pytest -q
 ```
 
 ```bash
+python -m tools.quality property
+```
+
+```bash
 python -m tools.quality lint
 ```
 
@@ -143,6 +150,15 @@ dependencies, the presence and consistency of required documentation, that
 every repository-relative Markdown link resolves, that no credential-shaped
 file would be committed, and that tool configuration is not duplicated outside
 `pyproject.toml`.
+
+Since Phase 5 it also enforces the conditions it runs under. Every test is
+offline — an autouse fixture refuses outbound sockets — and every test must leave
+the environment and working directory as it found them, or it fails. Use
+`monkeypatch.setenv` and `monkeypatch.chdir` rather than changing either
+directly. Where a mock is genuinely right, it must be
+`create_autospec(..., spec_set=True)`; the default remains a hand-written double
+satisfying a `Protocol`. Write a property test when a real invariant exists, not
+for every change.
 
 ---
 

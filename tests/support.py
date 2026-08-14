@@ -16,10 +16,13 @@ nothing more — see ``docs/TESTING_STRATEGY.md`` on why the suite tests
 
 import re
 import subprocess
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Final, NamedTuple
 
 import pytest
+
+from globin.domain.architecture import LAYER_ORDER, ArchitectureContract, Layer, LayerPolicy
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
 
@@ -32,6 +35,7 @@ TAXONOMY_LEVELS: Final[tuple[str, ...]] = (
     "contract",
     "architecture",
     "integration",
+    "property",
     "smoke",
 )
 
@@ -115,6 +119,100 @@ def parse_roadmap(text: str) -> list[RoadmapRow]:
             )
         )
     return rows
+
+
+def process_state_drift(
+    *,
+    environment_before: Mapping[str, str],
+    environment_after: Mapping[str, str],
+    directory_before: Path,
+    directory_after: Path | None,
+) -> tuple[str, ...]:
+    """Describe every way process-global state changed, or return ``()``.
+
+    Separated from the fixture that calls it so that it can be tested with its
+    own failing case. A detector nobody has ever seen report anything is
+    indistinguishable from one that cannot report at all, and this one runs in
+    teardown where a silent failure would be especially easy to miss.
+
+    Args:
+        environment_before: Environment as the test found it.
+        environment_after: Environment as the test left it.
+        directory_before: Working directory as the test found it.
+        directory_after: Working directory as the test left it, or ``None`` if
+            it can no longer be read — which happens when a test deletes the
+            directory it was standing in.
+
+    Returns:
+        One human-readable line per kind of drift, empty when nothing moved.
+    """
+    drift: list[str] = []
+
+    if environment_after != environment_before:
+        added = sorted(set(environment_after) - set(environment_before))
+        removed = sorted(set(environment_before) - set(environment_after))
+        altered = sorted(
+            name
+            for name in set(environment_after) & set(environment_before)
+            if environment_after[name] != environment_before[name]
+        )
+        changed = [
+            *(f"+{name}" for name in added),
+            *(f"-{name}" for name in removed),
+            *(f"~{name}" for name in altered),
+        ]
+        drift.append(f"environment variables: {', '.join(changed)}")
+
+    if directory_after != directory_before:
+        left_in = (
+            "a directory that no longer exists" if directory_after is None else str(directory_after)
+        )
+        drift.append(f"working directory: {left_in} (expected {directory_before})")
+
+    return tuple(drift)
+
+
+def layer_policy(
+    layer: Layer,
+    *,
+    may_import: Iterable[Layer] = (),
+    may_perform_io: bool = False,
+) -> LayerPolicy:
+    """Build one layer's policy, with the package name derived from the layer.
+
+    Defaults are the strictest available — imports nothing, performs no I/O — so
+    a test that permits something has to say so, and a reader can tell what the
+    test is actually about from the arguments it passes.
+    """
+    return LayerPolicy(
+        layer=layer,
+        package=f"globin.{layer.value}",
+        responsibility=f"Synthetic {layer.value} policy for tests.",
+        may_import=frozenset(may_import),
+        may_perform_io=may_perform_io,
+    )
+
+
+def architecture_contract(
+    *,
+    policies: Iterable[LayerPolicy] | None = None,
+    shared_modules: Iterable[str] = (),
+    io_capable_modules: Iterable[str] = (),
+) -> ArchitectureContract:
+    """Build a contract governing all five layers, permitting nothing by default.
+
+    This is a *synthetic* contract, not a copy of
+    ``docs/architecture/dependency-rules.toml``. Restating the real matrix here
+    would be the duplication ``docs/engineering/SOURCE_OF_TRUTH.md`` forbids, and
+    a test asserting a rule against a copy of that rule asserts nothing. Tests
+    that need the real contract load it from disk.
+    """
+    return ArchitectureContract(
+        root_package="globin",
+        policies=tuple(policies) if policies is not None else tuple(map(layer_policy, LAYER_ORDER)),
+        shared_modules=frozenset(shared_modules),
+        io_capable_modules=frozenset(io_capable_modules),
+    )
 
 
 def git_committable_files() -> tuple[str, ...]:

@@ -41,6 +41,7 @@ python -m tools.quality full
 | `smoke` | The smoke level only | Fastest possible signal |
 | `unit` | The unit level only | While writing a unit |
 | `architecture` | Contract and architecture levels | The repository guards |
+| `property` | The property level, exploratory Hypothesis profile | Searching for a new counter-example |
 | `coverage` | Full suite with branch coverage and its floor | Before delivery |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
@@ -96,6 +97,22 @@ figure on purpose, so that ordinary refactoring does not fail the build while a
 module quietly losing its tests does. Raising the number by adding tests that
 assert nothing would improve the metric and weaken the suite, which is the exact
 trade this project refuses. Judge a suite by what it would catch.
+
+Phase 005 tested that rule against its own temptation. It was a phase about test
+quality, measured coverage stood at 99.57%, and raising the floor would have
+looked like progress. The floor stayed at 95, because a phase that tightens a
+threshold it happens to be comfortably above has learnt nothing about the
+threshold — it has only recorded where the code was that week. What the phase did
+instead was read the partial-branch column and test the decisions it named: the
+`find_spec` failure arm in `tools/quality/runner.py`, the paths the error
+taxonomy added, and a defect in `import_cycles` that no coverage number would
+ever have shown, because the affected line was executed on every run.
+
+One line is knowingly uncovered: the `if __name__ == "__main__"` guard in
+`tools/quality/__main__.py`. It runs on every real invocation and in another
+process, so the suite cannot see it. It is exercised by a subprocess test rather
+than annotated with a `pragma`, because a pragma would claim coverage this
+repository does not have.
 
 Excluded from measurement, via `exclude_also` so that coverage's own defaults
 are kept rather than replaced:
@@ -168,6 +185,11 @@ Nothing in the workflow commits, pushes, formats or applies a fix. The GLOBIN
 package itself is not installed: the suite runs from `src/` via `pythonpath`,
 and building a distribution is work that belongs to Phases 017-032 and must not
 be described as verified before then.
+
+Property tests run under the reproducible Hypothesis profile, and so does the
+local gate. Selecting it in the command table rather than from an environment
+variable is what keeps CI and a developer's machine examining the same inputs; a
+machine with the variable unset would otherwise run a quietly different gate.
 
 The interpreter matrix is **provisional**. Interpreter selection and pinning is
 Phase 018; dependency resolution and locking is Phase 020. Until those phases

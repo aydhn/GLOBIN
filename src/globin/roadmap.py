@@ -18,6 +18,7 @@ exactly the drift this design is meant to prevent.
 from dataclasses import dataclass
 from typing import Final
 
+from globin.errors import ValidationError
 from globin.project_contract import ROADMAP_TOTAL_PHASES
 
 PHASE_BAND_WIDTH: Final[int] = 16
@@ -83,10 +84,13 @@ def band_for_phase(phase: int) -> PhaseBand:
         The :class:`PhaseBand` containing ``phase``.
 
     Raises:
-        ValueError: If ``phase`` is outside 1..``ROADMAP_TOTAL_PHASES``.
+        ValidationError: If ``phase`` is outside 1..``ROADMAP_TOTAL_PHASES``.
+            The bands are contiguous and cover the whole programme, so the only
+            way to fall out of the loop is to ask about a phase that does not
+            exist.
     """
     for band in PHASE_BANDS:
         if band.contains(phase):
             return band
     msg = f"phase must be in 1..{ROADMAP_TOTAL_PHASES}, got {phase}"
-    raise ValueError(msg)
+    raise ValidationError(msg)

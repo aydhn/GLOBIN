@@ -42,6 +42,23 @@ either true or the work is not done.
 - [ ] **Nothing is skipped, weakened or deleted to make the suite pass.** A
       failing test is information. Suppressing it destroys the information and
       keeps the defect.
+- [ ] **The error paths are tested, not only the happy one.** New behaviour that
+      can refuse an input has a test that makes it refuse, asserting the right
+      category from [`globin.errors`](../../src/globin/errors.py) rather than
+      merely that something was raised.
+- [ ] **A property test exists where an invariant does.** An idempotent
+      operation, a round trip, a total function over a bounded domain, an
+      ordering that must not depend on input order — these get a test in
+      `tests/property/`. This is a judgement, not a checkbox: most changes have
+      no such invariant, and a property test over a two-element strategy is a
+      slow unit test.
+- [ ] **Coverage did not regress.** The floor catches a module losing its tests.
+      It is not a target, and it is not raised to match the current figure —
+      [`QUALITY_GATES.md`](QUALITY_GATES.md) explains why.
+- [ ] **The new tests are offline and order-independent.** No network, no
+      wall-clock tolerance, no leaked environment variable or working directory.
+      The autouse guards enforce the common cases; they are a net, not a licence
+      to stop thinking about it.
 
 ## 3. Documentation
 

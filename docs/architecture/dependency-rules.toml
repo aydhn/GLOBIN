@@ -3,9 +3,9 @@
 #
 # This file is the CANONICAL statement of which layer may import which.
 #
-#   docs/architecture/README.md      explains the layers in prose
-#   tests/test_architecture_contract.py  enforces this file against the real
-#                                        import graph
+#   docs/architecture/README.md          explains the layers in prose
+#   tests/architecture/                  enforces this file against the real
+#     test_architecture_contract.py      import graph
 #   src/globin/domain/architecture.py    models the rules as pure types
 #
 # None of those restates the matrix below. A second copy of a rule is drift
@@ -25,13 +25,17 @@ established_in_phase = 3
 # ---------------------------------------------------------------------------
 # Modules that sit above the layer stack.
 #
-# These hold project identity and roadmap policy as constants. Every layer may
-# read them, because a policy constant is not a dependency on a layer. They
-# must import no layer themselves, which keeps the relationship one-way and is
-# asserted separately.
+# These hold project identity, roadmap policy and the error taxonomy. Every
+# layer may read them, because a policy constant is not a dependency on a layer,
+# and an exception class every layer is allowed to raise cannot live inside one
+# of them without inverting the direction. They must import no layer themselves,
+# which keeps the relationship one-way and is asserted separately.
+#
+# `globin.errors` joined this table in Phase 005; see ADR-0022 for why the
+# taxonomy sits above the stack rather than in the domain layer.
 # ---------------------------------------------------------------------------
 [shared]
-modules = ["globin.project_contract", "globin.roadmap"]
+modules = ["globin.errors", "globin.project_contract", "globin.roadmap"]
 
 # ---------------------------------------------------------------------------
 # Standard library packages that give a module the ability to reach outside its

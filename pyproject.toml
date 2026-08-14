@@ -51,6 +51,12 @@ dev = [
     # gate and CI cannot return different verdicts. Real dependency resolution
     # and locking is Phase 020.
     "pre-commit>=4.0",
+    # Added in Phase 005 for the property level. MPL-2.0, free, and a development
+    # tool rather than a runtime one, so ADR-0003 permits it; `dependencies`
+    # above stays empty and a contract test still asserts that. Its only runtime
+    # requirement is `sortedcontainers`, which is why it is cheap enough to be
+    # worth the sixth entry in this list. See ADR-0023.
+    "hypothesis>=6.130",
 ]
 
 [tool.hatch.version]
@@ -106,7 +112,7 @@ python_functions = ["test_*"]
 # a fixed bug leaves its test permanently green-but-lying.
 xfail_strict = true
 
-# The taxonomy. The first five are levels and are mutually exclusive: a test's
+# The taxonomy. The first six are levels and are mutually exclusive: a test's
 # directory under `tests/` decides which one it carries, applied automatically in
 # `tests/conftest.py` and asserted by `tests/contract/test_quality_contract.py`.
 #
@@ -118,6 +124,7 @@ markers = [
     "contract: a project rule asserted executably rather than merely written down",
     "architecture: the layer contract checked against the real import graph",
     "integration: several GLOBIN components together, still entirely local",
+    "property: an invariant asserted over generated input rather than fixed examples",
     "smoke: the smallest set of checks that would catch a broken tree",
     "slow: takes long enough to be worth deselecting during a tight edit loop",
     "network: requires network access; never permitted below the external level",

@@ -13,7 +13,7 @@ principle 10 in [`ARCHITECTURE_PRINCIPLES.md`](ARCHITECTURE_PRINCIPLES.md).
 
 ## Test levels
 
-Five levels, one directory each under `tests/`. A test's directory decides its
+Six levels, one directory each under `tests/`. A test's directory decides its
 level; there is no second place to declare it.
 
 | Level | Directory | Scope | Speed | Network |
@@ -22,13 +22,16 @@ level; there is no second place to declare it.
 | **Contract** | `tests/contract/` | Project invariants: identity, policy, documentation, packaging, quality configuration | Instant | Never |
 | **Architecture** | `tests/architecture/` | The layer contract checked against the real import graph | Instant | Never |
 | **Unit** | `tests/unit/` | One module, function or class, dependencies substituted | Fast | Never |
+| **Property** | `tests/property/` | An invariant asserted over generated input rather than fixed examples | Fast | Never |
 | **Integration** | `tests/integration/` | Several GLOBIN components together, still entirely local | Moderate | Never |
 | **External** | Does not exist yet | Real Binance non-production endpoints | Slow | Yes, explicitly opted into |
 
-**No test at any level that exists today may touch the network.** External tests
-arrive with the API layer (Phases 033-048), will carry the `external` marker, must
-be skipped by default, and must never run against production or with live
-credentials.
+**No test at any level that exists today may touch the network.** Since Phase 005
+that is enforced rather than requested: an autouse fixture refuses outbound
+connections, and the section on [isolation](#isolation-and-the-offline-guarantee)
+describes how. External tests arrive with the API layer (Phases 033-048), will
+carry the `external` marker, are deselected by default, and must never run
+against production or with live credentials.
 
 ### Choosing a level
 
@@ -50,6 +53,11 @@ The distinctions that are easy to get wrong:
 - **Smoke** is not a lighter unit test. Ask whether it would fail for a change
   that makes the repository unusable. If it would only fail for a subtle logic
   error, it belongs at a later level.
+- **Property versus unit** is about *whether an invariant exists*. If the claim
+  is "for every input in this space, X holds", it is a property test. If the
+  claim is "given this input, the answer is that", it is a unit test, and
+  dressing it up with a two-element strategy makes it slower without making it
+  stronger. See [property-based testing](#property-based-testing) below.
 
 ### Markers
 
@@ -65,8 +73,19 @@ property of a test rather than its level, so a test may carry none or several:
 |---|---|
 | `slow` | Worth deselecting during a tight edit loop |
 | `network` | Requires network access; never permitted below the external level |
-| `external` | Talks to a real external system; skipped by default |
+| `external` | Talks to a real external system; deselected by default |
 | `windows` | Depends on behaviour specific to the Windows host |
+
+`network` and `external` do a second job since Phase 005: either one exempts a
+test from the offline guard. Nothing carries them today, and the exemption is
+written now so that the guard has a documented door rather than acquiring an
+undocumented one later.
+
+`external` also became true in Phase 005. Its description had promised tests
+were "skipped by default" since Phase 004 while nothing deselected them — the
+selection is now composed into each expression in the command table. It is not in
+`addopts`, deliberately: a command-line `-m unit` overrides an `addopts` `-m`, so
+the exclusion would have silently vanished from exactly the selective runs.
 
 Markers are registered in `pyproject.toml`, and `strict_markers` makes an
 unregistered one a collection error rather than a warning.
@@ -114,6 +133,59 @@ Two rules keep this workable:
   re-reading per test would be slower and could not produce a different answer.
   A fixture whose value a test may mutate must not be session-scoped.
 
+### Autouse
+
+**Two autouse fixtures exist, and adding a third needs an argument.** An autouse
+fixture runs for every test in the suite, and unlike an ordinary one it is
+invisible at the point of use: a test that depends on it does not say so. The bar
+is therefore not "is this useful for many tests" but "would this be worthless
+anywhere narrower".
+
+Both current fixtures clear it because they are guarantees, and a guarantee that
+holds for most of the suite is not a guarantee. They are described under
+[isolation](#isolation-and-the-offline-guarantee).
+
+Anything that merely saves typing is not autouse. Request it by name, so that a
+reader of the test can see what it depends on.
+
+## Isolation and the offline guarantee
+
+Two rules in this document used to be things a contributor had to remember.
+Phase 005 made them fixtures, because both fail in a way that does not produce a
+failing test: reaching the network passes on the machine that wrote the test and
+fails elsewhere, and leaking process state produces a failure in a *different*
+test that did nothing wrong.
+
+**Nothing may open a socket.** `socket.socket.connect`, `socket.socket.connect_ex`
+and `socket.create_connection` are replaced for the duration of every test, and
+the replacement calls `pytest.fail`. It is deliberately not an `OSError`: a
+realistic connection error is what retry code is written to swallow, so once such
+code exists it would absorb the guard and the suite would go on reporting itself
+offline while doing nothing of the kind. A test marked `external` or `network`
+keeps the real socket.
+
+Name resolution is not blocked. Nothing can act on a resolved address without
+then connecting, and blocking DNS would only replace a specific message with a
+vaguer one. Subprocesses are not covered either — the patch applies to this
+interpreter.
+
+**Nothing may leave the process altered.** The environment and the working
+directory are captured before each test and compared afterwards; a test that
+moved either is failed *and* the state is put back. Both halves matter. Restoring
+alone would keep the suite green while the leak stayed; failing alone would name
+the culprit and then let the damage reach every test that follows.
+
+Use `monkeypatch.setenv` and `monkeypatch.chdir` to change either deliberately.
+They undo themselves, and the guard is the net beneath them rather than a
+substitute for them.
+
+The detection itself is a plain function in `tests/support.py` rather than logic
+buried in the fixture, so that it can be given its own failing cases — a checker
+running in teardown is the easiest place in a suite for a silent failure to hide.
+The reasoning behind all of this, including why the network guard must not use
+`monkeypatch`, is in
+[ADR-0024](adr/0024-tests-are-offline-and-isolated-by-construction.md).
+
 ## Naming
 
 | Kind | Convention |
@@ -127,9 +199,33 @@ Function names are long on purpose. A failing line in CI output should already
 be the diagnosis: `test_domain_imports_no_outer_layer` says what broke, where
 `test_imports_2` requires someone to open the file.
 
-Test doubles are hand-written classes satisfying a `Protocol` structurally. That
-is what proves a port is a real seam rather than decoration — a mock would
+### Test doubles
+
+**A hand-written class satisfying a `Protocol` structurally is the default.**
+That is what proves a port is a real seam rather than decoration — a mock would
 satisfy any interface, including one the production code does not have.
+
+**Where a mock is genuinely the right tool, it must be specified.** Use
+`create_autospec(target, spec_set=True)`, never a bare `Mock()` or
+`MagicMock()`. The autospec checks call signatures against the real object, so a
+test fails when the thing it stands in for changes shape; `spec_set` additionally
+refuses attributes the real object does not have, so a typo in an assertion fails
+instead of silently creating another mock. An unspecified mock accepts every call
+and every attribute, which means it goes on passing after the code it doubles has
+gone.
+
+The one place this applies today is the double for `tools.quality.runner.run` in
+`tests/unit/test_quality_runner.py`. It replaced a hand-written stub, which had
+encoded the runner's signature a second time and would have kept accepting the
+old one after the real signature changed.
+
+**Patch where a name is used, not where it is defined.** `main` binds `run` at
+import, so patching `tools.quality.runner.run` would leave the bound reference
+untouched; the patch goes at `tools.quality.__main__.run`.
+
+**Prefer a real object when one is cheap.** A frozen dataclass built from
+literals is clearer than a mock of it, and it cannot drift from the type it
+represents.
 
 ## What the suite enforces, and why
 
@@ -142,7 +238,9 @@ satisfy any interface, including one the production code does not have.
 | `test_packaging_contract.py` | Distribution name matches the package; **runtime dependencies are empty**; the interpreter floor is evidence-based; version is single-sourced; no licence is invented |
 | `test_architecture_contract.py` | The declared layers exist; no import crosses a boundary outward; the inner layers reach no I/O-capable module; importing a layer performs no work; there is no import cycle; the shared policy modules import no layer |
 | `test_quality_contract.py` | Every test module sits in a taxonomy directory and every level holds real tests; markers are registered and applied; an unregistered marker is genuinely rejected; coverage is branch-aware and gated; the CI workflow is least-privilege, SHA-pinned, secretless and unable to fail quietly; hook and CI tool versions agree |
-| `test_quality_runner.py` | A failing step's exit code is propagated unchanged; execution stops at the first failure; a missing tool fails distinctly and is never installed automatically; no verification command modifies the tree |
+| `test_quality_runner.py` | A failing step's exit code is propagated unchanged; execution stops at the first failure; a missing tool fails distinctly and is never installed automatically; no verification command modifies the tree; `python -m tools.quality` works as a process |
+| `test_error_taxonomy_contract.py` | Every fault descends from one root; the categories and the fault domains correspond exactly and neither may grow alone; no category inherits a builtin error type; the root declares no domain |
+| `test_isolation_contract.py` | A connection attempt is refused and a `network`-marked test is not; the drift detector reports added, removed, altered, moved and deleted-directory cases, and stays quiet otherwise |
 | `test_import_surface.py` | The package and every layer import cleanly; the declared public surface exists; no trading surface has appeared |
 | `test_architecture_review_end_to_end.py` | The composition root wires a review over the real package rather than an empty directory, and that review is clean |
 
@@ -185,15 +283,30 @@ its own, at which point it belongs in the package.
 
 ### Determinism is mandatory
 
-No test may depend on wall-clock time, network availability, execution order, or
-random state without an explicit seed. Warnings are errors
+The same source, the same inputs and the same controlled environment must give
+the same result. No test may depend on wall-clock time, network availability,
+execution order, the machine's environment variables, the working directory it
+happened to start in, or unseeded randomness. Warnings are errors
 (`filterwarnings = ["error"]`), so a deprecation surfaces when it appears rather
 than when it breaks.
 
-Two consequences worth spelling out. Tests must not share mutable state, so
-running one alone must give the same result as running it in the middle of the
-suite. And a test that writes must write to `tmp_path`: leaving the repository
-in a different state than it found it makes the next run depend on the last one.
+Consequences worth spelling out:
+
+- Tests must not share mutable state, so running one alone must give the same
+  result as running it in the middle of the suite. The isolation fixtures make
+  the common cases of this enforceable rather than aspirational.
+- A test that writes must write to `tmp_path`. Leaving the repository in a
+  different state than it found it makes the next run depend on the last one.
+- No `sleep` as synchronisation, and no assertion of the form "this took roughly
+  so long". Both are timing assertions, and a shared CI runner will eventually
+  break them. This is also why Hypothesis runs with its per-example deadline
+  disabled.
+- Never depend on set or dictionary iteration order reaching a reported result —
+  `ENGINEERING_CONTRACT.md` invariant 3. `tests/property/` asserts this directly
+  for the architecture review, whose output is sorted precisely so that two runs
+  over one tree report identically.
+- Flaky tests are diagnosed, never retried. There is no rerun plugin, and adding
+  one would convert a real defect into an intermittent green build.
 
 ### Guard every checker with its failing case
 
@@ -210,6 +323,70 @@ Where a negative case could pass because the harness itself is broken, a
 positive control runs alongside it — the same fixture with only the thing under
 test changed. That pairing is what caught the ineffective `--strict-markers`
 configuration described above.
+
+## Property-based testing
+
+An example-based test asserts what its author thought of. A property test states
+something that must hold across a described space of inputs, and Hypothesis
+searches that space for a counter-example, then shrinks it to the smallest input
+that still fails.
+
+That distinction is not theoretical. The first run of `tests/property/` produced
+two failures, both defects in the *tests*: one asserted that a module name never
+contains `.py`, which is false for a module legitimately called `py`, and one
+generated the source `import as`. Neither is an input a person writing examples
+pictures.
+
+### When to write one
+
+When a real invariant exists. The recognisable shapes are an idempotent
+operation, a round trip, a total function over a bounded domain, an ordering that
+must not depend on input order, and a rule about a whole class of names or paths.
+The invariants asserted today include `band_for_phase` being total over 1..320,
+cycle detection being canonical and order-independent, and the architecture
+review reporting identically however its input is ordered — a rule
+`ENGINEERING_CONTRACT.md` had stated since Phase 001 with nothing checking it.
+
+Not for every change. A property test over a two-element strategy is a slow unit
+test, and requiring one everywhere would devalue the level. The Definition of
+Done asks for one *when an invariant exists*, which is a judgement, not a
+checkbox.
+
+Do not restate the implementation. A property asserting that
+`top_level_package` returns `module.split(".")[0]` passes forever and catches
+nothing. The test to be suspicious of is one that would have to change if the
+implementation were rewritten correctly.
+
+### Profiles
+
+Two, registered in `tests/conftest.py`:
+
+| Profile | Used by | Behaviour |
+|---|---|---|
+| `dev` | `python -m tools.quality property`, and a bare `pytest` | Searches freely, keeps the example database so a past failure replays first |
+| `ci` | `python -m tools.quality full`, locally and in CI | `derandomize` — the same code examines the same inputs every run — and no database |
+
+The gate uses `ci` on every machine, not only on the build server. A gate that
+searched a different input space per machine could pass where the code was
+written and fail where it was reviewed, for no visible reason.
+
+Both disable the per-example deadline, and both print a reproduction blob.
+
+### Reproducing a failure
+
+Hypothesis prints a `@reproduce_failure(...)` decorator with every failure. Paste
+it above the test to replay that exact case while fixing it, and delete it
+afterwards — it pins one input and would stop the search that found it.
+
+```bash
+python -m pytest -q -m property --hypothesis-profile=ci
+```
+
+A failure under `ci` reproduces on a rerun by construction. A failure under `dev`
+may not, and the printed blob is how it is pinned. Do not fix a property failure
+by narrowing the strategy until the failing input can no longer be generated
+unless the input was genuinely invalid — as `import as` was, and as a module
+called `py` was not.
 
 ## Testing that arrives with later phases
 
@@ -251,6 +428,13 @@ python -m pytest -q
 
 ```bash
 python -m tools.quality fast
+```
+
+The property level under the exploratory profile, which is the one that searches
+for new counter-examples:
+
+```bash
+python -m tools.quality property
 ```
 
 Tests import from the source tree directly — `pythonpath` is set in

@@ -134,12 +134,21 @@ acceptable is an exception nobody can evaluate later.
 | Exception | Where | Reason |
 |---|---|---|
 | `S101` (`assert`) | `tests/**` | `assert` is the assertion mechanism; pytest is never run under `-O` |
-| `TRY004` | `globin.adapters.architecture` | Malformed input raises `ValueError` throughout, deliberately, so Phase 005 inherits one scheme to replace rather than two |
 | `S607` | `tests/support.py` | `git` is resolved from `PATH` on purpose; the argument list is a fixed literal |
 | `S603` | `tools/quality/runner.py` | Arguments come from a frozen table of literals; `shell` is never enabled |
 
 The list being short is the point. If it grows quickly, the rule set is wrong
 and should be argued with, not worked around one line at a time.
+
+It got shorter in Phase 005, which is the rarer direction and worth recording.
+`globin.adapters.architecture` carried a `TRY004` exemption because every
+malformed-contract path raised `ValueError` after an `isinstance` check, and the
+rule asks for `TypeError`. The error taxonomy replaced those raises with
+`ConfigurationError` ([ADR-0022](../adr/0022-error-taxonomy-rooted-in-one-type.md)),
+which satisfies the rule outright, so the suppression was deleted rather than
+reworded. An exemption that disappears because the underlying design improved is
+the outcome this procedure is for; one that is reworded to survive a refactor
+usually is not.
 
 ---
 

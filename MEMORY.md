@@ -26,16 +26,17 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Fact | Value |
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
-| Completed phases | **001-004** |
+| Completed phases | **001-005** |
 | Phase 001 | **Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
 | Phase 002 | **Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Commit `9c46313`, pushed. |
 | Phase 003 | **Architecture Boundaries and Dependency Direction.** Five layers under `src/globin/`, the inward dependency contract in `docs/architecture/dependency-rules.toml`, C4 system context and container views, the ADR lifecycle with supersession rules, and `tests/architecture/test_architecture_contract.py` enforcing all of it. Commit `990e5f4`, pushed. |
 | Last completed | **004 — Test Architecture and Quality Gates.** Five test levels as directories under `tests/`, markers derived from the directory, `tests` as a package with helpers in `tests/support.py`; explicit mypy flags in place of `strict = true`; branch coverage gated at 95; `.pre-commit-config.yaml`; the canonical entrypoint `tools/quality`; and a SHA-pinned, least-privilege, verification-only CI workflow. Commit `abb96a9`, pushed. **CI is confirmed working:** the first run on that commit succeeded on both Python 3.12 and 3.14, and the pre-commit job passed. The phase was reported before that run existed, so ADR-0020 and the Phase 004 research ledger still describe the workflow as never executed — correct for their date, and superseded by this row. |
-| Next phase | **005 — Error Taxonomy and Exception Hierarchy.** Not started. |
+| Phase 005 | **Error Taxonomy and Deterministic Test Foundations.** `globin.errors` — one root, five categories divided by who must act — replacing the ad-hoc `ValueError` scheme in the adapters and domain layers. Plus a `property` taxonomy level with Hypothesis, autouse fixtures that refuse outbound sockets and fail a test leaking process state, the `create_autospec` rule for mocks, and the `external` deselection that Phase 004's marker description had promised but nothing performed. ADR-0021 to ADR-0024. |
+| Next phase | **006 — Structured Logging Foundation.** Not started. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
 
-**The roadmap has been amended twice.** Band ranges, phase numbers and band width
-are unchanged by either; amending phase scope requires an ADR.
+**The roadmap has been amended three times.** Band ranges, phase numbers and band
+width are unchanged by all three; amending phase scope requires an ADR.
 
 - **Phase 003** originally read *Coding Standards and Static Analysis Baseline*;
   that scope moved into Phase 013.
@@ -45,11 +46,24 @@ are unchanged by either; amending phase scope requires an ADR.
   *Coding Standards and Documentation Conventions* and keeps the conventions
   those gates enforce.
   [ADR-0016](docs/adr/0016-phase-004-absorbs-the-quality-gate-scope.md).
+- **Phase 005** originally read *Error Taxonomy and Exception Hierarchy*; it
+  still delivers that and now also the deterministic testing foundation. This
+  amendment *widens* a phase instead of moving scope between two: nothing is
+  displaced, nothing deferred, no other title changes.
+  [ADR-0021](docs/adr/0021-phase-005-widens-to-include-the-test-foundation.md).
 
 ADR-0012 warned that a second amendment without strong justification would be
-the signal the first was wrong. ADR-0016 is that second amendment and answers the
-warning directly rather than ignoring it. **A third before Phase 016 should be
-treated as evidence the roadmap is being used as a backlog.**
+the signal the first was wrong. ADR-0016 is that second amendment, answers the
+warning directly, and said a third before Phase 016 should be treated as evidence
+the roadmap is being used as a backlog.
+
+**ADR-0021 is that third amendment.** It was put to the owner as one of four
+explicit options with the conflict named, and it is the only one under which no
+phase is displaced. It does not licence a fourth: the argument turns on four
+conditions holding at once — nothing displaced, nothing deferred, no phase owning
+the work, and the two halves needing each other — and an amendment that cannot
+state all four is not covered by it. **A fourth before Phase 016 should be
+refused rather than argued.**
 
 **Nothing so far implements trading.** No exchange connection, no credentials,
 no market data, no strategy, no models. Anything claiming otherwise is wrong.
@@ -146,7 +160,20 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
   is a defect to fix, not merely to route around (ADR-0011).
 - **Marking a phase complete requires two edits**, deliberately: the status in
   `ROADMAP.md` and `LAST_COMPLETED_PHASE` in `tests/contract/test_roadmap_contract.py`.
-  The constant is a tripwire — raise it only for a phase genuinely delivered.
+  The constant is a tripwire — raise it only for a phase genuinely delivered. A
+  phase adding a research ledger needs a third: `REQUIRED_DOCS` in
+  `tests/contract/test_documentation_contract.py`.
+- **Tests are offline and process-isolated by fixture, not by convention**
+  (Phase 005). An autouse fixture in `tests/conftest.py` refuses outbound
+  sockets; another fails any test that leaves an environment variable or the
+  working directory changed. Use `monkeypatch.setenv` and `monkeypatch.chdir`.
+- **An autouse fixture must not depend on `monkeypatch`.** pytest hoists an
+  autouse fixture's dependencies to the front of the closure, so `monkeypatch`
+  would then tear down *last* — after the isolation guard has inspected the
+  environment — and every `monkeypatch.setenv` would be reported as a leak. The
+  network guard saves and restores by hand for this reason (ADR-0024).
+- **`PYTEST_CURRENT_TEST` is rewritten by pytest at every test phase**, so any
+  environment comparison across a test must exclude it or it fires on every test.
 - **Commit and push at phase end are pre-authorized by the owner.** Do not ask
   for permission to deliver a completed, verified phase — just do it. The
   authorization covers delivery only; verifying that the phase really is

@@ -38,7 +38,7 @@ EXIT_USAGE: Final[int] = 2
 
 def missing_modules(steps: Iterable[Step]) -> tuple[str, ...]:
     """Return the modules required by ``steps`` that are not importable."""
-    required = {step.module for step in steps}
+    required = {module for step in steps for module in step.modules}
     absent: set[str] = set()
     for module in required:
         try:

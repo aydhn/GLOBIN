@@ -87,7 +87,7 @@ jobs:
         # verified before then.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "ruff==0.15.14" "mypy==2.1.0" "pytest==9.0.3" "pytest-cov==7.1.0"
+          python -m pip install "ruff==0.15.14" "mypy==2.1.0" "pytest==9.0.3" "pytest-cov==7.1.0" "hypothesis==6.165.7"
 
       - name: Run the canonical quality gate
         run: python -m tools.quality full
@@ -110,7 +110,7 @@ jobs:
       - name: Install pre-commit and the tools its local hook needs
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "pre-commit==4.6.2" "pytest==9.0.3" "pytest-cov==7.1.0"
+          python -m pip install "pre-commit==4.6.2" "pytest==9.0.3" "pytest-cov==7.1.0" "hypothesis==6.165.7"
 
       - name: Run every hook over every file
         # `--show-diff-on-failure` prints what an autofixing hook WOULD change.

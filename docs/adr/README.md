@@ -85,6 +85,10 @@ a future reader can judge whether the reason still holds.
 | [0018](0018-quality-toolchain-and-explicit-strictness.md) | The quality toolchain is pinned, and strictness is written out flag by flag | Accepted |
 | [0019](0019-single-quality-entrypoint.md) | One command table defines the checks, and every caller reads it | Accepted |
 | [0020](0020-verification-only-continuous-integration.md) | Continuous integration verifies, with least privilege and pinned actions | Accepted |
+| [0021](0021-phase-005-widens-to-include-the-test-foundation.md) | Phase 005 widens to deliver the error taxonomy and the deterministic test foundation | Accepted |
+| [0022](0022-error-taxonomy-rooted-in-one-type.md) | One error root, five categories chosen by who must act, and no builtin inheritance | Accepted |
+| [0023](0023-property-based-testing-as-a-sixth-taxonomy-level.md) | Property-based testing is a sixth taxonomy level, with two Hypothesis profiles | Accepted |
+| [0024](0024-tests-are-offline-and-isolated-by-construction.md) | Tests are offline and process-isolated by construction, not by convention | Accepted |
 
 ## Relationship to other documents
 

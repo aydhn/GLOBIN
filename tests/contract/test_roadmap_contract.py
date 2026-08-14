@@ -11,6 +11,7 @@ Two things are checked, and the distinction matters:
 
 import pytest
 
+from globin.errors import ValidationError
 from globin.project_contract import ROADMAP_TOTAL_PHASES
 from globin.roadmap import PHASE_BAND_WIDTH, PHASE_BANDS, PhaseBand, band_for_phase
 from tests.support import RoadmapRow
@@ -80,7 +81,7 @@ def test_band_for_phase_resolves_every_phase() -> None:
 
 @pytest.mark.parametrize("phase", [0, -1, ROADMAP_TOTAL_PHASES + 1, 1000])
 def test_band_for_phase_rejects_out_of_range(phase: int) -> None:
-    with pytest.raises(ValueError, match="phase must be in"):
+    with pytest.raises(ValidationError, match="phase must be in"):
         band_for_phase(phase)
 
 
@@ -130,7 +131,7 @@ def test_roadmap_band_headings_match_the_code_skeleton(roadmap_text: str) -> Non
 #: diff. Raise it only when the phase genuinely satisfies
 #: ``docs/engineering/DEFINITION_OF_DONE.md`` — never in advance, and never to
 #: make a failing test pass.
-LAST_COMPLETED_PHASE: int = 4
+LAST_COMPLETED_PHASE: int = 5
 
 
 def test_no_future_phase_is_marked_complete(roadmap_rows: list[RoadmapRow]) -> None:

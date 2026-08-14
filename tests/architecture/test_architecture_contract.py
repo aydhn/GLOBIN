@@ -45,7 +45,9 @@ from globin.domain.architecture import (
     ArchitectureReport,
     Layer,
     ModuleImports,
+    import_cycles,
 )
+from globin.errors import ConfigurationError, InternalError, ValidationError
 from globin.runtime.composition import (
     CONTRACT_RELATIVE_PATH,
     PACKAGE_RELATIVE_PATH,
@@ -365,6 +367,27 @@ def test_the_review_reports_an_import_cycle(contract: ArchitectureContract) -> N
     assert not result.is_clean
 
 
+def test_cycle_detection_reads_a_one_shot_iterable_correctly() -> None:
+    """A generator must not be silently reported as a graph with no cycles.
+
+    ``import_cycles`` accepts an ``Iterable`` and reads it twice: once to learn
+    which modules were scanned, once to build the edges. Before Phase 005 it did
+    not materialise the argument first, so a generator was exhausted by the first
+    pass and the second saw nothing. The failure was invisible in exactly the
+    wrong way — no error, an empty graph, and the confident report that the tree
+    is acyclic.
+    """
+    loop = (
+        ModuleImports("globin.adapters.one", ("globin.adapters.two",)),
+        ModuleImports("globin.adapters.two", ("globin.adapters.one",)),
+    )
+    from_sequence = import_cycles(loop, ROOT_PACKAGE)
+    from_generator = import_cycles((item for item in loop), ROOT_PACKAGE)
+
+    assert from_sequence == (("globin.adapters.one", "globin.adapters.two"),)
+    assert from_generator == from_sequence
+
+
 def test_the_review_reports_a_shared_module_reaching_into_a_layer(
     contract: ArchitectureContract,
 ) -> None:
@@ -395,7 +418,7 @@ def test_policy_lookup_refuses_a_layer_the_contract_does_not_govern() -> None:
         shared_modules=frozenset(),
         io_capable_modules=frozenset(),
     )
-    with pytest.raises(KeyError, match="no policy for layer"):
+    with pytest.raises(InternalError, match="no policy for layer"):
         ungoverned.policy_for(Layer.DOMAIN)
 
 
@@ -442,7 +465,7 @@ def test_import_extraction_covers_every_import_form() -> None:
 
 def test_import_extraction_rejects_a_relative_import() -> None:
     """Relative imports are banned by lint; the extractor must not quietly ignore one."""
-    with pytest.raises(ValueError, match="relative import"):
+    with pytest.raises(ValidationError, match="relative import"):
         extract_imports(ast.parse("from . import sibling\n"), ROOT_PACKAGE)
 
 
@@ -457,6 +480,18 @@ def test_module_name_resolves_packages_and_modules(repo_root: Path) -> None:
         module_name(package_root / "domain" / "architecture.py", package_root, ROOT_PACKAGE)
         == "globin.domain.architecture"
     )
+
+
+def test_module_name_refuses_the_package_root_itself(repo_root: Path) -> None:
+    """The root is a directory, not a module, and has no name to return.
+
+    Without the guard this reaches ``parts[-1]`` on an empty list and raises
+    ``IndexError`` — an exception naming neither the argument nor the reason,
+    from a public function whose whole job is to name things.
+    """
+    package_root = repo_root / PACKAGE_RELATIVE_PATH
+    with pytest.raises(ValidationError, match="is the package root itself"):
+        module_name(package_root, package_root, ROOT_PACKAGE)
 
 
 # --------------------------------------------------------------------------
@@ -493,17 +528,29 @@ def test_a_minimal_contract_loads(tmp_path: Path) -> None:
     assert [policy.layer for policy in loaded.policies] == list(LAYER_ORDER)
 
 
+def test_a_document_that_is_not_valid_toml_fails_as_a_parse_error(tmp_path: Path) -> None:
+    """Broken syntax is a broken *file*, distinct from a well-formed wrong *contract*.
+
+    ``tomllib`` already reports the line and column, which is more use than any
+    rewording, so the error is allowed through rather than converted into a
+    :class:`~globin.errors.ConfigurationError`. Asserting that is what stops a
+    later phase wrapping it "for consistency" and discarding the position.
+    """
+    with pytest.raises(tomllib.TOMLDecodeError):
+        _write_contract(tmp_path, "[meta\nroot_package = broken\n").load()
+
+
 def test_contract_loading_rejects_an_unknown_layer(tmp_path: Path) -> None:
     """A layer nobody governs must not be creatable by editing one file."""
     text = _contract_document(*LAYER_ORDER) + '\n[layers.persistence]\npackage = "x"\n'
-    with pytest.raises(ValueError, match="is not a known layer"):
+    with pytest.raises(ConfigurationError, match="is not a known layer"):
         _write_contract(tmp_path, text).load()
 
 
 def test_contract_loading_rejects_a_missing_layer(tmp_path: Path) -> None:
     """Deleting a layer's rules must fail loudly, not leave that layer unchecked."""
     remaining = tuple(layer for layer in LAYER_ORDER if layer is not Layer.PORTS)
-    with pytest.raises(ValueError, match="does not declare"):
+    with pytest.raises(ConfigurationError, match="does not declare"):
         _write_contract(tmp_path, _contract_document(*remaining)).load()
 
 
@@ -529,5 +576,5 @@ def test_contract_loading_refuses_malformed_input(
     the build stays green while part of the architecture goes unchecked.
     """
     text = _contract_document(*LAYER_ORDER).replace(old, new, 1)
-    with pytest.raises(ValueError, match=re.escape(expected)):
+    with pytest.raises(ConfigurationError, match=re.escape(expected)):
         _write_contract(tmp_path, text).load()

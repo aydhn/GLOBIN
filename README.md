@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 004 of 320 complete — foundation only
+## Current status: Phase 005 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -23,7 +23,7 @@ Binance Global, built over a fixed programme of 320 phases.
 |---|---|
 | Repository, branch policy, engineering contract | Implemented |
 | 320-phase roadmap, every phase named | Implemented |
-| Architecture decision records (15) | Implemented |
+| Architecture decision records (24) | Implemented |
 | Research source ledgers with primary sources | Implemented |
 | Engineering contracts: done-criteria, authority order, layout, doc standard | Implemented |
 | Change templates for pull requests and issues | Implemented |
@@ -31,6 +31,8 @@ Binance Global, built over a fixed programme of 320 phases.
 | `globin` package — project contract constants and the architecture review | Implemented |
 | Contract test suite and verification gate | Implemented |
 | Test taxonomy, quality gates, pre-commit hooks and CI | Implemented |
+| Error taxonomy: one root, five categories by who must act | Implemented |
+| Property-based testing, enforced offline tests, process isolation | Implemented |
 | Everything else | Not started |
 
 ### What does not exist
@@ -140,7 +142,7 @@ Placement rules are in
 ## Running the checks
 
 Requires Python 3.12 or later. The development toolchain is `pytest`,
-`pytest-cov`, `ruff`, `mypy` and `pre-commit`.
+`pytest-cov`, `hypothesis`, `ruff`, `mypy` and `pre-commit`.
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1

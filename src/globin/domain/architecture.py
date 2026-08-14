@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
+from globin.errors import InternalError
+
 
 class Layer(StrEnum):
     """The architectural layers, ordered from innermost to outermost.
@@ -164,15 +166,23 @@ class ArchitectureContract:
             Its :class:`LayerPolicy`.
 
         Raises:
-            KeyError: If the contract declares no policy for ``layer``. A
-                missing policy is a defect in the contract file, not a reason
-                to fall back to a permissive default.
+            InternalError: If the contract declares no policy for ``layer``.
+                Falling back to a permissive default would turn an incomplete
+                contract into a passing review, which is the one outcome this
+                type exists to prevent.
+
+                It is an internal fault rather than a configuration one because
+                a contract read from disk cannot reach it: the loader refuses a
+                document that omits any layer before an
+                :class:`ArchitectureContract` is ever built. Getting here means
+                one was constructed in code with policies that do not cover the
+                layers it is being asked about.
         """
         for policy in self.policies:
             if policy.layer is layer:
                 return policy
         msg = f"contract declares no policy for layer {layer.value!r}"
-        raise KeyError(msg)
+        raise InternalError(msg)
 
     def violations_in(self, module_imports: ModuleImports) -> tuple[BoundaryViolation, ...]:
         """Return every import in ``module_imports`` that this contract forbids.
@@ -328,11 +338,19 @@ def import_cycles(
 def _own_edges(
     modules: Iterable[ModuleImports], root_package: str
 ) -> Mapping[str, tuple[str, ...]]:
-    """Restrict the graph to edges between scanned modules inside ``root_package``."""
-    known = {item.module for item in modules if top_level_package(item.module) == root_package}
+    """Restrict the graph to edges between scanned modules inside ``root_package``.
+
+    ``modules`` is materialised first because it is read twice — once to learn
+    which modules were scanned, once to build the edges. Iterating a generator
+    twice yields nothing the second time, so without this a caller passing one
+    would get an empty graph and, from that, the false report that the tree
+    contains no cycles.
+    """
+    scanned = tuple(modules)
+    known = {item.module for item in scanned if top_level_package(item.module) == root_package}
     return {
         item.module: tuple(target for target in item.imported if target in known)
-        for item in modules
+        for item in scanned
         if item.module in known
     }
 

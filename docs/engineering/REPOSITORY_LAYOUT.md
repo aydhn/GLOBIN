@@ -44,6 +44,7 @@ GLOBIN/
 │   └── verify.ps1              The single verification gate
 ├── src/
 │   └── globin/                 The Python package
+│       ├── errors.py           The error taxonomy; above the layer stack
 │       ├── domain/             Pure concepts, values and rules
 │       ├── ports/              Abstract contracts for the outside world
 │       ├── application/        Use cases coordinating domain through ports
@@ -55,6 +56,7 @@ GLOBIN/
 │   ├── contract/               Project rules asserted executably
 │   ├── architecture/           The layer contract against the real import graph
 │   ├── unit/                   One unit, dependencies substituted
+│   ├── property/               Invariants over generated input
 │   └── integration/            Several components together, still local
 └── tools/                      Development tooling that acts on the repository
     └── quality/                The canonical quality entrypoint

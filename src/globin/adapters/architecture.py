@@ -5,12 +5,14 @@ derives the import graph by parsing Python source. Both are the *only* reason
 the architecture review touches a disk, which is exactly why they sit in this
 layer rather than beside the use case that consumes them.
 
-Malformed input raises :exc:`ValueError` with a message naming the offending
-key. It is deliberately not a bespoke exception type: GLOBIN's error taxonomy
-is designed in Phase 005, and inventing a competing hierarchy here is the
-specific mistake ``ENGINEERING_CONTRACT.md`` warns against. What matters now is
-that a broken contract file fails loudly rather than degrading into permissive
-defaults — silent fallback is the failure mode
+A malformed contract document raises :exc:`~globin.errors.ConfigurationError`
+with a message naming the offending key; a relative import found while scanning
+source raises :exc:`~globin.errors.ValidationError`. Until Phase 005 both were a
+single ad-hoc :exc:`ValueError` scheme, kept deliberately to one scheme rather
+than two so that the taxonomy would have one thing to replace (ADR-0022).
+
+What has not changed is that a broken contract file fails loudly rather than
+degrading into permissive defaults — silent fallback is the failure mode
 ``ARCHITECTURE_PRINCIPLES.md`` principle 9 exists to prevent.
 """
 
@@ -25,6 +27,7 @@ from globin.domain.architecture import (
     LayerPolicy,
     ModuleImports,
 )
+from globin.errors import ConfigurationError, ValidationError
 
 
 class TomlArchitectureContractSource:
@@ -48,8 +51,12 @@ class TomlArchitectureContractSource:
             The parsed :class:`~globin.domain.architecture.ArchitectureContract`.
 
         Raises:
-            ValueError: If a required table or key is missing, has the wrong
-                type, or names a layer the domain model does not define.
+            ConfigurationError: If a required table or key is missing, has the
+                wrong type, or names a layer the domain model does not define.
+            tomllib.TOMLDecodeError: If the document is not valid TOML. That is
+                a malformed *file* rather than a malformed *contract*, and
+                :mod:`tomllib` already reports the line and column, so it is
+                allowed through rather than reworded.
             OSError: If the document cannot be read.
         """
         with self._path.open("rb") as handle:
@@ -101,6 +108,7 @@ class AstModuleImportSource:
             SyntaxError: If a source file cannot be parsed. A file that does
                 not parse is a defect; skipping it would hide whatever it
                 imports.
+            ValidationError: If a scanned module uses a relative import.
             OSError: If a source file cannot be read.
         """
         found: list[ModuleImports] = []
@@ -127,8 +135,24 @@ def module_name(path: Path, package_root: Path, root_package: str) -> str:
     Returns:
         The dotted module name. A package's ``__init__.py`` resolves to the
         package itself rather than to a module called ``__init__``.
+
+    Raises:
+        ValidationError: If ``path`` is not inside ``package_root``, or is
+            ``package_root`` itself. Both mean the caller has paired a file with
+            the wrong root, and the message names both so the mistake is
+            readable; :meth:`~pathlib.PurePath.relative_to` on its own reports
+            only that one path is not in the subpath of the other.
     """
-    parts = list(path.relative_to(package_root).parts)
+    try:
+        parts = list(path.relative_to(package_root).parts)
+    except ValueError:
+        msg = f"{path} is not inside the package root {package_root}"
+        raise ValidationError(msg) from None
+
+    if not parts:
+        msg = f"{path} is the package root itself, not a module inside it"
+        raise ValidationError(msg)
+
     if parts[-1] == "__init__.py":
         parts.pop()
     else:
@@ -155,9 +179,10 @@ def extract_imports(tree: ast.Module, root_package: str) -> tuple[str, ...]:
         Sorted, deduplicated module names.
 
     Raises:
-        ValueError: If a relative import is found. Relative imports are banned
-            repository-wide by ``ban-relative-imports`` in ``pyproject.toml``,
-            so one appearing here means the lint gate was bypassed.
+        ValidationError: If a relative import is found. Relative imports are
+            banned repository-wide by ``ban-relative-imports`` in
+            ``pyproject.toml``, so one appearing here means the lint gate was
+            bypassed.
     """
     names: set[str] = set()
     for node in ast.walk(tree):
@@ -174,7 +199,7 @@ def _import_from_targets(node: ast.ImportFrom, root_package: str) -> tuple[str, 
             f"relative import found at line {node.lineno}; GLOBIN bans relative "
             f"imports repository-wide (pyproject.toml, ban-relative-imports)"
         )
-        raise ValueError(msg)
+        raise ValidationError(msg)
 
     base = node.module
     if base is None:  # pragma: no cover - unreachable while level is 0
@@ -192,7 +217,7 @@ def _policies(layers: dict[str, object], where: str) -> tuple[LayerPolicy, ...]:
     missing = [layer.value for layer in LAYER_ORDER if layer not in declared]
     if missing:
         msg = f"{where}: [layers] does not declare {missing}"
-        raise ValueError(msg)
+        raise ConfigurationError(msg)
 
     return tuple(
         LayerPolicy(
@@ -223,37 +248,42 @@ def _layer(name: str, where: str) -> Layer:
     except ValueError:
         known = sorted(layer.value for layer in Layer)
         msg = f"{where}: {name!r} is not a known layer; expected one of {known}"
-        raise ValueError(msg) from None
+        raise ConfigurationError(msg) from None
 
 
 def _table(value: object, where: str) -> dict[str, object]:
     if not isinstance(value, dict):
         msg = f"{where} is missing or is not a table"
-        # TRY004 asks for TypeError. Every malformed-contract path in this module
-        # raises ValueError on purpose, so that Phase 005 inherits one scheme to
-        # replace rather than two (docs/architecture/README.md; ENGINEERING_
-        # CONTRACT.md invariant 9). The choice is pinned by test_contract_loading_
-        # refuses_malformed_input.
-        raise ValueError(msg)  # noqa: TRY004
+        # A failed isinstance check here is not a type error. The value came
+        # from a TOML document the operator wrote, so every rejection on this
+        # path is one fault — the configuration is wrong — whether the symptom
+        # is a wrong type or a missing key. Splitting it by symptom would make
+        # callers catch two things to handle one situation.
+        #
+        # Until Phase 005 this line raised `ValueError` and needed a `noqa`
+        # to silence TRY004, which asks for `TypeError` after an isinstance
+        # check. Raising a domain-named error satisfies the rule outright, so
+        # the suppression is gone rather than reworded (ADR-0022).
+        raise ConfigurationError(msg)
     return {str(key): item for key, item in value.items()}
 
 
 def _text(value: object, where: str) -> str:
     if not isinstance(value, str) or not value:
         msg = f"{where} is missing or is not a non-empty string"
-        raise ValueError(msg)
+        raise ConfigurationError(msg)
     return value
 
 
 def _flag(value: object, where: str) -> bool:
     if not isinstance(value, bool):
         msg = f"{where} is missing or is not a boolean"
-        raise ValueError(msg)  # noqa: TRY004 — see `_table`; one scheme, not two
+        raise ConfigurationError(msg)  # see `_table`; one fault, not two
     return value
 
 
 def _text_tuple(value: object, where: str) -> tuple[str, ...]:
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
         msg = f"{where} is missing or is not a list of strings"
-        raise ValueError(msg)
+        raise ConfigurationError(msg)
     return tuple(str(item) for item in value)

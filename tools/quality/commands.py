@@ -6,7 +6,7 @@ and the CI command are written out separately they drift, and the drift is
 discovered at the worst possible moment: CI fails on something that passes on
 the machine that produced it.
 
-Steps carry the module they need so the runner can say *which* tool is missing
+Steps carry the modules they need so the runner can say *which* tool is missing
 rather than surfacing a bare ``No module named ...`` from a subprocess.
 """
 
@@ -20,15 +20,21 @@ class Step:
 
     Args:
         name: Human-facing label, shown as the step executes.
-        module: The importable module this step runs, checked before launching
-            anything so a missing tool is reported once and by name.
+        modules: Every importable module this step needs, checked before
+            launching anything so a missing tool is reported once and by name.
+
+            Plural since Phase 005. The coverage step passes
+            ``--hypothesis-profile`` to pytest, which pytest rejects as an
+            unrecognised argument unless the Hypothesis plugin is installed. With
+            a single module the check would confirm pytest was present, launch,
+            and fail on a usage error that says nothing about the real cause.
         argv: Arguments after the interpreter. The executable is always the
             running interpreter, so a step cannot accidentally use a different
             Python from the one invoking it.
     """
 
     name: str
-    module: str
+    modules: tuple[str, ...]
     argv: tuple[str, ...]
 
 
@@ -48,23 +54,43 @@ class Command:
     steps: tuple[Step, ...]
 
 
-_LINT = Step("lint", "ruff", ("-m", "ruff", "check", "."))
-_FORMAT = Step("format", "ruff", ("-m", "ruff", "format", "--check", "."))
-_TYPECHECK = Step("typecheck", "mypy", ("-m", "mypy", "src/globin", "tests", "tools"))
-_SMOKE = Step("smoke", "pytest", ("-m", "pytest", "-q", "-m", "smoke"))
-_UNIT = Step("unit", "pytest", ("-m", "pytest", "-q", "-m", "unit"))
+# Every selection excludes `external`, because the marker's registered
+# description promises tests carrying it are "skipped by default" and until
+# Phase 005 nothing made that true. The exclusion is composed into each
+# expression here rather than added to `addopts`, which looks tidier and is
+# wrong: a command-line `-m unit` overrides an `addopts` `-m`, so the exclusion
+# would silently disappear from exactly the selective runs.
+_LINT = Step("lint", ("ruff",), ("-m", "ruff", "check", "."))
+_FORMAT = Step("format", ("ruff",), ("-m", "ruff", "format", "--check", "."))
+_TYPECHECK = Step("typecheck", ("mypy",), ("-m", "mypy", "src/globin", "tests", "tools"))
+_SMOKE = Step("smoke", ("pytest",), ("-m", "pytest", "-q", "-m", "smoke and not external"))
+_UNIT = Step("unit", ("pytest",), ("-m", "pytest", "-q", "-m", "unit and not external"))
 _ARCHITECTURE = Step(
     "architecture",
-    "pytest",
-    ("-m", "pytest", "-q", "-m", "contract or architecture"),
+    ("pytest",),
+    ("-m", "pytest", "-q", "-m", "(contract or architecture) and not external"),
 )
+# The exploratory property run: the `dev` profile, which keeps the example
+# database so that a failure replays on the next run.
+_PROPERTY = Step(
+    "property",
+    ("pytest", "hypothesis"),
+    ("-m", "pytest", "-q", "-m", "property and not external", "--hypothesis-profile=dev"),
+)
+# The whole suite, and the gate. `--hypothesis-profile=ci` is deliberately used
+# locally as well as in CI: the point of the profile is that the same code
+# examines the same inputs every time, and a gate that searched a different
+# space on each machine could pass here and fail there for no visible reason.
 _COVERAGE = Step(
     "coverage",
-    "pytest",
+    ("pytest", "hypothesis"),
     (
         "-m",
         "pytest",
         "-q",
+        "-m",
+        "not external",
+        "--hypothesis-profile=ci",
         "--cov=globin",
         "--cov=tools",
         "--cov-branch",
@@ -77,8 +103,8 @@ _COVERAGE = Step(
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
 # because a fix that changes behaviour is a change someone should be making
 # consciously.
-_FIX = Step("fix", "ruff", ("-m", "ruff", "check", ".", "--fix"))
-_REFORMAT = Step("reformat", "ruff", ("-m", "ruff", "format", "."))
+_FIX = Step("fix", ("ruff",), ("-m", "ruff", "check", ".", "--fix"))
+_REFORMAT = Step("reformat", ("ruff",), ("-m", "ruff", "format", "."))
 
 
 COMMANDS: Final[tuple[Command, ...]] = (
@@ -98,6 +124,7 @@ COMMANDS: Final[tuple[Command, ...]] = (
     Command("smoke", "The smallest set of checks that would catch a broken tree.", (_SMOKE,)),
     Command("unit", "Unit tests only.", (_UNIT,)),
     Command("architecture", "Contract and architecture tests.", (_ARCHITECTURE,)),
+    Command("property", "Property tests under the exploratory Hypothesis profile.", (_PROPERTY,)),
     Command("coverage", "The full suite with branch coverage and its threshold.", (_COVERAGE,)),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

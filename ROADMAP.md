@@ -33,15 +33,15 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-004 are complete. Phase 005 is next and has not started.**
-> Nothing beyond Phase 004 is implemented. GLOBIN does not trade, does not
+> **Phases 001-005 are complete. Phase 006 is next and has not started.**
+> Nothing beyond Phase 005 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
 
-> **Scope amendments.** Two have been made. Both cost an ADR, and each is
+> **Scope amendments.** Three have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
-> unchanged by either.
+> unchanged by all three.
 >
 > **First.** Phase 003 originally read *Coding Standards and Static Analysis
 > Baseline*, and Phase 013 read *Continuous Verification Script and Quality
@@ -55,6 +55,18 @@ the contract:
 > owned. Phase 013 retains the *conventions* those gates enforce. Reasoning in
 > [ADR-0016](docs/adr/0016-phase-004-absorbs-the-quality-gate-scope.md), which
 > also states plainly what a second amendment costs.
+>
+> **Third.** Phase 005 originally read *Error Taxonomy and Exception Hierarchy*.
+> It still delivers that, and now also delivers the deterministic testing
+> foundation: the property level, the enforced offline guarantee, process-state
+> isolation and the test-double rule. Unlike the first two, this amendment
+> *widens* a phase rather than moving scope between two — no phase is displaced,
+> nothing is deferred, and no other title changes. ADR-0016 named a third
+> amendment before Phase 016 as the signal that the roadmap is being treated as a
+> backlog;
+> [ADR-0021](docs/adr/0021-phase-005-widens-to-include-the-test-foundation.md)
+> answers that warning rather than arguing it away, and states the four
+> conditions that would have to hold before this precedent applies again.
 
 ---
 
@@ -70,7 +82,7 @@ written down.
 | 002 | Documentation System and Style Guide | Define document types, ownership, review cadence and the writing conventions all later documentation follows. | Complete |
 | 003 | Architecture Boundaries and Dependency Direction | Establish the layer contract, the inward dependency direction, the ports and adapters boundary, the composition root, the C4 system and container views, and the ADR lifecycle. | Complete |
 | 004 | Test Architecture and Quality Gates | Define test layers, directory structure, fixture scope rules and naming; enforce them with a lint, typing and branch-coverage contract, a pre-commit gate, one canonical quality entrypoint and a verification-only CI workflow. | Complete |
-| 005 | Error Taxonomy and Exception Hierarchy | Design the project-wide exception hierarchy separating configuration, transport, exchange, validation and internal faults. | Planned |
+| 005 | Error Taxonomy and Deterministic Test Foundations | Design the project-wide exception hierarchy separating configuration, transport, exchange, validation and internal faults, and establish the deterministic testing foundation that proves it: a property level, an enforced offline guarantee, process-state isolation and the test-double rule. | Complete |
 | 006 | Structured Logging Foundation | Establish structured, correlation-aware logging with severity policy and redaction of sensitive fields. | Planned |
 | 007 | Configuration Model and Schema Contract | Define the typed configuration model, validation rules, defaults and layered override precedence. | Planned |
 | 008 | Domain Value Types and Units | Introduce explicit types for prices, quantities, symbols, sides and currencies to prevent unit confusion. | Planned |

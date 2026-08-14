@@ -37,9 +37,15 @@ def test_there_are_no_runtime_dependencies(pyproject: dict[str, Any]) -> None:
 
 
 def test_development_extra_is_a_free_toolchain(pyproject: dict[str, Any]) -> None:
+    """The exact set, so that adding a tool is a change someone has to read.
+
+    ADR-0003 exempts development tooling from the zero-budget rule, which makes
+    this list the only place the exemption is bounded. `hypothesis` joined it in
+    Phase 005 (ADR-0023); it is MPL-2.0 and pulls in one Apache-2.0 dependency.
+    """
     dev = pyproject["project"]["optional-dependencies"]["dev"]
     names = {entry.split(">")[0].split("=")[0].split("[")[0].strip() for entry in dev}
-    assert names == {"pytest", "pytest-cov", "ruff", "mypy", "pre-commit"}
+    assert names == {"pytest", "pytest-cov", "ruff", "mypy", "pre-commit", "hypothesis"}
 
 
 def test_requires_python_floor_supports_the_planned_stack(pyproject: dict[str, Any]) -> None:

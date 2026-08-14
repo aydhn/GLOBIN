@@ -164,9 +164,12 @@ Stated so that a later phase does not assume the question was settled here.
 - **Threading, process supervision and isolation** between long-running
   subsystems — Phase 261. Choosing a monolith is a topology decision, not a
   concurrency model.
-- **The exception hierarchy** — Phase 005. Malformed input in the code written
-  here raises `ValueError`, deliberately rather than a bespoke type, so that no
-  competing scheme exists for Phase 005 to unpick.
+- **The exception hierarchy** — settled since, in Phase 005. The code written
+  here raised `ValueError` throughout so that one scheme, not two, would need
+  unpicking; it now raises from
+  [`globin.errors`](../../src/globin/errors.py), which sits above the layer stack
+  in the `[shared]` table for the same reason `globin.project_contract` does. See
+  [ADR-0022](../adr/0022-error-taxonomy-rooted-in-one-type.md).
 - **Structured logging** — Phase 006. No layer configures logging.
 - **The configuration model** — Phase 007.
 - **Naming, docstring and typing conventions, and the lint and type
