@@ -35,7 +35,7 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Phase 006 | **Structured Logging Foundation.** `observability.py` in all four layers plus `build_logger` in the composition root: a `LogEvent` domain value that redacts itself in `__post_init__`, a one-method `LogSink` port, an immutable `Logger` whose `bind` returns a new logger, and a `StreamLogSink` writing JSON Lines. Correlation is explicit, never a context variable; the timestamp is stamped by the adapter so Phase 009 keeps the clock decision. `docs/LOGGING_POLICY.md` owns the severity meanings and the redacted-name list, and a contract test compares that document against the code in both directions. ADR-0025 and ADR-0026. Commit `9913edb`, pushed. |
 | Phase 007 | **Configuration Model and Schema Contract.** `configuration.py` in all four layers plus `build_configuration` in the composition root. The model is frozen dataclasses and *is* the schema: the key register and the defaults layer are both derived from `dataclasses.fields()`, so a setting cannot be half-added. Layers are flat dotted keys carrying an origin; `resolve` folds them last-wins and **never raises**, so every refusal lives in `as_config` where the origin can be named. `docs/CONFIGURATION_POLICY.md` owns the settings register, and its contract test feeds each documented default back through the binding rather than comparing strings. The one setting is `logging.min_severity`, honoured by a decorating `ThresholdLogSink` — `StreamLogSink` and `Logger` are untouched. ADR-0027 to ADR-0029. Commit `651f35d`, pushed. |
 | Phase 008 | **Domain Value Types and Units.** `values.py` in the domain layer and nowhere else: five denominated types — `Side`, `Currency`, `Symbol`, `Quantity`, `Price` — carrying `Decimal`, never subclassing it. They **compare but do not compute**: `Decimal` arithmetic reads a thread-local context and silently rounds, so the operators wait for Phase 010, while comparison is exact and settles nothing that phase owns. A wrong type returns `NotImplemented`; a wrong *unit* raises `ValidationError`, because mypy could not have caught it. `docs/VALUE_TYPES_POLICY.md` owns the register, and its contract test **executes** each documented operation rather than comparing strings. Delivered with it, as tooling rather than phase scope: a mutation-testing gate. ADR-0030 to ADR-0033. Commits `2490fcb` and `ab2e187`, pushed. **CI is confirmed working, including the new job:** run `31821279313` passed all four jobs on `windows-latest`, and the `Mutation baseline` job reported `48/52 killed, 4 survived` — byte-identical to the local run on a machine with no user-level toolchain and a cold cache, which is the evidence that the mutant identity scheme is deterministic across machines. |
-| Last completed | **009 — Time, Clock and Timezone Discipline.** `clock.py` in the domain, ports and adapters layers, plus `build_clock` and `build_monotonic_clock` in the composition root. Three types, because *when* is three questions: `Instant` (an aware UTC `datetime`, orders but does not subtract), `Duration` (non-negative whole nanoseconds) and `MonotonicReading` (nanoseconds from an undefined origin, which therefore cannot be rendered as a time). **Two ports, not one** — a wall clock can be stepped and a monotonic one cannot, and Phase 040's server-time clock must be able to implement `Clock` without inventing a monotonic reading. Milliseconds are a **floored projection**, never the representation. ADR-0026's prediction held exactly: one call replaced in one adapter, five construction sites touched, and the observability property tests needed no edit. ADR-0034 and ADR-0035. |
+| Last completed | **009 — Time, Clock and Timezone Discipline.** `clock.py` in the domain, ports and adapters layers, plus `build_clock` and `build_monotonic_clock` in the composition root. Three types, because *when* is three questions: `Instant` (an aware UTC `datetime`, orders but does not subtract), `Duration` (non-negative whole nanoseconds) and `MonotonicReading` (nanoseconds from an undefined origin, which therefore cannot be rendered as a time). **Two ports, not one** — a wall clock can be stepped and a monotonic one cannot, and Phase 040's server-time clock must be able to implement `Clock` without inventing a monotonic reading. Milliseconds are a **floored projection**, never the representation. ADR-0026's prediction held exactly: one call replaced in one adapter, five construction sites touched, and the observability property tests needed no edit. ADR-0034 and ADR-0035. Delivered with it, as tooling rather than phase scope and on the ADR-0032 pattern: a deterministic sharded-execution gate. ADR-0036. |
 | Next phase | **010 — Decimal and Numeric Precision Policy.** Not started. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
 
@@ -346,6 +346,25 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
 - **An ADR's `## Supersedes` section is machine-parsed.** Writing "this does not
   supersede ADR-NNNN" in it makes the suite read a supersession claim and fail.
   Say it in the Context instead.
+- **A shard child must pass `--cov-fail-under=0`.** `pytest-cov` falls back to
+  `fail_under` from `[tool.coverage.report]`, which is 95 here. A shard measures a
+  fraction of the suite — measured, one quarter reaches 87.43% — so without the
+  flag every shard exits 1 and the gate reports a broken suite while nothing is
+  broken.
+- **`pytest @file` is argparse's `fromfile_prefix_chars`.** It splits on
+  `splitlines` and returns each line verbatim, so a blank line becomes an empty
+  positional argument, and a line starting with `@` is expanded as another file.
+  It is also a necessity rather than a convenience on Windows: 963 node IDs are
+  roughly 60 KB of argv against a 32 767-character limit.
+- **pytest escapes special characters inside a parametrised node ID**, so IDs
+  legitimately contain backslashes — a newline in a fixture appears as a literal
+  `
+`, `ç` as `ç`. Four IDs in this repository are spelled that way. Refuse a
+  backslash in the *path* part only; the manifest parser's count self-check
+  against pytest's own total is what caught the first version dropping all four.
+- **pytest exits 4, loudly, for a node ID that no longer exists**, rather than
+  skipping it. That makes collection drift observable. Exit 5 — no tests
+  collected — is the one that must never be read as success.
 - **Never** commit credentials. **Never** report a check as passing without
   running it. **Never** implement a later phase early. **Never** delete working
   functionality to simplify a task.

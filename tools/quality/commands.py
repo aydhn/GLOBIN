@@ -128,6 +128,29 @@ _COVERAGE = Step(
 # example database left by the mutant before it.
 _MUTATION = Step("mutation", ("pytest", "hypothesis"), ("-m", "tools.quality.mutation"))
 
+# Deterministic multi-process execution. Collect once into a digested manifest,
+# partition it by a seeded hash, run each shard as its own pytest process, and
+# account for every test exactly once.
+#
+# It is SLOWER than `coverage`, not faster, and buys evidence rather than time:
+# that no test depends on sharing a process with another, and that the suite's
+# result is invariant under partitioning. Anyone reaching for it expecting a
+# speed-up should be told before they run it.
+#
+# In neither `fast` nor `full`, on the same reasoning as the mutation gate:
+# `full` already ends in a coverage-measured pytest run, and nesting a
+# pytest-spawning step inside one is the re-entrancy that harness avoids.
+#
+# `pytest_cov` and `coverage` are declared because the children pass `--cov`,
+# which the plugin contributes and the library backs; `hypothesis` because the
+# harness passes `--hypothesis-profile=ci` to the children itself, so the
+# preflight cannot see it in this argv.
+_SHARDS = Step(
+    "shards",
+    ("pytest", "pytest_cov", "coverage", "hypothesis"),
+    ("-m", "tools.quality.execution", "shards"),
+)
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -157,6 +180,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
     Command("integration", "Several components together, still entirely local.", (_INTEGRATION,)),
     Command("property", "Property tests under the exploratory Hypothesis profile.", (_PROPERTY,)),
     Command("coverage", "The full suite with branch coverage and its threshold.", (_COVERAGE,)),
+    Command(
+        "shards",
+        "The suite split into deterministic shards, each shard its own process.",
+        (_SHARDS,),
+    ),
     Command(
         "mutation",
         "Mutation testing of the declared targets, against the committed baseline.",

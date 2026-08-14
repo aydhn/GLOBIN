@@ -28,9 +28,10 @@ capability cannot be claimed here without pointing at something real.
 |---|---|
 | Repository, branch policy, engineering contract — [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) | Implemented |
 | 320-phase roadmap, every phase named — [`ROADMAP.md`](ROADMAP.md) | Implemented |
-| Architecture decision records (35) — [`docs/adr/`](docs/adr/README.md) | Implemented |
+| Architecture decision records (36) — [`docs/adr/`](docs/adr/README.md) | Implemented |
 | Research source ledgers with primary sources — [`docs/research/`](docs/research/phase_001_sources.md) | Implemented |
 | UTC-only internal time: an injected clock, aware instants, milliseconds as a floored projection — [`TIME_POLICY.md`](docs/TIME_POLICY.md) | Implemented |
+| Deterministic multi-process test execution, sharded by a stable digest — [`tools/quality/execution/`](tools/quality/execution/__init__.py) | Implemented |
 | Engineering contracts: done-criteria, authority order, layout, doc standard — [`DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md) | Implemented |
 | Change templates for pull requests and issues — [`pull_request_template.md`](.github/pull_request_template.md) | Implemented |
 | Architecture: five layers, inward dependency contract, C4 system and container views — [`docs/architecture/`](docs/architecture/README.md) | Implemented |

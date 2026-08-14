@@ -69,6 +69,11 @@ dmypy.json
 coverage.xml
 htmlcov/
 .hypothesis/
+# Verification tooling artefacts: the test manifest, per-shard argument files,
+# per-shard coverage data and the JSON reports. Regenerable, machine-specific,
+# never source. The rule exists before the first byte is written, for the reason
+# stated at the top of this file.
+.globin/
 .tox/
 .nox/
 

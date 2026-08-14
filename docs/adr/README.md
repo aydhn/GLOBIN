@@ -100,6 +100,7 @@ a future reader can judge whether the reason still holds.
 | [0033](0033-mutation-testing-is-a-repository-native-ast-harness.md) | Mutation testing is a repository-native `ast` harness gated by a committed survivor set | Accepted |
 | [0034](0034-time-is-injected-and-internal-time-is-utc.md) | Time is an injected clock behind two ports, and internal time is UTC | Accepted |
 | [0035](0035-milliseconds-are-a-floored-projection.md) | Milliseconds are a floored projection, not the representation | Accepted |
+| [0036](0036-test-execution-is-sharded-by-a-stable-digest-not-by-a-plugin.md) | Test execution is sharded by a stable digest, not by a plugin | Accepted |
 
 ## Relationship to other documents
 

@@ -4,10 +4,11 @@ Every external claim made by Phase 9 traces to an entry below. Entries are
 summaries written for GLOBIN's purposes; documentation text is not copied into
 this repository.
 
-Phase 9 relies on external behaviour in two places: the standard library modules
-the clock is built from, and the venue's published timestamp convention — which
-justifies a *convention*, not an integration. It adds no dependency, and it
-reaches nothing.
+Phase 9 relies on external behaviour in three places: the standard library
+modules the clock is built from, the venue's published timestamp convention —
+which justifies a *convention*, not an integration — and the pytest and
+coverage.py interfaces the execution tooling drives. It adds no dependency, and
+it reaches nothing.
 
 **Ledger conventions**
 
@@ -209,6 +210,152 @@ reaches nothing.
   the past is the safe direction. **Nothing in Phase 009 calls this API.** The
   entry justifies a convention; the integration is Phases 033-048, and
   reconciling the two clocks is **Phase 040**.
+
+---
+
+## The execution tooling
+
+### S-12 — pytest: arguments read from a file, and what `argparse` does with them
+
+- **Canonical location:** https://docs.pytest.org/en/stable/how-to/usage.html
+- **Accessed:** 2026-08-14
+- **Authority:** Primary — the project documenting its own interface.
+- **Supports:** since pytest 8.2, `pytest @file` reads arguments from a file, one
+  entry per line, in any of the selection formats the command line accepts. The
+  mechanism is `argparse`'s `fromfile_prefix_chars`, which splits on
+  `str.splitlines` and, with the default line converter, returns each line
+  **verbatim** — so a blank line becomes an empty positional argument. Expansion
+  is also recursive, so a line beginning with `@` is read as another file.
+- **Implication for GLOBIN:** this is what makes shard execution possible with no
+  plugin, and on Windows it is a necessity rather than a convenience: the command
+  line is capped at 32 767 characters and 963 node IDs are roughly 60 KB of argv.
+  The three behaviours above are why the args files carry no blank line and no
+  trailing blank, and why a node ID beginning with `@` is refused when the
+  manifest is parsed. **Verified by running it on this machine:** a two-line args
+  file resolved both node IDs, and a stale one produced `ERROR: not found` with
+  exit 4 rather than a silent skip.
+
+### S-13 — pytest: node ID syntax, and the escaping inside a parametrised one
+
+- **Canonical location:** https://docs.pytest.org/en/stable/how-to/usage.html
+- **Accessed:** 2026-08-14
+- **Authority:** Primary.
+- **Supports:** a node ID is a path, `::`, and the test name, with parameters in
+  square brackets. **Verified by running collection on this machine:** all 963
+  IDs use forward slashes on Windows, and four of them contain backslashes
+  *inside the parameter part*, because pytest escapes special characters there —
+  a TOML fixture containing a newline appears as a literal backslash-n, and a
+  cedilla appears as a backslash-x escape.
+- **Implication for GLOBIN:** forward slashes mean node IDs are platform-stable
+  and can be hashed without normalisation. The escaping means a validator must
+  treat the path part and the parameter part differently: a backslash before
+  `::` is a platform difference that must surface, and one after it is pytest's
+  own spelling. The first implementation refused both and silently dropped four
+  tests; the parser's count self-check is what caught it.
+
+### S-14 — pytest: the exit codes
+
+- **Canonical location:** https://docs.pytest.org/en/stable/reference/exit-codes.html
+- **Accessed:** 2026-08-14
+- **Authority:** Primary.
+- **Supports:** `0` all tests passed; `1` some failed; `2` interrupted by the
+  user; `3` an internal error; `4` a command-line usage error; `5` no tests were
+  collected.
+- **Implication for GLOBIN:** only `0` and `1` are verdicts about tests, and the
+  harness classifies everything else as unmeasured. Two matter especially: `5`
+  read as success reports a shard that ran nothing as a shard that passed, which
+  in a partition is the failure that makes the union claim false; and `4` is what
+  pytest returns for a node ID that no longer exists, making collection drift
+  something observed rather than inferred.
+
+### S-15 — pytest: a unique base temporary directory per concurrent run
+
+- **Canonical location:** https://docs.pytest.org/en/stable/how-to/tmp_path.html
+- **Accessed:** 2026-08-14
+- **Authority:** Primary.
+- **Supports:** temporary directories are created under
+  `{temproot}/pytest-of-{user}/pytest-{num}/`, where the number auto-increments.
+  Concurrent invocations of the same test function are supported by configuring
+  the base temporary directory to be unique for each concurrent run, and when
+  `pytest-xdist` is used the documentation says care is taken to configure a
+  `basetemp` directory for the sub processes automatically. `--basetemp` is
+  cleared before each test run.
+- **Implication for GLOBIN:** a hand-rolled runner gets none of that help, so it
+  must pass `--basetemp` itself if shards are ever run concurrently. This design
+  runs them **sequentially**, so the collision cannot arise today; the fact is
+  recorded because it is the first thing that would break if a concurrent mode
+  were ever added, and [ADR-0036](../adr/0036-test-execution-is-sharded-by-a-stable-digest-not-by-a-plugin.md)
+  declines to add one.
+
+### S-16 — coverage.py: data files, and what `combine` needs
+
+- **Canonical location:** https://coverage.readthedocs.io/en/latest/config.html
+- **Accessed:** 2026-08-14
+- **Authority:** Primary — the project documenting its own configuration.
+- **Supports:** `[run] data_file` names the file, and the `COVERAGE_FILE`
+  environment variable overrides it. `[run] parallel` appends machine name,
+  process id and a random suffix so that many processes can be collected.
+  `combine` merges such files, deleting the inputs unless `--keep` is passed.
+  `relative_files` and a `[paths]` section are what allow combining across
+  machines or directories.
+- **Implication for GLOBIN:** each shard child is given its own `COVERAGE_FILE`,
+  which is **mandatory rather than tidy** — the plugin erases the data file at
+  start unless appending, so two children sharing one would erase each other's
+  work, and both would overwrite the `.coverage` the last `full` gate left at the
+  repository root. `parallel`, `relative_files` and `[paths]` are deliberately
+  **not** added: all three are read by the existing `coverage` and `full` gates,
+  and ADR-0032 condition 5 forbids a tooling addition that changes what an
+  existing gate does. The stated cost is that combining is same-machine only.
+
+### S-17 — pytest-cov: the coverage threshold a child inherits
+
+- **Canonical location:** https://pytest-cov.readthedocs.io/en/latest/config.html
+- **Accessed:** 2026-08-14
+- **Authority:** Primary.
+- **Supports:** `--cov-fail-under` sets the minimum coverage percentage, and when
+  it is not given the plugin falls back to the `fail_under` value in the coverage
+  configuration. **Verified by running it on this machine:** one quarter of this
+  suite, run as a shard with `--cov` and no override, passed all 240 of its tests
+  and still exited `1`, reporting that the required coverage of 95.0% was not
+  reached and total coverage was 87.43%.
+- **Implication for GLOBIN:** every shard child passes `--cov-fail-under=0`.
+  Without it the repository's whole-suite floor is applied to a fraction of the
+  suite, so **every shard exits 1** and the gate reports a broken suite while
+  nothing is broken — a false red indistinguishable from a real one.
+
+### S-18 — CPython: `PYTHONHASHSEED` is read at interpreter startup
+
+- **Canonical location:** https://docs.python.org/3/using/cmdline.html
+- **Accessed:** 2026-08-14
+- **Authority:** Primary.
+- **Supports:** the variable seeds the hashing of `str` and `bytes`. The integer
+  must be a decimal number in the range 0 to 4294967295, and the value 0 disables
+  hash randomisation. It is processed during interpreter startup, before the
+  runtime is initialised.
+- **Implication for GLOBIN:** the seed is part of the **child environment** and
+  cannot be a fixture — assigning it inside a running process changes nothing
+  about that process. It also bounds what the seed option accepts, and it is why
+  the test proving the shard mapping is hash-seed-independent has to start two
+  real interpreters rather than manipulating anything in-process.
+
+### S-19 — pytest-xdist and execnet: evaluated and not adopted
+
+- **Canonical location:** https://pypi.org/project/pytest-xdist/
+- **Accessed:** 2026-08-14
+- **Authority:** Primary — the projects publishing their own metadata.
+- **Supports:** the latest `pytest-xdist` is 3.8.0, released 2025-07-01, with
+  `requires_python >=3.9` and classifiers listing Python 3.9 through 3.13. Its
+  dependencies are `execnet>=2.1` and `pytest>=7.0.0`. The latest `execnet` is
+  2.1.2, released 2025-11-12, with classifiers listing Python 3.8 through 3.12.
+  The xdist changelog records Python 3.13 support arriving in 3.7.0 and mentions
+  neither Python 3.14 nor pytest 9.
+- **Implication for GLOBIN:** **not adopted, and this entry is the evidence for
+  the refusal rather than a plan to revisit soon.** The primary reason is
+  governance: ADR-0032 condition 3 forbids a new dependency and routes one to
+  Phase 014, which does not exist yet. The secondary reason is that this
+  repository runs Python 3.14.5 and pytest 9.0.3, and neither package declares
+  support for either. Recorded so that the Phase 014 review starts from what has
+  already been checked.
 
 ---
 

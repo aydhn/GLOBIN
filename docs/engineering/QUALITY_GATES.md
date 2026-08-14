@@ -44,6 +44,7 @@ python -m tools.quality full
 | `integration` | The integration level only | While wiring components together |
 | `property` | The property level, exploratory Hypothesis profile | Searching for a new counter-example |
 | `coverage` | Full suite with branch coverage and its floor | Before delivery |
+| `shards` | The suite partitioned N ways, each shard its own process | Proving no test depends on sharing a process with another |
 | `mutation` | Mutation testing of the declared targets, against the baseline | Proving the tests would notice a change |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
@@ -110,12 +111,13 @@ instead was read the partial-branch column and test the decisions it named: the
 taxonomy added, and a defect in `import_cycles` that no coverage number would
 ever have shown, because the affected line was executed on every run.
 
-Two lines are knowingly uncovered, and they are the same line twice: the
-`if __name__ == "__main__"` guard in `tools/quality/__main__.py` and in
-`tools/quality/mutation/__main__.py`. Each runs on every real invocation and in
-another process, so the suite cannot see it. Both are exercised by a test that
-starts the module rather than annotated with a `pragma`, because a pragma would
-claim coverage this repository does not have.
+Three lines are knowingly uncovered, and they are the same line three times: the
+`if __name__ == "__main__"` guard in `tools/quality/__main__.py`, in
+`tools/quality/mutation/__main__.py` and in `tools/quality/execution/__main__.py`.
+Each runs on every real invocation and in another process, so the suite cannot
+see it. All three are exercised by a test that starts the module rather than
+annotated with a `pragma`, because a pragma would claim coverage this repository
+does not have.
 
 Excluded from measurement, via `exclude_also` so that coverage's own defaults
 are kept rather than replaced:
@@ -213,6 +215,7 @@ Recorded here so that their absence is a decision rather than an oversight.
 | Packaging build verification | 017-032 |
 | Docstring linting and naming conventions | 013 |
 | Secret storage and credential handling | 028-029 |
+| Concurrent workers, dynamic load balancing and worker-scoped fixtures — everything `pytest-xdist` would provide | 014, which owns dependency review |
 
 Phase 004 configures the quality tools it uses and pins the versions it runs
 against. It does not solve dependency management, and nothing here should be

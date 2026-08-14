@@ -127,6 +127,40 @@ jobs:
       - name: Compare the mutation baseline
         run: python -m tools.quality mutation
 
+  shards:
+    name: Sharded execution
+    # After the canonical gate, for the same reason the mutation job is: a
+    # partitioning result on a tree that does not lint or type-check is noise.
+    needs: quality
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Install what the harness launches
+        # No ruff and no mypy: the harness lints nothing and type-checks nothing.
+        # `pytest-cov` is here because each shard child passes `--cov`, and
+        # `hypothesis` because each is given `--hypothesis-profile=ci`.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pytest==9.0.3" "pytest-cov==7.1.0" "hypothesis==6.165.7"
+
+      - name: Run the suite as deterministic shards
+        # `windows-latest`, like every other job. The brief for this work asked
+        # for a Linux runner too; MEMORY.md records CI staying Windows-only as a
+        # decision already taken and reaffirmed, on the grounds that Windows is
+        # the only platform GLOBIN declares (ADR-0009) and the only one
+        # exercising the CRLF rules in `.gitattributes`.
+        run: python -m tools.quality shards
+
   hygiene:
     name: Pre-commit hooks
     runs-on: windows-latest
