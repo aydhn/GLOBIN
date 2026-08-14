@@ -95,6 +95,29 @@ def markdown_prose(text: str) -> str:
     return MARKDOWN_INLINE_CODE_RE.sub("", MARKDOWN_FENCE_RE.sub("", text))
 
 
+def markdown_section(text: str, heading: str) -> str:
+    """Return the body under ``heading``, stopping at the next heading of any level.
+
+    Args:
+        text: The Markdown source.
+        heading: The exact heading line, including its leading hashes.
+
+    Returns:
+        Everything between that heading and the next one.
+
+    Raises:
+        AssertionError: If the heading does not appear exactly once. Several
+            documents carry more than one table, and a reader that silently
+            returned nothing would make its caller compare two empty sets and
+            pass — which is the failure mode the checks built on this exist to
+            avoid in the documents themselves.
+    """
+    occurrences = text.count(f"\n{heading}\n")
+    assert occurrences == 1, f"expected one {heading!r} heading, found {occurrences}"
+    body = text.split(f"\n{heading}\n", 1)[1]
+    return re.split(r"^#{1,6} ", body, maxsplit=1, flags=re.MULTILINE)[0]
+
+
 class RoadmapRow(NamedTuple):
     """One parsed phase row from ``ROADMAP.md``."""
 

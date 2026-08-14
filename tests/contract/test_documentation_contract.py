@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.support import REPO_ROOT, markdown_prose
+from tests.support import REPO_ROOT, markdown_prose, markdown_section
 
 #: Documents that must exist for the engineering contract to be coherent.
 REQUIRED_DOCS: tuple[str, ...] = (
@@ -537,3 +537,174 @@ def test_phase_001_ledger_remains_comprehensive(repo_root: Path) -> None:
     text = _read(repo_root, "docs/research/phase_001_sources.md")
     headings = SOURCE_HEADING_RE.findall(text)
     assert len(headings) >= 12, f"expected at least 12 research sources, found {len(headings)}"
+
+
+# --------------------------------------------------------------------------
+# The README's maturity table
+#
+# `README.md` is the one document a stranger reads before deciding whether to
+# trust anything else here, and its capability table is the load-bearing claim:
+# what exists, and what does not. Prose is not directly checkable, so the table
+# is held to a structure that makes the claim falsifiable — every implemented row
+# must point at the artefact that proves it, and the row admitting that
+# everything else is unbuilt must survive.
+# --------------------------------------------------------------------------
+
+#: A two-column row of a Markdown table, with the cells stripped.
+TABLE_ROW_RE = re.compile(r"^\|\s*(?P<left>[^|]+?)\s*\|\s*(?P<right>[^|]+?)\s*\|\s*$", re.MULTILINE)
+
+#: A repository-relative Markdown link: `[text](path)`, excluding URLs and
+#: in-page anchors.
+RELATIVE_LINK_RE = re.compile(r"\[[^\]]+\]\((?!https?://|#)(?P<target>[^)]+)\)")
+
+#: The states a capability row may claim. Deliberately two: a third such as
+#: "Partial" or "In progress" is how a table stops distinguishing a thing that
+#: works from a thing somebody started.
+CAPABILITY_STATES: frozenset[str] = frozenset({"Implemented", "Not started"})
+
+#: The row that stops the table reading as a complete inventory of the system.
+CATCH_ALL_ROW: tuple[str, str] = ("Everything else", "Not started")
+
+#: Capabilities `README.md` states do not exist, each paired with the fragment no
+#: module under `src/globin/` may contain while that remains true. Phases 033
+#: onwards will legitimately break these, and the point is that they cannot do so
+#: without editing the README in the same commit.
+ABSENT_CAPABILITIES: tuple[tuple[str, str], ...] = (
+    ("Binance API integration", "binance"),
+    ("request signing", "signing"),
+    ("credential handling", "credential"),
+    ("WebSocket", "websocket"),
+    ("market data ingestion", "market"),
+    ("order books", "order"),
+    ("an execution engine", "execution"),
+    ("backtesting", "backtest"),
+    ("technical indicators", "indicator"),
+    ("strategies", "strateg"),
+    ("machine learning", "learning"),
+    ("reinforcement learning", "reinforcement"),
+    ("optimisation", "optimis"),
+    ("portfolio and risk management", "portfolio"),
+    ("the Telegram interface", "telegram"),
+    ("the orchestrator", "orchestrat"),
+)
+
+
+def capability_rows(readme: str) -> tuple[tuple[str, str], ...]:
+    """Return the component/state rows of the README's maturity table.
+
+    Args:
+        readme: The README source.
+
+    Returns:
+        One ``(component, state)`` pair per row, in document order, with the
+        header and separator rows dropped.
+    """
+    section = markdown_section(readme, "### What exists right now")
+    return tuple(
+        (match.group("left"), match.group("right"))
+        for match in TABLE_ROW_RE.finditer(section)
+        if match.group("right") != "State" and not match.group("left").startswith("--")
+    )
+
+
+def test_the_capability_reader_finds_its_own_failing_case() -> None:
+    """Guard the guard. A reader returning nothing would pass every check below."""
+    readme = "\n".join(
+        [
+            "",
+            "### What exists right now",
+            "",
+            "| Component | State |",
+            "|---|---|",
+            "| A | Implemented |",
+            "",
+            "## Next",
+            "",
+            "| B | C |",
+            "",
+        ]
+    )
+    assert capability_rows(readme) == (("A", "Implemented"),)
+
+
+def test_the_capability_table_has_rows(repo_root: Path) -> None:
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    assert capability_rows(readme), "README states nothing about what exists"
+
+
+def test_every_capability_claims_a_known_state(repo_root: Path) -> None:
+    """Two states, so that a row cannot describe something half-built.
+
+    `DEFINITION_OF_DONE.md` recognises no partial completion, and a table that
+    offered one would let a phase report itself as nearly finished — the claim
+    the whole programme is arranged to make impossible.
+    """
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    unknown = [row for row in capability_rows(readme) if row[1] not in CAPABILITY_STATES]
+    assert not unknown, f"capability rows with an unrecognised state: {unknown}"
+
+
+def test_the_table_still_admits_that_everything_else_is_unbuilt(repo_root: Path) -> None:
+    """Without the final row the table reads as a complete inventory.
+
+    It is the only row permitted to say `Not started`, and it must come last:
+    a catch-all in the middle would leave the rows beneath it looking like
+    exceptions to it rather than entries above it.
+    """
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    rows = capability_rows(readme)
+    assert rows[-1] == CATCH_ALL_ROW, f"the last capability row is {rows[-1]}, not {CATCH_ALL_ROW}"
+
+    unstarted = [row for row in rows if row[1] == "Not started"]
+    assert unstarted == [CATCH_ALL_ROW], (
+        "a capability that is not started needs no row of its own; the catch-all covers it"
+    )
+
+
+def test_every_implemented_capability_points_at_its_evidence(repo_root: Path) -> None:
+    """A claim with nothing behind it is the failure this table could hide.
+
+    Requiring a repository-relative link makes the claim checkable without this
+    test knowing anything about what any row means: the link must exist, which
+    `test_every_repository_relative_link_resolves` already enforces over every
+    committable document, so a row naming a file that was never written fails
+    there rather than here.
+    """
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    unevidenced = [
+        component
+        for component, state in capability_rows(readme)
+        if state == "Implemented" and RELATIVE_LINK_RE.search(component) is None
+    ]
+    assert not unevidenced, (
+        f"implemented capabilities with no link to what proves them: {unevidenced}"
+    )
+
+
+def test_the_readme_names_every_capability_it_says_is_absent(repo_root: Path) -> None:
+    """The list below is the other half of the maturity claim, and it goes stale
+    the moment a phase starts building one of these."""
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    # Whitespace is collapsed first: the document wraps at 100 columns, so a
+    # two-word capability can be split across a line break and a naive substring
+    # search would report it missing from a document that names it.
+    section = " ".join(markdown_section(readme, "### What does not exist").split())
+    missing = [name for name, _fragment in ABSENT_CAPABILITIES if name not in section]
+    assert not missing, f"README no longer lists these as absent: {missing}"
+
+
+def test_nothing_absent_from_the_readme_has_quietly_acquired_a_module(repo_root: Path) -> None:
+    """The claim, checked against the tree rather than against itself.
+
+    `test_import_surface.py` guards the exported names; this guards the file
+    names, which is where a phase implemented early would show up first.
+    """
+    modules = [path.stem.lower() for path in (repo_root / "src" / "globin").rglob("*.py")]
+    started = [
+        f"{name} (module matching {fragment!r})"
+        for name, fragment in ABSENT_CAPABILITIES
+        if any(fragment in module for module in modules)
+    ]
+    assert not started, (
+        f"README says these do not exist, but the package has modules for them: {started}"
+    )

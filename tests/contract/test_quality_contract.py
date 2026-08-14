@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest
 
-from tests.support import TAXONOMY_LEVELS, spelled_size
+from tests.support import TAXONOMY_LEVELS, markdown_section, spelled_size
 from tools.quality.commands import command_names
 
 #: Attribute markers that are registered but not applied by directory. They
@@ -398,34 +398,13 @@ def test_the_testing_strategy_describes_every_test_module(repo_root: Path) -> No
     )
 
 
-def _section(document: str, heading: str) -> str:
-    """Return the body under ``heading``, stopping at the next heading of any level.
-
-    Args:
-        document: The Markdown source.
-        heading: The exact heading line, including its leading hashes.
-
-    Returns:
-        Everything between that heading and the next one.
-
-    Raises:
-        AssertionError: If the heading does not appear exactly once. A reader
-            that silently returned nothing would make its caller compare two
-            empty sets and pass.
-    """
-    occurrences = document.count(f"\n{heading}\n")
-    assert occurrences == 1, f"expected one {heading!r} heading, found {occurrences}"
-    body = document.split(f"\n{heading}\n", 1)[1]
-    return re.split(r"^#{1,6} ", body, maxsplit=1, flags=re.MULTILINE)[0]
-
-
 def test_the_section_reader_finds_its_own_failing_case() -> None:
     """Guard the guard, for the reader the marker check below depends on."""
     document = "\n## One\n\n| `alpha` | x |\n\n## Two\n\n| `beta` | y |\n"
-    section = _section(document, "## One")
+    section = markdown_section(document, "## One")
     assert [m.group("name") for m in BACKTICKED_FIRST_CELL_RE.finditer(section)] == ["alpha"]
     with pytest.raises(AssertionError):
-        _section(document, "## Absent")
+        markdown_section(document, "## Absent")
 
 
 def test_the_testing_strategy_documents_every_attribute_marker(repo_root: Path) -> None:
@@ -437,7 +416,7 @@ def test_the_testing_strategy_documents_every_attribute_marker(repo_root: Path) 
     turns an unregistered marker into a failure rather than a typo.
     """
     document = (repo_root / "docs" / "TESTING_STRATEGY.md").read_text(encoding="utf-8")
-    section = _section(document, "### Markers")
+    section = markdown_section(document, "### Markers")
 
     documented = tuple(match.group("name") for match in BACKTICKED_FIRST_CELL_RE.finditer(section))
     assert documented == ATTRIBUTE_MARKERS

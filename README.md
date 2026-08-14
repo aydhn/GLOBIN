@@ -19,22 +19,27 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ### What exists right now
 
+Every implemented row links to the thing that proves it. That is not decoration:
+`tests/contract/test_documentation_contract.py` requires the link, and
+`tests/contract/test_repository_contract.py` requires it to resolve, so a
+capability cannot be claimed here without pointing at something real.
+
 | Component | State |
 |---|---|
-| Repository, branch policy, engineering contract | Implemented |
-| 320-phase roadmap, every phase named | Implemented |
-| Architecture decision records (29) | Implemented |
-| Research source ledgers with primary sources | Implemented |
-| Engineering contracts: done-criteria, authority order, layout, doc standard | Implemented |
-| Change templates for pull requests and issues | Implemented |
-| Architecture: five layers, inward dependency contract, C4 system and container views | Implemented |
-| `globin` package — project contract constants and the architecture review | Implemented |
-| Contract test suite and verification gate | Implemented |
-| Test taxonomy, quality gates, pre-commit hooks and CI | Implemented |
-| Error taxonomy: one root, five categories by who must act | Implemented |
-| Property-based testing, enforced offline tests, process isolation | Implemented |
-| Structured logging: correlation-aware records that redact secrets by construction | Implemented |
-| Typed configuration model: declared defaults, layered overrides, unknown settings refused | Implemented |
+| Repository, branch policy, engineering contract — [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) | Implemented |
+| 320-phase roadmap, every phase named — [`ROADMAP.md`](ROADMAP.md) | Implemented |
+| Architecture decision records (29) — [`docs/adr/`](docs/adr/README.md) | Implemented |
+| Research source ledgers with primary sources — [`docs/research/`](docs/research/phase_001_sources.md) | Implemented |
+| Engineering contracts: done-criteria, authority order, layout, doc standard — [`DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md) | Implemented |
+| Change templates for pull requests and issues — [`pull_request_template.md`](.github/pull_request_template.md) | Implemented |
+| Architecture: five layers, inward dependency contract, C4 system and container views — [`docs/architecture/`](docs/architecture/README.md) | Implemented |
+| `globin` package — project contract constants and the architecture review — [`src/globin/`](src/globin/__init__.py) | Implemented |
+| Contract test suite and verification gate — [`verify.ps1`](scripts/verify.ps1) | Implemented |
+| Test taxonomy, quality gates, pre-commit hooks and CI — [`TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) | Implemented |
+| Error taxonomy: one root, five categories by who must act — [`errors.py`](src/globin/errors.py) | Implemented |
+| Property-based testing, enforced offline tests, process isolation — [`tests/conftest.py`](tests/conftest.py) | Implemented |
+| Structured logging: correlation-aware records that redact secrets by construction — [`LOGGING_POLICY.md`](docs/LOGGING_POLICY.md) | Implemented |
+| Typed configuration model: declared defaults, layered overrides, unknown settings refused — [`CONFIGURATION_POLICY.md`](docs/CONFIGURATION_POLICY.md) | Implemented |
 | Everything else | Not started |
 
 ### What does not exist
