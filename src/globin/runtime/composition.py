@@ -23,11 +23,13 @@ from pathlib import Path
 from typing import Final, TextIO
 
 from globin.adapters.architecture import AstModuleImportSource, TomlArchitectureContractSource
+from globin.adapters.clock import SystemClock, SystemMonotonicClock
 from globin.adapters.observability import StreamLogSink, ThresholdLogSink, new_correlation_id
 from globin.application.architecture_review import ArchitectureReview
 from globin.application.configuration import ConfigurationResolution
 from globin.application.observability import Logger
 from globin.domain.configuration import GlobinConfig, default_config
+from globin.ports.clock import Clock, MonotonicClock
 from globin.ports.configuration import ConfigurationSource
 
 CONTRACT_RELATIVE_PATH: Final[str] = "docs/architecture/dependency-rules.toml"
@@ -84,10 +86,38 @@ def build_configuration(sources: Sequence[ConfigurationSource] | None = None) ->
     return ConfigurationResolution(sources=() if sources is None else tuple(sources)).run()
 
 
+def build_clock() -> Clock:
+    """The host's wall clock, as the port.
+
+    Returns:
+        A :class:`~globin.adapters.clock.SystemClock`.
+
+    The return type is the **port**, not the adapter, so this function stays the
+    only place in the tree that names the concrete clock. That is ADR-0014 and
+    ADR-0015 made concrete rather than restated.
+    """
+    return SystemClock()
+
+
+def build_monotonic_clock() -> MonotonicClock:
+    """The host's monotonic clock, as the port.
+
+    Returns:
+        A :class:`~globin.adapters.clock.SystemMonotonicClock`.
+
+    Nothing in GLOBIN measures an elapsed interval yet. This exists because
+    ``ROADMAP.md`` gives Phase 009 "monotonic clocks" by name, and because the
+    decision worth fixing now is *which* guarantee an elapsed measurement rests
+    on — not the first call site, which arrives with the code that needs it.
+    """
+    return SystemMonotonicClock()
+
+
 def build_logger(
     stream: TextIO | None = None,
     correlation_id: str | None = None,
     config: GlobinConfig | None = None,
+    clock: Clock | None = None,
 ) -> Logger:
     """Wire a logger writing JSON Lines to a stream.
 
@@ -101,6 +131,9 @@ def build_logger(
         config: Supplies the severity threshold. Defaults to
             :func:`~globin.domain.configuration.default_config`, whose threshold
             is ``DEBUG`` and therefore discards nothing.
+        clock: Stamps each record. Defaults to :func:`build_clock`. A test
+            passes a fixed or manually advanced clock and can then assert the
+            exact timestamps written.
 
     Returns:
         A :class:`~globin.application.observability.Logger`.
@@ -109,7 +142,9 @@ def build_logger(
     ``sys.stderr`` as a default argument would be captured when this module is
     imported, which is both work at import time and the wrong stream if anything
     later replaces it — and reading it here keeps this function the only place
-    that knows which stream GLOBIN logs to.
+    that knows which stream GLOBIN logs to. The clock is the same argument with
+    a stronger reason: a clock captured at import would be ambient time, which
+    is what Phase 009 exists to remove.
 
     The threshold sink is applied unconditionally rather than only when a
     threshold has been configured. ``DEBUG`` is the lowest severity, so at the
@@ -120,7 +155,10 @@ def build_logger(
     settings = default_config() if config is None else config
     return Logger(
         sink=ThresholdLogSink(
-            inner=StreamLogSink(sys.stderr if stream is None else stream),
+            inner=StreamLogSink(
+                stream=sys.stderr if stream is None else stream,
+                clock=build_clock() if clock is None else clock,
+            ),
             minimum=settings.logging.min_severity,
         ),
         correlation_id=new_correlation_id() if correlation_id is None else correlation_id,

@@ -165,7 +165,7 @@ absence of a rule.
 | Question | Phase |
 |---|---|
 | Rounding, tick size, step size, where exact arithmetic is mandatory | 010 |
-| Timestamps, clocks and timezones | 009 |
+| Timestamps, clocks and timezones | 009, delivered — [`TIME_POLICY.md`](TIME_POLICY.md) |
 | Canonical identifiers, and the register of assets that exist | 011 |
 | Serialization and schema evolution for persisted values | 012 |
 | The venue spelling of a market, such as the concatenated form | 033-048 |

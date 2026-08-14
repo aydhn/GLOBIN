@@ -31,11 +31,11 @@ import json
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Final, TextIO
 from uuid import uuid4
 
 from globin.domain.observability import LogEvent, Severity
+from globin.ports.clock import Clock
 from globin.ports.observability import LogSink
 
 ENVELOPE_KEYS: Final[tuple[str, ...]] = ("timestamp", "severity", "event", "correlation_id")
@@ -129,6 +129,16 @@ class StreamLogSink:
     Args:
         stream: Where records go. The composition root passes
             :data:`sys.stderr`; a test passes a :class:`io.StringIO`.
+        clock: Where the timestamp comes from. The composition root passes
+            :class:`globin.adapters.clock.SystemClock`; a test passes a fixed
+            clock and can then assert the exact timestamp it wrote.
+
+    **The clock has no default, and cannot have one.** ``clock: Clock =
+    SystemClock()`` and ``field(default_factory=SystemClock)`` are both calls in
+    a class body, and ``tests/architecture/test_architecture_contract.py`` holds
+    every layer package to performing no work at import. The architecture rule
+    and the design rule agree here: a default clock would be ambient time
+    wearing a keyword argument.
 
     **A write failure propagates.** The stream is not wrapped in a try/except,
     so a closed pipe or a full disk surfaces at the call site rather than
@@ -146,6 +156,7 @@ class StreamLogSink:
     """
 
     stream: TextIO
+    clock: Clock
 
     def emit(self, event: LogEvent) -> None:
         """Write one record, followed by a newline.
@@ -156,8 +167,12 @@ class StreamLogSink:
         The stream is not flushed. Flushing per record costs a system call on a
         path that a trading loop may take often, and the streams GLOBIN writes
         to are line-buffered or flushed at exit.
+
+        The clock is read **per record**, not once when the sink was built. A
+        cached reading would stamp every record in a run with the same moment,
+        which is worse than no timestamp because it looks like one.
         """
-        record = as_record(event, datetime.now(UTC).isoformat())
+        record = as_record(event, str(self.clock.now()))
         self.stream.write(json.dumps(record, ensure_ascii=True, separators=(",", ":")) + "\n")
 
 

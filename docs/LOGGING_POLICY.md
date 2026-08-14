@@ -55,8 +55,10 @@ stream happens to have — GLOBIN's host is Windows, where a console stream is
 frequently not UTF-8, and a logger that raises on a symbol name fails exactly
 when something interesting is happening.
 
-Timestamps are timezone-aware and UTC. The general rule arrives with Phase 009;
-this document commits only the logging half of it.
+Timestamps are timezone-aware and UTC. Since Phase 009 the value comes from a
+[`Clock`](../src/globin/ports/clock.py) the sink is handed rather than from a call
+inside the sink, and it is read once per record. The general rule is
+[`TIME_POLICY.md`](TIME_POLICY.md).
 
 ---
 

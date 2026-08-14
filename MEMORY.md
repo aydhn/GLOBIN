@@ -26,7 +26,7 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Fact | Value |
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
-| Completed phases | **001-007** |
+| Completed phases | **001-009** |
 | Phase 001 | **Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
 | Phase 002 | **Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Commit `9c46313`, pushed. |
 | Phase 003 | **Architecture Boundaries and Dependency Direction.** Five layers under `src/globin/`, the inward dependency contract in `docs/architecture/dependency-rules.toml`, C4 system context and container views, the ADR lifecycle with supersession rules, and `tests/architecture/test_architecture_contract.py` enforcing all of it. Commit `990e5f4`, pushed. |
@@ -34,8 +34,9 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Phase 005 | **Error Taxonomy and Deterministic Test Foundations.** `globin.errors` — one root, five categories divided by who must act — replacing the ad-hoc `ValueError` scheme in the adapters and domain layers. Plus a `property` taxonomy level with Hypothesis, autouse fixtures that refuse outbound sockets and fail a test leaking process state, the `create_autospec` rule for mocks, and the `external` deselection that Phase 004's marker description had promised but nothing performed. ADR-0021 to ADR-0024. Commit `7f65d25`, pushed. |
 | Phase 006 | **Structured Logging Foundation.** `observability.py` in all four layers plus `build_logger` in the composition root: a `LogEvent` domain value that redacts itself in `__post_init__`, a one-method `LogSink` port, an immutable `Logger` whose `bind` returns a new logger, and a `StreamLogSink` writing JSON Lines. Correlation is explicit, never a context variable; the timestamp is stamped by the adapter so Phase 009 keeps the clock decision. `docs/LOGGING_POLICY.md` owns the severity meanings and the redacted-name list, and a contract test compares that document against the code in both directions. ADR-0025 and ADR-0026. Commit `9913edb`, pushed. |
 | Phase 007 | **Configuration Model and Schema Contract.** `configuration.py` in all four layers plus `build_configuration` in the composition root. The model is frozen dataclasses and *is* the schema: the key register and the defaults layer are both derived from `dataclasses.fields()`, so a setting cannot be half-added. Layers are flat dotted keys carrying an origin; `resolve` folds them last-wins and **never raises**, so every refusal lives in `as_config` where the origin can be named. `docs/CONFIGURATION_POLICY.md` owns the settings register, and its contract test feeds each documented default back through the binding rather than comparing strings. The one setting is `logging.min_severity`, honoured by a decorating `ThresholdLogSink` — `StreamLogSink` and `Logger` are untouched. ADR-0027 to ADR-0029. Commit `651f35d`, pushed. |
-| Last completed | **008 — Domain Value Types and Units.** `values.py` in the domain layer and nowhere else: five denominated types — `Side`, `Currency`, `Symbol`, `Quantity`, `Price` — carrying `Decimal`, never subclassing it. They **compare but do not compute**: `Decimal` arithmetic reads a thread-local context and silently rounds, so the operators wait for Phase 010, while comparison is exact and settles nothing that phase owns. A wrong type returns `NotImplemented`; a wrong *unit* raises `ValidationError`, because mypy could not have caught it. `docs/VALUE_TYPES_POLICY.md` owns the register, and its contract test **executes** each documented operation rather than comparing strings. Delivered with it, as tooling rather than phase scope: a mutation-testing gate. ADR-0030 to ADR-0033. Commits `2490fcb` and `ab2e187`, pushed. **CI is confirmed working, including the new job:** run `31821279313` passed all four jobs on `windows-latest`, and the `Mutation baseline` job reported `48/52 killed, 4 survived` — byte-identical to the local run on a machine with no user-level toolchain and a cold cache, which is the evidence that the mutant identity scheme is deterministic across machines. |
-| Next phase | **009 — Time, Clock and Timezone Discipline.** Not started. |
+| Phase 008 | **Domain Value Types and Units.** `values.py` in the domain layer and nowhere else: five denominated types — `Side`, `Currency`, `Symbol`, `Quantity`, `Price` — carrying `Decimal`, never subclassing it. They **compare but do not compute**: `Decimal` arithmetic reads a thread-local context and silently rounds, so the operators wait for Phase 010, while comparison is exact and settles nothing that phase owns. A wrong type returns `NotImplemented`; a wrong *unit* raises `ValidationError`, because mypy could not have caught it. `docs/VALUE_TYPES_POLICY.md` owns the register, and its contract test **executes** each documented operation rather than comparing strings. Delivered with it, as tooling rather than phase scope: a mutation-testing gate. ADR-0030 to ADR-0033. Commits `2490fcb` and `ab2e187`, pushed. **CI is confirmed working, including the new job:** run `31821279313` passed all four jobs on `windows-latest`, and the `Mutation baseline` job reported `48/52 killed, 4 survived` — byte-identical to the local run on a machine with no user-level toolchain and a cold cache, which is the evidence that the mutant identity scheme is deterministic across machines. |
+| Last completed | **009 — Time, Clock and Timezone Discipline.** `clock.py` in the domain, ports and adapters layers, plus `build_clock` and `build_monotonic_clock` in the composition root. Three types, because *when* is three questions: `Instant` (an aware UTC `datetime`, orders but does not subtract), `Duration` (non-negative whole nanoseconds) and `MonotonicReading` (nanoseconds from an undefined origin, which therefore cannot be rendered as a time). **Two ports, not one** — a wall clock can be stepped and a monotonic one cannot, and Phase 040's server-time clock must be able to implement `Clock` without inventing a monotonic reading. Milliseconds are a **floored projection**, never the representation. ADR-0026's prediction held exactly: one call replaced in one adapter, five construction sites touched, and the observability property tests needed no edit. ADR-0034 and ADR-0035. |
+| Next phase | **010 — Decimal and Numeric Precision Policy.** Not started. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
 
 **The roadmap has been amended three times.** Band ranges, phase numbers and band
@@ -309,6 +310,42 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
   on the same reasoning as `xfail_strict`. Nothing writes the file — `tomllib`
   cannot emit TOML — so a stale baseline is corrected by a person, and the block
   the tool prints is filled with a placeholder a contract test refuses.
+- **`time` is I/O-capable in the dependency contract; `datetime` deliberately is
+  not.** `time` holds no value type, so every reason to import it in an inner
+  layer is a reason to read the host. Banning `datetime` would make invariant 25
+  unimplementable, since "timezone-naive datetimes must not cross a domain
+  boundary" presupposes that aware ones do. The gap that leaves —
+  `datetime.now(UTC)` in the domain — is closed by an AST rule in
+  `tests/architecture/test_clock_discipline.py`, not by the import list.
+- **Ruff's `DTZ` rules enforce awareness, never location.** `datetime.now(UTC)`
+  inside the domain layer passes every one of them. Anyone proposing to delete
+  the clock-discipline test because "the linter already covers it" is wrong, and
+  this is the sentence that says why.
+- **A `tzinfo` is arbitrary caller-supplied code.** `datetime.utcoffset()` raises
+  `TypeError` if it returns a non-`timedelta` and `ValueError` if the offset
+  exceeds a day, and `astimezone` raises `OverflowError` within a day of either
+  end of the calendar. All three are translated into `ValidationError`, because
+  none is a `globin.errors` type and ADR-0022 requires one at a boundary.
+- **`datetime.timestamp()` is a float and is not exact at the extremes.**
+  Measured: `datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)` is
+  `253402300799999999` microseconds after the epoch, and `timestamp()` gives
+  `253402300800000000` — a moment that does not exist. Conversions go through
+  `timedelta` integer arithmetic instead.
+- **No test may assert that two real clock readings differ**, only that the later
+  is not smaller. The declared host resolves to `1e-07`, but a Windows host
+  falling back to `GetSystemTimeAsFileTime()` is granular to about 15.6 ms and
+  returns the same value twice. Distinctness comes from `ManualClock`.
+- **`MonotonicReading.since` takes `object`, not `MonotonicReading`.** Annotated
+  with the narrow type, mypy proves the runtime guard unreachable and refuses the
+  module; without the guard, passing an `Instant` raises `AttributeError` out of a
+  domain boundary. The same trade `values.py` makes in its comparison helpers.
+- **Ruff's `SIM300` fix flips `a < b` into `b > a`.** That is not equivalent when
+  the test exists to record *which* operand is on the left — Python tries the left
+  operand's dunder first. The clock contract's operation matrix carries `noqa`
+  for exactly that reason.
+- **An ADR's `## Supersedes` section is machine-parsed.** Writing "this does not
+  supersede ADR-NNNN" in it makes the suite read a supersession claim and fail.
+  Say it in the Context instead.
 - **Never** commit credentials. **Never** report a check as passing without
   running it. **Never** implement a later phase early. **Never** delete working
   functionality to simplify a task.

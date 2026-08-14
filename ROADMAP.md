@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-008 are complete. Phase 009 is next and has not started.**
-> Nothing beyond Phase 008 is implemented. GLOBIN does not trade, does not
+> **Phases 001-009 are complete. Phase 010 is next and has not started.**
+> Nothing beyond Phase 009 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
 
@@ -86,7 +86,7 @@ written down.
 | 006 | Structured Logging Foundation | Establish structured, correlation-aware logging with severity policy and redaction of sensitive fields. | Complete |
 | 007 | Configuration Model and Schema Contract | Define the typed configuration model, validation rules, defaults and layered override precedence. | Complete |
 | 008 | Domain Value Types and Units | Introduce explicit types for prices, quantities, symbols, sides and currencies to prevent unit confusion. | Complete |
-| 009 | Time, Clock and Timezone Discipline | Establish UTC-only internal time, millisecond conventions, monotonic clocks and an injectable clock abstraction. | Planned |
+| 009 | Time, Clock and Timezone Discipline | Establish UTC-only internal time, millisecond conventions, monotonic clocks and an injectable clock abstraction. | Complete |
 | 010 | Decimal and Numeric Precision Policy | Decide where decimal arithmetic is mandatory versus floating point, and define rounding and tick-size behaviour. | Planned |
 | 011 | Identifier and Naming Registry | Define canonical identifiers for symbols, products, environments, runs, models and orders across the system. | Planned |
 | 012 | Serialization and Persistence Contracts | Establish schema evolution rules and forward and backward compatibility guarantees for persisted structures. | Planned |

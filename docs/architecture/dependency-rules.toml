@@ -77,6 +77,17 @@ capable_modules = [
     "telnetlib",
     "tempfile",
     "threading",
+    # `time` joined this table in Phase 009; see ADR-0034. It is listed and
+    # `datetime` is not, which is the asymmetry a reader will want explained.
+    # `time` is entirely a clock-and-sleep module: it holds no value type, so
+    # every reason to import it in an inner layer is a reason to read the host.
+    # `datetime` is mostly a calendar-and-value module, and banning it would make
+    # ENGINEERING_CONTRACT.md invariant 25 unimplementable — "timezone-naive
+    # datetimes must not cross a domain boundary" presupposes that aware ones do,
+    # so the domain must be able to name the type. The narrower rule that closes
+    # that gap — no clock is *read* outside the adapters layer — is enforced by
+    # tests/architecture/test_clock_discipline.py rather than by this list.
+    "time",
     "tomllib",
     "urllib",
     "webbrowser",

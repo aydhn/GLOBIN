@@ -15,11 +15,14 @@ exchange.
 
 import io
 import json
+from datetime import UTC, datetime
 from typing import Final
 
 import pytest
 
+from globin.domain.clock import duration_from_millis, instant
 from globin.runtime.composition import build_logger
+from tests.support import ManualClock
 
 PLANTED_CREDENTIAL: Final[str] = "PLANTED-CREDENTIAL-9c41"
 """A credential-shaped value, so its absence downstream is unambiguous."""
@@ -89,6 +92,56 @@ def test_a_logger_built_without_a_correlation_id_gets_a_fresh_one(stream: io.Str
     identifiers = {record["correlation_id"] for record in _records(stream)}
     assert len(identifiers) == 2
     assert all(identifier for identifier in identifiers)
+
+
+def test_the_wired_logger_stamps_records_from_the_injected_clock(
+    stream: io.StringIO,
+) -> None:
+    """The clock reaches the sink through the real graph, and moves with it.
+
+    Every other test of this phase substitutes something. This one builds the
+    logger the way a program does and proves two things at once: that
+    :func:`~globin.runtime.composition.build_logger` threads the clock all the
+    way down through the threshold sink into the stream sink, and that the sink
+    reads it once per record rather than caching a reading.
+
+    Before Phase 009 neither claim could be tested at all — the sink called
+    ``datetime.now(UTC)`` itself, so the only available assertion was that the
+    timestamp looked like a timestamp.
+    """
+    logger = build_logger(
+        stream=stream,
+        correlation_id="corr-int-5",
+        clock=ManualClock(
+            current=instant(datetime(2026, 8, 14, 12, 0, 0, tzinfo=UTC)),
+            step=duration_from_millis(250),
+        ),
+    )
+    logger.info("run.started")
+    logger.info("run.progressed")
+    logger.info("run.finished")
+
+    assert [record["timestamp"] for record in _records(stream)] == [
+        "2026-08-14T12:00:00+00:00",
+        "2026-08-14T12:00:00.250000+00:00",
+        "2026-08-14T12:00:00.500000+00:00",
+    ]
+
+
+def test_a_logger_built_without_a_clock_still_stamps_a_utc_timestamp(
+    stream: io.StringIO,
+) -> None:
+    """The default path, which a real run takes.
+
+    The value is not asserted — only that the default resolved to a real clock
+    answering in UTC. Asserting a value here would be asserting what time it is.
+    """
+    build_logger(stream=stream, correlation_id="corr-int-6").info("startup.completed")
+
+    (record,) = _records(stream)
+    timestamp = record["timestamp"]
+    assert isinstance(timestamp, str)
+    assert timestamp.endswith("+00:00")
 
 
 def test_the_default_stream_is_standard_error(

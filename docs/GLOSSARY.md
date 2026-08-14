@@ -303,3 +303,32 @@ separate `Money`. Zero is permitted; negative is not.
 **Side** — which way round a piece of work goes, `BUY` or `SELL`. Direction lives
 here and never in the sign of a number, which is what lets an amount refuse to be
 negative.
+
+---
+
+## Time
+
+Full descriptions live in [`TIME_POLICY.md`](TIME_POLICY.md); these are the
+one-line definitions.
+
+**Instant** — a moment, held as a timezone-aware UTC `datetime`. The only type
+here that denotes a point on the calendar, and therefore the only one that can be
+written into a record or compared against a venue's timestamp.
+
+**Duration** — a length of time, in whole nanoseconds. A length, never a
+position, and never negative: a negative length is a subtraction performed in the
+wrong order rather than a value.
+
+**Monotonic reading** ⚠ *commonly confused* — one reading of a clock that cannot
+go backwards, counted from an origin the platform declines to define. It is
+**not** a time. It cannot be rendered, cannot produce epoch milliseconds, and
+means nothing except against another reading from the same clock.
+
+**Wall clock** — the operating system's idea of the civil time. It can be
+stepped, by an operator or by a clock correction, which is why it is never used
+to measure how long something took.
+
+**Epoch milliseconds** — the wire form: whole milliseconds since 1970-01-01 UTC,
+which is what Binance publishes. A **projection** of an `Instant` rather than the
+way one is stored, and it **floors** — a truncated timestamp has already
+happened, whereas a rounded-up one may not have.

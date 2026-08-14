@@ -15,6 +15,7 @@ over generated input, which is
 
 import io
 import json
+from datetime import UTC, datetime
 from typing import Final
 
 import pytest
@@ -26,6 +27,7 @@ from globin.adapters.observability import (
     new_correlation_id,
 )
 from globin.application.observability import Logger, emitted_event
+from globin.domain.clock import Instant, duration_from_millis, instant
 from globin.domain.observability import (
     EVENT_NAME_ALPHABET,
     MAX_REDACTION_DEPTH,
@@ -37,9 +39,19 @@ from globin.domain.observability import (
     redact,
 )
 from globin.errors import ValidationError
+from tests.support import FixedClock, ManualClock
 
 SENTINEL: Final[str] = "SENTINEL-VALUE-4f2a"
 """A value distinctive enough that finding it in output is unambiguous."""
+
+_AT_NOON: Final[Instant] = instant(datetime(2026, 8, 14, 12, 0, 0, tzinfo=UTC))
+"""``2026-08-14T12:00:00+00:00``, a moment chosen only for being recognisable.
+
+Spelled as a datetime rather than as a count of milliseconds so that the
+expected strings below can be checked against it by reading. Whole seconds on
+purpose: a reader can then see at a glance that the sink added nothing and
+dropped nothing.
+"""
 
 
 class _RecordingSink:
@@ -359,7 +371,7 @@ def test_a_value_json_cannot_represent_is_rendered_rather_than_refused() -> None
 
 def test_the_sink_writes_one_json_line_per_record() -> None:
     stream = io.StringIO()
-    sink = StreamLogSink(stream)
+    sink = StreamLogSink(stream=stream, clock=FixedClock(_AT_NOON))
 
     sink.emit(log_event(Severity.INFO, "a.b", "corr-1", {"symbol": "BTCUSDT"}))
     sink.emit(log_event(Severity.ERROR, "c.d", "corr-1"))
@@ -370,18 +382,54 @@ def test_the_sink_writes_one_json_line_per_record() -> None:
     assert json.loads(lines[1])["severity"] == "ERROR"
 
 
-def test_the_written_line_carries_a_timezone_aware_timestamp() -> None:
+def test_the_written_timestamp_is_the_one_the_clock_gave() -> None:
+    """Since Phase 009 this is an equality, not a shape check.
+
+    The sink used to call ``datetime.now(UTC)`` itself, so a test could only ask
+    whether *something* had stamped a UTC offset. With the clock injected, the
+    stronger claim is available and is the one worth asserting: the sink writes
+    the moment it was handed, and invents nothing.
+    """
     stream = io.StringIO()
-    StreamLogSink(stream).emit(log_event(Severity.INFO, "a.b", "corr-1"))
+    StreamLogSink(stream=stream, clock=FixedClock(_AT_NOON)).emit(
+        log_event(Severity.INFO, "a.b", "corr-1"),
+    )
 
     timestamp = json.loads(stream.getvalue())["timestamp"]
+    assert timestamp == "2026-08-14T12:00:00+00:00"
     assert timestamp.endswith("+00:00"), f"expected a UTC offset, got {timestamp!r}"
+
+
+def test_the_clock_is_read_once_per_record_and_not_cached() -> None:
+    """A sink that read its clock once would stamp a whole run identically.
+
+    That failure looks like a working timestamp right up until someone tries to
+    order two records by it, which is why it is worth a test of its own. A
+    ``FixedClock`` cannot detect it — only a clock that moves can.
+    """
+    stream = io.StringIO()
+    sink = StreamLogSink(
+        stream=stream,
+        clock=ManualClock(current=_AT_NOON, step=duration_from_millis(1000)),
+    )
+
+    for _ in range(3):
+        sink.emit(log_event(Severity.INFO, "a.b", "corr-1"))
+
+    stamps = [json.loads(line)["timestamp"] for line in stream.getvalue().splitlines()]
+    assert stamps == [
+        "2026-08-14T12:00:00+00:00",
+        "2026-08-14T12:00:01+00:00",
+        "2026-08-14T12:00:02+00:00",
+    ]
 
 
 def test_non_ascii_is_escaped_so_any_stream_encoding_can_take_it() -> None:
     """GLOBIN's host is Windows, where a console stream is often not UTF-8."""
     stream = io.StringIO()
-    StreamLogSink(stream).emit(log_event(Severity.INFO, "a.b", "corr-1", {"note": "ölçüm"}))
+    StreamLogSink(stream=stream, clock=FixedClock(_AT_NOON)).emit(
+        log_event(Severity.INFO, "a.b", "corr-1", {"note": "ölçüm"}),
+    )
 
     written = stream.getvalue()
     assert written.isascii()
@@ -391,7 +439,9 @@ def test_non_ascii_is_escaped_so_any_stream_encoding_can_take_it() -> None:
 def test_a_failing_write_propagates_rather_than_disappearing() -> None:
     """A sink that discards records looks exactly like one that works."""
     with pytest.raises(OSError, match="stream is closed"):
-        StreamLogSink(_BrokenStream()).emit(log_event(Severity.INFO, "a.b", "corr-1"))
+        StreamLogSink(stream=_BrokenStream(), clock=FixedClock(_AT_NOON)).emit(
+            log_event(Severity.INFO, "a.b", "corr-1"),
+        )
 
 
 def test_a_fresh_correlation_id_is_unique_and_printable() -> None:

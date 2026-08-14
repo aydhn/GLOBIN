@@ -99,7 +99,12 @@ configuration and seeds needed to produce it again.
 
 Timezone-naive datetimes must not cross a domain boundary. Internal time is UTC.
 Wall-clock time is an input to be injected, never read ambiently by code that
-needs to be testable. The full clock discipline is **Phase 009**.
+needs to be testable. Phase 009 delivered that discipline: the values are
+[`globin.domain.clock`](../../src/globin/domain/clock.py), the seam is
+[`globin.ports.clock`](../../src/globin/ports/clock.py), and the rules — including
+the millisecond convention — are [`../TIME_POLICY.md`](../TIME_POLICY.md). It is
+enforced rather than trusted: `tests/architecture/test_clock_discipline.py`
+refuses a clock read anywhere outside the adapters layer.
 
 ### 4. Explicit configuration
 

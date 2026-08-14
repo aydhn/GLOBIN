@@ -17,12 +17,14 @@ nothing more — see ``docs/TESTING_STRATEGY.md`` on why the suite tests
 import re
 import subprocess
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, NamedTuple
 
 import pytest
 
 from globin.domain.architecture import LAYER_ORDER, ArchitectureContract, Layer, LayerPolicy
+from globin.domain.clock import Duration, Instant, MonotonicReading, instant_from_epoch_millis
 from globin.domain.configuration import ResolvedConfig, config_layer, default_layer, resolve
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
@@ -296,6 +298,74 @@ def resolved_configuration(origin: str = "test", /, **settings: object) -> Resol
     touched if it forgot them.
     """
     return resolve((default_layer(), config_layer(origin, settings)))
+
+
+@dataclass(frozen=True, slots=True)
+class FixedClock:
+    """A :class:`~globin.ports.clock.Clock` that always answers with one moment.
+
+    Args:
+        fixed: The moment every call returns.
+
+    The default double for anything that needs a timestamp but does not care
+    which. Because it is frozen, a test can also assert on the sink holding it.
+    """
+
+    fixed: Instant
+
+    def now(self) -> Instant:
+        """The moment this clock was built with."""
+        return self.fixed
+
+
+@dataclass(slots=True)
+class ManualClock:
+    """A :class:`~globin.ports.clock.Clock` a test advances by hand.
+
+    Args:
+        current: The moment the next call returns.
+        step: How far the clock moves after each call.
+
+    Mutable on purpose, and the one double in the suite that is. It exists to
+    prove a specific invariant that :class:`FixedClock` cannot:
+    :class:`~globin.adapters.observability.StreamLogSink` reads its clock once
+    *per record* rather than caching a reading when it was built. Against a
+    fixed clock those two implementations are indistinguishable.
+    """
+
+    current: Instant
+    step: Duration
+
+    def now(self) -> Instant:
+        """The current moment, then advance by :attr:`step`."""
+        answer = self.current
+        self.current = instant_from_epoch_millis(
+            answer.epoch_millis + self.step.milliseconds,
+        )
+        return answer
+
+
+@dataclass(slots=True)
+class ManualMonotonicClock:
+    """A :class:`~globin.ports.clock.MonotonicClock` a test advances by hand.
+
+    Args:
+        current: The reading the next call returns.
+        step: How far the reading advances after each call.
+
+    A real monotonic clock cannot be asked for a specific elapsed interval, and
+    on Windows two consecutive readings can be identical. A test that needs a
+    known duration uses this instead of measuring one.
+    """
+
+    current: MonotonicReading
+    step: Duration
+
+    def reading(self) -> MonotonicReading:
+        """The current reading, then advance by :attr:`step`."""
+        answer = self.current
+        self.current = MonotonicReading(answer.nanoseconds + self.step.nanoseconds)
+        return answer
 
 
 def git_committable_files() -> tuple[str, ...]:

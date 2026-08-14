@@ -98,6 +98,8 @@ a future reader can judge whether the reason still holds.
 | [0031](0031-value-types-compare-but-do-not-compute.md) | Value types compare but do not compute; a wrong type returns `NotImplemented` and a wrong unit raises | Accepted |
 | [0032](0032-verification-tooling-may-be-added-outside-phase-scope.md) | Verification tooling may be added outside phase scope, under six conditions | Accepted |
 | [0033](0033-mutation-testing-is-a-repository-native-ast-harness.md) | Mutation testing is a repository-native `ast` harness gated by a committed survivor set | Accepted |
+| [0034](0034-time-is-injected-and-internal-time-is-utc.md) | Time is an injected clock behind two ports, and internal time is UTC | Accepted |
+| [0035](0035-milliseconds-are-a-floored-projection.md) | Milliseconds are a floored projection, not the representation | Accepted |
 
 ## Relationship to other documents
 

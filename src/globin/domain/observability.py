@@ -15,10 +15,11 @@ enforced by convention is not enforced at all.
 
 Two things are deliberately absent.
 
-*There is no timestamp.* Reading the clock is ambient nondeterminism, and Phase
-009 owns the injectable clock abstraction. The adapter stamps the time as it
-serialises, which keeps this module testable without freezing anything and
-leaves Phase 009 a clean seam rather than a competing scheme to remove.
+*There is no timestamp.* Reading the clock is ambient nondeterminism. Phase 009
+settled where it is read: :class:`globin.adapters.observability.StreamLogSink` is
+handed a :class:`globin.ports.clock.Clock` and stamps the record as it serialises.
+This module therefore stays deterministic, and a test needing a particular time
+passes a fixed clock rather than freezing anything.
 
 *There is no severity threshold.* Deciding which events are worth keeping is a
 sink's concern, and Phase 007 settled it there:

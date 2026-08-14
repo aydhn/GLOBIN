@@ -107,8 +107,12 @@ Two of them, and conflating them is a known way to lose money. The host clock
 can drift; the exchange's server time is what the venue validates requests
 against. GLOBIN must treat them as distinct inputs rather than as one fact.
 
-Phase 009 establishes the clock discipline and Phase 038 the synchronisation.
-Nothing is implemented yet.
+Phase 009 established the clock discipline for the first of the two: the host
+clock is reached only through [`globin.ports.clock`](../../src/globin/ports/clock.py),
+and the instants it produces are UTC by construction
+([`TIME_POLICY.md`](../TIME_POLICY.md)). The venue's server time is a second and
+independent source; reconciling the two, and deciding what to do when they
+disagree, is **Phase 040**. Nothing reaches a venue yet.
 
 ### Windows host services
 
