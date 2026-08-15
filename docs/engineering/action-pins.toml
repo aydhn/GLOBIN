@@ -69,3 +69,34 @@ repository = "actions/download-artifact"
 sha = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
 version = "v8.0.1"
 verified = "2026-08-15"
+
+# ---------------------------------------------------------------------------
+# Added in Phase 014 with `.github/workflows/codeql.yml`.
+#
+# THE FIRST NON-`actions/*` REPOSITORY THIS WORKFLOW EXECUTES. The note above
+# says adding one "is a decision that must be recorded here, not a default that
+# arrives with a copied snippet", so here is the record: `github/codeql-action`
+# is GitHub's own, it is the only supported way to run CodeQL in a workflow, and
+# the alternative — default setup — was rejected because it is configured in a
+# control plane no commit can review. See ADR-0044.
+#
+# THE TWO SOURCES DISAGREED, AND THE PROCEDURE IS WHY THAT WAS CAUGHT. This tag
+# is annotated, so the two lookups return different objects:
+#
+#   git ls-remote --tags --refs   ->  faaa5d804fc648d0fdb28822a8e36cf7d0a6132c
+#   gh api .../tags               ->  ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd
+#
+# The first is the TAG OBJECT, not the commit. `CI_SECURITY.md` step 3 warns
+# about exactly this and says to dereference; `refs/tags/v4.37.7^{}` and
+# `GET /git/tags/faaa5d80` both resolve to `ff2f1c62`, which is the commit and
+# is what is pinned. Pinning the tag object would have failed at run time rather
+# than silently, but the disagreement is worth recording: it is the case the
+# nine-step procedure was written for, meeting its first real use.
+#
+# Two subpaths are used — `/init` and `/analyze` — and both carry this one SHA,
+# because they are directories inside a single repository at a single commit.
+[[action]]
+repository = "github/codeql-action"
+sha = "ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd"
+version = "v4.37.7"
+verified = "2026-08-15"

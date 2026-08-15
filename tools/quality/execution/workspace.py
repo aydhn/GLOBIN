@@ -44,7 +44,7 @@ def prepare(reports: Path) -> None:
 
 
 def write_args_file(path: Path, node_ids: Sequence[str]) -> None:
-    """Write one shard's node IDs where pytest can read them.
+    r"""Write one shard's node IDs where pytest can read them.
 
     Args:
         path: The file to write.

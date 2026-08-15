@@ -28,10 +28,16 @@ scheduled for Phase 182, requires 3.12 while the rest of the planned stack
 requires 3.10. Choosing the strictest known constraint now avoids a breaking
 change later. See `docs/research/phase_001_sources.md`.
 
-The development toolchain is `pytest`, `pytest-cov`, `hypothesis`, `ruff`, `mypy`
-and `pre-commit`, declared
-under the `dev` extra in `pyproject.toml`. All six are free and open source, as
+The development toolchain is `pytest`, `pytest-cov`, `hypothesis`, `ruff`, `mypy`,
+`pre-commit` and `pip-audit`, declared
+under the `dev` extra in `pyproject.toml`. All seven are free and open source, as
 required by [ADR-0003](docs/adr/0003-zero-budget-open-source-dependency-policy.md).
+
+`pip-audit` is the newest and the only one adopted through a written review.
+Every candidate dependency now goes through
+[`docs/DEPENDENCY_POLICY.md`](docs/DEPENDENCY_POLICY.md), and the verdict on each
+is recorded in
+[`docs/engineering/dependency-reviews.toml`](docs/engineering/dependency-reviews.toml).
 
 Tests import the package straight from `src/` because `pythonpath = ["src"]` is
 configured, so **no build or install step is required** to work on the project.

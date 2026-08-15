@@ -42,6 +42,11 @@ class TomlArchitectureContractSource:
     """
 
     def __init__(self, path: Path) -> None:
+        """Bind the reader to a document.
+
+        Args:
+            path: The contract file to parse when asked.
+        """
         self._path = path
 
     def load(self) -> ArchitectureContract:
@@ -94,6 +99,12 @@ class AstModuleImportSource:
     """
 
     def __init__(self, package_root: Path, root_package: str) -> None:
+        """Bind the scanner to a package.
+
+        Args:
+            package_root: The directory holding the package's modules.
+            root_package: The dotted name every module is reported under.
+        """
         self._package_root = package_root
         self._root_package = root_package
 

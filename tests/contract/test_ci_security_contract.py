@@ -46,37 +46,45 @@ from typing import Final
 
 import pytest
 
+from tools.quality.supply.workflows import (
+    job_blocks,
+    pinned_versions,
+    remote_references,
+    run_bodies,
+    top_level_block,
+    undocumented_pins,
+    unpinned_references,
+    workflow_paths,
+)
 from tools.quality.workflow.plan import read_configuration
 
 WORKFLOW_RELATIVE_PATH: Final[str] = ".github/workflows/quality.yml"
 MANIFEST_RELATIVE_PATH: Final[str] = "docs/engineering/action-pins.toml"
 
+FIRST_PARTY_PREFIX: Final[str] = "actions/"
+
+MINIMUM_REASON_LENGTH: Final[int] = 40
+"""Long enough that "needed" does not pass for an argument."""
+
+THIRD_PARTY_ALLOWED: Final[dict[str, str]] = {
+    "github/codeql-action": (
+        "GitHub's own, and the only supported way to run CodeQL from a workflow. "
+        "The alternative — default setup — is configured in a control plane no "
+        "commit can review, which ADR-0044 rejected. Recorded here rather than "
+        "waved through, because this is the first non-`actions/*` program this "
+        "repository executes."
+    ),
+}
+"""Third-party actions admitted deliberately, each with the reason.
+
+The rule ``CI_SECURITY.md`` states is "adding a third-party action is a decision
+that must be recorded here, not a default that arrives with a copied snippet".
+This mapping is where that recording happens, and an entry with no reason is a
+syntax error rather than an oversight.
+"""
+
 AGGREGATE_JOB: Final[str] = "aggregate"
 """The job key the required check is declared under, and the one job not in ``required_jobs``."""
-
-#: A `uses:` line, with the trailing version comment when there is one. The
-#: comment is optional in the pattern and mandatory in the contract, so that a
-#: missing one is reported by name rather than silently not matching.
-ACTION_USE_RE: Final[re.Pattern[str]] = re.compile(
-    r"^\s*(?:-\s*)?uses:\s*(?P<ref>\S+)(?:[ \t]+#[ \t]*(?P<comment>\S+))?[ \t]*$",
-    re.MULTILINE,
-)
-
-#: A reference pinned to a full commit: owner, repository, optional subdirectory,
-#: then exactly forty lowercase hex characters. The anchors are what make the
-#: length exact — thirty-nine fails to reach the end, forty-one leaves a
-#: character behind, and an uppercase or non-hex digit matches nothing.
-SHA_PINNED_RE: Final[re.Pattern[str]] = re.compile(
-    r"^[\w.\-]+/[\w.\-]+(?:/[\w.\-]+)*@[0-9a-f]{40}$"
-)
-
-#: A version comment worth having: `v` and three dotted numbers. A bare major
-#: such as `v5` is refused because it is precisely the ambiguity the pin removes.
-VERSION_COMMENT_RE: Final[re.Pattern[str]] = re.compile(r"^v\d+\.\d+\.\d+$")
-
-#: A job key: two spaces, a name, a colon, nothing else. Only ever applied to the
-#: region after `jobs:`, because the trigger block has keys at that indentation.
-JOB_KEY_RE: Final[re.Pattern[str]] = re.compile(r"^  ([a-z][\w-]*):$", re.MULTILINE)
 
 #: A job's display name, which is what becomes a status check. Four spaces, so it
 #: cannot match a step's `- name:`, which is indented further and dashed.
@@ -88,17 +96,6 @@ JOB_TIMEOUT_RE: Final[re.Pattern[str]] = re.compile(r"^    timeout-minutes: (\d+
 
 #: A trigger name inside the `on:` block.
 TRIGGER_KEY_RE: Final[re.Pattern[str]] = re.compile(r"^  ([a-z_]+):", re.MULTILINE)
-
-#: The first top-level key, used to find where a top-level block ends. Comments
-#: begin with `#` and blank lines are empty, so neither can end a block early.
-TOP_LEVEL_KEY_RE: Final[re.Pattern[str]] = re.compile(r"^[a-z]", re.MULTILINE)
-
-#: The start of a `run:` step, capturing its indentation and whatever follows.
-RUN_START_RE: Final[re.Pattern[str]] = re.compile(r"^(?P<indent> *)(?:- )?run:(?P<rest>.*)$")
-
-#: The block scalar indicators. A `run:` introduced by one of these carries its
-#: body on the following lines rather than on its own.
-BLOCK_SCALARS: Final[frozenset[str]] = frozenset({"|", "|-", "|+", ">", ">-", ">+"})
 
 PRIVILEGED_TRIGGERS: Final[tuple[str, ...]] = ("pull_request_target", "workflow_run")
 """Events that hand a workflow the repository's own trust while running someone else's code.
@@ -170,150 +167,6 @@ FAILURE_MASKS: Final[tuple[str, ...]] = (
 # Each returns what is wrong rather than a boolean, so a failing assertion names
 # the offender instead of announcing that something, somewhere, is off.
 # ---------------------------------------------------------------------------
-
-
-def top_level_block(text: str, key: str) -> str:
-    """Everything under a top-level key, up to the next one.
-
-    Args:
-        text: The workflow.
-        key: The top-level key, without its colon.
-
-    Returns:
-        The block's body, or the empty string if the key is absent.
-    """
-    parts = text.split(f"\n{key}:\n", maxsplit=1)
-    if len(parts) == 1:
-        return ""
-    rest = parts[1]
-    end = TOP_LEVEL_KEY_RE.search(rest)
-    return rest[: end.start()] if end else rest
-
-
-def job_blocks(text: str) -> dict[str, str]:
-    """Split the jobs region into one block per job.
-
-    Args:
-        text: The workflow.
-
-    Returns:
-        Each job key mapped to its body, in declaration order.
-    """
-    region = text.split("\njobs:\n", maxsplit=1)[-1]
-    keys = list(JOB_KEY_RE.finditer(region))
-    blocks: dict[str, str] = {}
-    for index, key in enumerate(keys):
-        end = keys[index + 1].start() if index + 1 < len(keys) else len(region)
-        blocks[key.group(1)] = region[key.end() : end]
-    return blocks
-
-
-def run_bodies(text: str) -> tuple[str, ...]:
-    """Every shell script the workflow runs.
-
-    Args:
-        text: The workflow.
-
-    Returns:
-        One entry per ``run:`` step: the command itself for an inline step, and
-        the whole indented body for a block scalar.
-
-    Written by hand rather than by regex because a block scalar's extent is
-    decided by indentation, which is the one thing a regular expression cannot
-    follow. It reads only far enough to know where each script ends.
-    """
-    lines = text.splitlines()
-    bodies: list[str] = []
-    index = 0
-    while index < len(lines):
-        start = RUN_START_RE.match(lines[index])
-        index += 1
-        if start is None:
-            continue
-        rest = start.group("rest").strip()
-        if rest not in BLOCK_SCALARS:
-            bodies.append(rest)
-            continue
-        indent = len(start.group("indent"))
-        body: list[str] = []
-        while index < len(lines):
-            line = lines[index]
-            if line.strip() and len(line) - len(line.lstrip()) <= indent:
-                break
-            body.append(line)
-            index += 1
-        bodies.append("\n".join(body))
-    return tuple(bodies)
-
-
-def remote_references(text: str) -> tuple[tuple[str, str | None], ...]:
-    """Every action this workflow fetches from elsewhere, with its version comment.
-
-    Args:
-        text: The workflow.
-
-    Returns:
-        Each remote ``uses:`` reference paired with its trailing comment, or
-        ``None`` where there is no comment.
-
-    A reference beginning with ``./`` names something inside this repository,
-    which is already pinned by the commit being tested and has no upstream to be
-    pinned to. Those are excluded here rather than exempted later.
-    """
-    return tuple(
-        (match.group("ref"), match.group("comment"))
-        for match in ACTION_USE_RE.finditer(text)
-        if not match.group("ref").startswith("./")
-    )
-
-
-def unpinned_references(text: str) -> tuple[str, ...]:
-    """Remote references not frozen to a full commit.
-
-    Args:
-        text: The workflow.
-
-    Returns:
-        Every offending reference, including duplicates, so a count means something.
-    """
-    return tuple(ref for ref, _ in remote_references(text) if not SHA_PINNED_RE.match(ref))
-
-
-def undocumented_pins(text: str) -> tuple[str, ...]:
-    """Pins with no readable version beside them, or an unreadable one.
-
-    Args:
-        text: The workflow.
-
-    Returns:
-        Every reference whose comment is missing or is not a three-part version.
-    """
-    return tuple(
-        ref
-        for ref, comment in remote_references(text)
-        if comment is None or not VERSION_COMMENT_RE.match(comment)
-    )
-
-
-def pinned_versions(text: str) -> dict[str, tuple[str, str]]:
-    """What the workflow claims each pinned commit is.
-
-    Args:
-        text: The workflow.
-
-    Returns:
-        Each SHA mapped to the repository it was fetched from and the version the
-        comment beside it claims. Repeated pins collapse, which is intended: the
-        same commit named twice with two different versions is caught by the
-        disagreement rather than by the repetition.
-    """
-    claims: dict[str, tuple[str, str]] = {}
-    for ref, comment in remote_references(text):
-        if comment is None or "@" not in ref:
-            continue
-        repository, _, sha = ref.partition("@")
-        claims[sha] = (repository, comment)
-    return claims
 
 
 def job_timeouts(text: str) -> dict[str, int]:
@@ -411,8 +264,29 @@ def duplicate_display_names(text: str) -> tuple[str, ...]:
 
 @pytest.fixture(scope="module")
 def workflow(repo_root: Path) -> str:
-    """The CI workflow, read once."""
+    """The quality workflow, read once.
+
+    Still singular, because the checks that use it are about *this* workflow: its
+    job keys, its budgets, its triggers and its concurrency rule. The checks
+    about what any workflow may fetch use :func:`every_workflow` instead.
+    """
     return (repo_root / WORKFLOW_RELATIVE_PATH).read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def every_workflow(repo_root: Path) -> str:
+    """Every workflow in the repository, concatenated.
+
+    Phase 014 added a second one, and a pin checker that knew the name of the
+    first would have silently stopped covering the repository the moment it did.
+    Discovered from the directory rather than listed here, so a third costs
+    nobody an edit.
+
+    Concatenation is safe for these checks because every one of them is a scan
+    for offending lines rather than a structural read: a `uses:` reference means
+    the same thing whichever file it came from.
+    """
+    return "\n".join(path.read_text(encoding="utf-8") for path in workflow_paths(repo_root))
 
 
 @pytest.fixture(scope="module")
@@ -432,27 +306,31 @@ def pyproject(repo_root: Path) -> dict[str, object]:
 # ---------------------------------------------------------------------------
 
 
-def test_every_remote_action_is_pinned_to_a_full_commit(workflow: str) -> None:
+def test_every_remote_action_is_pinned_to_a_full_commit(every_workflow: str) -> None:
     """A tag is mutable. Pinning to one lets its owner change what runs here."""
-    assert remote_references(workflow), "no remote `uses:` found; this check would be vacuous"
-    assert not unpinned_references(workflow)
+    assert remote_references(every_workflow), "no remote `uses:` found; this check would be vacuous"
+    assert not unpinned_references(every_workflow)
 
 
-def test_every_pin_carries_a_readable_version(workflow: str) -> None:
+def test_every_pin_carries_a_readable_version(every_workflow: str) -> None:
     """Forty hex characters tell a reader nothing about what they are approving."""
-    assert not undocumented_pins(workflow)
+    assert not undocumented_pins(every_workflow)
 
 
-def test_every_pin_is_listed_in_the_manifest(workflow: str, manifest: dict[str, object]) -> None:
+def test_every_pin_is_listed_in_the_manifest(
+    every_workflow: str, manifest: dict[str, object]
+) -> None:
     """A pin nobody verified is a pin nobody can vouch for."""
     entries = manifest["action"]
     assert isinstance(entries, list)
     recorded = {str(entry["sha"]) for entry in entries}
-    unlisted = sorted(set(pinned_versions(workflow)) - recorded)
+    unlisted = sorted(set(pinned_versions(every_workflow)) - recorded)
     assert not unlisted, f"pinned in the workflow but absent from the manifest: {unlisted}"
 
 
-def test_every_manifest_entry_is_still_used(workflow: str, manifest: dict[str, object]) -> None:
+def test_every_manifest_entry_is_still_used(
+    every_workflow: str, manifest: dict[str, object]
+) -> None:
     """The other direction, and the one that rots quietly.
 
     An entry for an action the workflow dropped is a verification record for
@@ -461,11 +339,13 @@ def test_every_manifest_entry_is_still_used(workflow: str, manifest: dict[str, o
     entries = manifest["action"]
     assert isinstance(entries, list)
     recorded = {str(entry["sha"]) for entry in entries}
-    unused = sorted(recorded - set(pinned_versions(workflow)))
+    unused = sorted(recorded - set(pinned_versions(every_workflow)))
     assert not unused, f"listed in the manifest but not used by the workflow: {unused}"
 
 
-def test_the_manifest_and_the_comments_agree(workflow: str, manifest: dict[str, object]) -> None:
+def test_the_manifest_and_the_comments_agree(
+    every_workflow: str, manifest: dict[str, object]
+) -> None:
     """The check that would have caught three phases of drift.
 
     Two comments in this repository named a version their commit did not have.
@@ -477,14 +357,14 @@ def test_the_manifest_and_the_comments_agree(workflow: str, manifest: dict[str, 
     verified = {str(entry["sha"]): entry for entry in entries}
     disagreements = [
         f"{repository}@{sha[:7]}: workflow says {claimed}, manifest says {verified[sha]['version']}"
-        for sha, (repository, claimed) in pinned_versions(workflow).items()
+        for sha, (repository, claimed) in pinned_versions(every_workflow).items()
         if sha in verified and verified[sha]["version"] != claimed
     ]
     assert not disagreements, f"the pin comments disagree with the manifest: {disagreements}"
 
 
 def test_the_manifest_records_a_repository_that_matches_the_workflow(
-    workflow: str, manifest: dict[str, object]
+    every_workflow: str, manifest: dict[str, object]
 ) -> None:
     """A SHA is only meaningful against the repository it came from."""
     entries = manifest["action"]
@@ -492,24 +372,53 @@ def test_the_manifest_records_a_repository_that_matches_the_workflow(
     verified = {str(entry["sha"]): str(entry["repository"]) for entry in entries}
     wrong = [
         f"{sha[:7]}: workflow fetches {repository}, manifest records {verified[sha]}"
-        for sha, (repository, _) in pinned_versions(workflow).items()
+        for sha, (repository, _) in pinned_versions(every_workflow).items()
         if sha in verified and verified[sha] != repository
     ]
     assert not wrong, f"the manifest names the wrong upstream: {wrong}"
 
 
-def test_every_manifest_entry_is_a_first_party_action(manifest: dict[str, object]) -> None:
-    """A fork or a mirror is a different supply chain wearing a familiar name."""
+def test_every_manifest_entry_is_a_first_party_or_recorded_action(
+    manifest: dict[str, object],
+) -> None:
+    """A fork or a mirror is a different supply chain wearing a familiar name.
+
+    ``actions/*`` is admitted by construction. Anything else must appear in
+    :data:`THIRD_PARTY_ALLOWED` with a stated reason, which is what turns
+    ``CI_SECURITY.md``'s "must be recorded here" from prose into a gate.
+    """
     entries = manifest["action"]
     assert isinstance(entries, list)
     foreign = sorted(
         str(entry["repository"])
         for entry in entries
-        if not str(entry["repository"]).startswith("actions/")
+        if not str(entry["repository"]).startswith(FIRST_PARTY_PREFIX)
+        and str(entry["repository"]) not in THIRD_PARTY_ALLOWED
     )
     assert not foreign, (
         f"third-party actions are a decision, not a default; found {foreign}. "
-        "Adding one deliberately means recording why here."
+        "Adding one deliberately means recording it in THIRD_PARTY_ALLOWED with why."
+    )
+
+
+def test_every_recorded_third_party_action_is_still_used(manifest: dict[str, object]) -> None:
+    """The other direction: an admission for something nobody runs.
+
+    A standing exception for an action the repository dropped is a permission
+    nobody reviewed, waiting for the next person who wants to add that name back.
+    """
+    entries = manifest["action"]
+    assert isinstance(entries, list)
+    recorded = {str(entry["repository"]) for entry in entries}
+    stale = sorted(set(THIRD_PARTY_ALLOWED) - recorded)
+    assert not stale, f"admitted in THIRD_PARTY_ALLOWED but no longer pinned anywhere: {stale}"
+
+
+@pytest.mark.parametrize("repository", sorted(THIRD_PARTY_ALLOWED))
+def test_every_third_party_admission_states_a_reason(repository: str) -> None:
+    """An exception with no argument is an exception nobody can review."""
+    assert len(THIRD_PARTY_ALLOWED[repository]) > MINIMUM_REASON_LENGTH, (
+        f"{repository} is admitted without a reason worth reading"
     )
 
 

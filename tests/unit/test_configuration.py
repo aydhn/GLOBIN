@@ -201,8 +201,10 @@ def test_a_severity_spelled_in_the_wrong_case_is_refused() -> None:
 
 
 def test_a_number_is_not_a_severity() -> None:
-    """``25`` is between two levels, and a threshold that means "between" is worse
-    than one that refuses."""
+    """``25`` is between two levels, and a threshold that means "between" is worse.
+
+    than one that refuses.
+    """
     with pytest.raises(ConfigurationError, match="expected one of"):
         as_config(_resolved(**{MIN_SEVERITY: 25}))
 
@@ -275,8 +277,10 @@ def test_an_array_of_tables_survives_as_a_value_to_be_refused_later() -> None:
     ],
 )
 def test_a_quoted_key_containing_the_separator_is_refused(document: dict[str, object]) -> None:
-    """TOML's ``"a.b" = 1`` is one key; flattened it would be indistinguishable
-    from a table, so the two spellings would collide."""
+    """TOML's ``"a.b" = 1`` is one key; flattened it would be indistinguishable.
+
+    from a table, so the two spellings would collide.
+    """
     with pytest.raises(ConfigurationError, match="separates"):
         flatten(document, "test")
 
@@ -321,8 +325,10 @@ def test_an_empty_document_overrides_nothing(tmp_path: Path) -> None:
 
 
 def test_a_document_that_is_not_valid_toml_fails_as_a_parse_error(tmp_path: Path) -> None:
-    """Left unwrapped: ``tomllib`` reports the line and column, which is worth
-    more than a reworded message."""
+    """Left unwrapped: ``tomllib`` reports the line and column, which is worth.
+
+    more than a reworded message.
+    """
     path = _document(tmp_path, "this is not = = toml\n")
     with pytest.raises(tomllib.TOMLDecodeError):
         TomlConfigurationSource(path).layer()

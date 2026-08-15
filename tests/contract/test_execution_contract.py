@@ -17,7 +17,7 @@ from tools.quality.commands import COMMANDS, MUTATING_COMMANDS, command_names, f
 EXECUTION_COMMANDS: Final[tuple[str, ...]] = ("shards",)
 
 TOOLCHAIN: Final[frozenset[str]] = frozenset(
-    {"pytest", "pytest-cov", "ruff", "mypy", "pre-commit", "hypothesis"}
+    {"pytest", "pytest-cov", "ruff", "mypy", "pre-commit", "hypothesis", "pip-audit"}
 )
 """The six names ADR-0032 condition 3 pins. Restated here on purpose.
 

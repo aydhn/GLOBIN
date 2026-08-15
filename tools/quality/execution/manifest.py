@@ -139,7 +139,7 @@ def canonical_order(node_ids: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def digest(node_ids: tuple[str, ...], *, selection: str) -> str:
-    """The stable identity of a set of tests.
+    r"""The stable identity of a set of tests.
 
     Args:
         node_ids: The IDs. Order does not matter; they are sorted first.

@@ -1,4 +1,4 @@
-"""Reading a linter's and a type checker's output into one comparable shape.
+r"""Reading a linter's and a type checker's output into one comparable shape.
 
 Pure. Parsing takes text and returns values; building takes values and returns a
 document; rendering takes a document and returns bytes. Nothing here starts a
@@ -90,7 +90,7 @@ class Diagnostic:
 
 
 def normalise_path(text: str, *, repo_root: str) -> str:
-    """Reduce a path a tool reported to one that names only the repository.
+    r"""Reduce a path a tool reported to one that names only the repository.
 
     Args:
         text: The path as the tool wrote it, absolute or relative, with either

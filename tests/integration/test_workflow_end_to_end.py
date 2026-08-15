@@ -199,7 +199,7 @@ def test_an_evidence_gate_that_did_not_say_is_never_a_pass(
 def test_absent_evidence_is_never_a_pass(
     monkeypatch: pytest.MonkeyPatch, reports: Path, tmp_path: Path
 ) -> None:
-    """ "Evidence not found but it probably passed" is the reading this forbids."""
+    """Evidence that was not found is never read as evidence that probably passed."""
     _context(monkeypatch)
     assert run_aggregate(reports=reports, evidence=tmp_path / "nothing") == EXIT_UNMEASURED
 

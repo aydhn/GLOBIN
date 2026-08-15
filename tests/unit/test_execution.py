@@ -57,7 +57,7 @@ def test_a_deselected_summary_is_understood() -> None:
 
 
 def test_a_parametrised_id_carrying_an_escape_is_kept() -> None:
-    """pytest escapes special characters inside a parametrised ID.
+    r"""Pytest escapes special characters inside a parametrised ID.
 
     A fixture string containing a newline becomes a literal ``\\n`` and ``ç``
     becomes ``\\xe7``. Four real IDs in this repository are spelled that way, and

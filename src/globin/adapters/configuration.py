@@ -82,6 +82,11 @@ class TomlConfigurationSource:
     """
 
     def __init__(self, path: Path) -> None:
+        """Bind the reader to a document.
+
+        Args:
+            path: The configuration file to read when asked.
+        """
         self._path = path
 
     def layer(self) -> ConfigLayer:

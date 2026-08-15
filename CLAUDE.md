@@ -38,6 +38,7 @@ phase before assuming any capability exists.
 | Why is the architecture like this? | [`docs/ARCHITECTURE_PRINCIPLES.md`](docs/ARCHITECTURE_PRINCIPLES.md) |
 | Why was X decided? | [`docs/adr/README.md`](docs/adr/README.md) |
 | What sources may I trust? | [`docs/SOURCE_POLICY.md`](docs/SOURCE_POLICY.md) |
+| May I add this dependency? | [`docs/DEPENDENCY_POLICY.md`](docs/DEPENDENCY_POLICY.md), [`docs/engineering/dependency-reviews.toml`](docs/engineering/dependency-reviews.toml) |
 | How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 | Which error do I raise? | [`src/globin/errors.py`](src/globin/errors.py), [ADR-0022](docs/adr/0022-error-taxonomy-rooted-in-one-type.md) |
 | How do I express a price or a quantity? | [`docs/VALUE_TYPES_POLICY.md`](docs/VALUE_TYPES_POLICY.md) |
@@ -71,6 +72,7 @@ GLOBIN/
 │   ├── property/        Invariants over generated input (Hypothesis)
 │   └── integration/     Several components together, still local
 ├── tools/quality/       The canonical quality entrypoint; CI runs this too
+│   └── supply/          Dependency inventory, CycloneDX SBOM, audit, secrets
 ├── docs/
 │   ├── architecture/    Layer contract, C4 system context and container views
 │   ├── engineering/     How work is done: contracts and standards
@@ -143,6 +145,24 @@ it aggregates whatever `evidence` last wrote, using the same evaluator CI uses:
 ```bash
 python -m tools.quality aggregate
 ```
+
+One more sits outside `full`, and for a reason none of the others has: it
+**reaches the network**. `pip-audit` resolves a requirements file against an
+index and queries an advisory service, and the capability probe asks GitHub
+about repository settings. `full` runs before every commit and must work on an
+aeroplane, so this is separate:
+
+```bash
+python -m tools.quality supply
+```
+
+It reads the three registers that declare a dependency and reports where they
+disagree, renders them as a deterministic CycloneDX 1.7 SBOM, audits the
+declared toolchain, scans tracked content for credentials, and records what the
+platform will and will not do. `--offline` skips both network calls and records
+them as unmeasured — which is never a pass, so an offline run cannot exit `0`.
+Adding a dependency is a written decision:
+[`docs/DEPENDENCY_POLICY.md`](docs/DEPENDENCY_POLICY.md).
 
 Its job in CI is the check named `Quality gate`, which is the one to mark as
 required on `master`. Branch protection is a repository setting and no file here

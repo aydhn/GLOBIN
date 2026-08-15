@@ -520,7 +520,7 @@ def test_two_quantities_of_one_asset_subtract() -> None:
 
 
 def test_subtraction_below_zero_is_refused_by_the_type_itself() -> None:
-    """ "You cannot spend more than you hold" as a fact about the type.
+    """Not being able to spend more than you hold, as a fact about the type.
 
     The refusal comes from `__post_init__`, not from a check inside `__sub__`,
     which is the point: a quantity has no direction, so there is no negative
@@ -618,7 +618,7 @@ def test_a_price_aligns_onto_a_tick_in_the_direction_asked_for() -> None:
 
 
 def test_a_quantity_aligns_onto_a_step_and_may_reach_zero() -> None:
-    """ "Your order rounds down to nothing" is an answer, not an error.
+    """An order that rounds down to nothing is an answer, not an error.
 
     A zero quantity is admissible where a zero price is not, so this is the one
     place the two alignment helpers genuinely differ.

@@ -146,8 +146,10 @@ def test_the_exit_code_is_reported_verbatim(tmp_path: Path, exit_code: int) -> N
 
 
 def test_the_child_runs_inside_the_sandbox(tmp_path: Path) -> None:
-    """The working directory is what makes pytest's rootdir the sandbox, and
-    therefore its `src` the mutated one rather than the real package."""
+    """The working directory is what makes pytest's rootdir the sandbox, and.
+
+    therefore its `src` the mutated one rather than the real package.
+    """
     runner = _FixedRunner()
 
     sandbox.run_subset(ARGV, sandbox=tmp_path, env={"PATH": "p"}, timeout=2.0, run_process=runner)

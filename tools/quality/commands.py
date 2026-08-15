@@ -194,6 +194,25 @@ _SHARDS = Step(
 # whose absence could turn a gate into an unmeasured one.
 _AGGREGATE = Step("aggregate", (), ("-m", "tools.quality.workflow"))
 
+# The supply-chain gate. Reads the three manifests that declare a dependency,
+# renders them as a deterministic CycloneDX 1.7 SBOM, audits the declared
+# toolchain against published advisories, scans tracked content for credentials,
+# and records what the hosting platform will and will not do.
+#
+# In neither `fast` nor `full`, and for a reason the other standalone gates do
+# not have: this one REACHES THE NETWORK. `pip-audit` resolves a requirements
+# file against an index and queries an advisory service, and the capability probe
+# asks GitHub about repository settings. `full` runs before every commit and must
+# work on an aeroplane; a gate that needed a network there would be a gate people
+# learn to skip.
+#
+# `pip_audit` is the declared module rather than `pip-audit` the executable,
+# because the step launches `python -m pip_audit` — what matters is whether THIS
+# interpreter can find it. Without the declaration a machine lacking it would
+# report an audit that found nothing rather than an audit that did not happen,
+# which is the exact conflation `tools/quality/supply/audit.py` exists to prevent.
+_SUPPLY = Step("supply", ("pip_audit",), ("-m", "tools.quality.supply"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -242,6 +261,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "aggregate",
         "This run's job results and its published evidence, reduced to one verdict.",
         (_AGGREGATE,),
+    ),
+    Command(
+        "supply",
+        "Dependency inventory, CycloneDX SBOM, vulnerability audit and secret hygiene.",
+        (_SUPPLY,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

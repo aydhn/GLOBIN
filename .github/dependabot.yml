@@ -1,0 +1,105 @@
+# ---------------------------------------------------------------------------
+# Dependabot, configured to OPEN pull requests and to decide nothing.
+#
+# ADR-0043 refused a bot at Phase 013 on the grounds that "deciding whether to
+# adopt a version is Phase 014's review process; a bot that opens the pull
+# request does not perform the review, and adding one now would manufacture a
+# stream of decisions nobody has criteria for". Phase 014 built the criteria —
+# `docs/DEPENDENCY_POLICY.md` — so the bot is now useful rather than noisy.
+#
+# NOTHING HERE MERGES ANYTHING. There is no auto-merge, no `automerged_updates`,
+# and no workflow that approves a Dependabot pull request. Every update is read
+# by a human against the policy before it lands, which is the entire point of a
+# review process. A bot that merged its own pull requests would be the review
+# process deleting itself.
+#
+# WHAT IS AND IS NOT CONTROLLED BY THIS FILE. Version updates are: this file
+# turns them on and shapes them. Security updates are NOT — those are a
+# repository setting (`automated-security-fixes`), enabled through the API, and
+# no file in this tree can change it. `docs/DEPENDENCY_POLICY.md` records which
+# is which, because the difference is invisible from here and matters when
+# somebody wonders why a security bump arrived without a schedule.
+# ---------------------------------------------------------------------------
+
+version: 2
+
+updates:
+  # --- Python -------------------------------------------------------------
+  # `pip` is the identifier for every Python manager Dependabot supports, and
+  # the one GitHub's own dependency graph already reports for this repository:
+  # the "Graph Update: pip in /." run on c5cf451 predates this file. So the
+  # ecosystem is observed rather than assumed.
+  #
+  # What it can see today is the `dev` extra in `pyproject.toml`, which carries
+  # LOWER BOUNDS rather than pins. Dependabot therefore has little to raise here
+  # until Phase 020 introduces a lockfile — that phase owns dependency
+  # resolution and locking, and this file must not pre-empt it.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    # A cap, not a target. An unbounded bot on a repository with a six-package
+    # toolchain produces more review than the toolchain is worth.
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+
+  # --- GitHub Actions -----------------------------------------------------
+  # The one that matters most here, because these are the only remote programs
+  # this repository executes.
+  #
+  # Dependabot updates a SHA-pinned `uses:` by replacing the commit AND the
+  # trailing version comment, which is exactly the shape
+  # `docs/engineering/CI_SECURITY.md` requires and
+  # `tools/quality/supply/workflows.py` enforces. A Dependabot pull request is
+  # therefore compliant the moment it opens rather than in violation of the pin
+  # policy — that compatibility is deliberate and is why the comment format is
+  # `vX.Y.Z` and not something prettier.
+  #
+  # The pull request still needs the nine-step procedure in CI_SECURITY.md
+  # applied by a human: Dependabot resolves the tag, but it does not record the
+  # resolution in `docs/engineering/action-pins.toml`, and the contract test
+  # compares the two in both directions. An unaccompanied Dependabot merge fails
+  # the suite, which is the intended outcome.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci"
+
+  # --- pre-commit ---------------------------------------------------------
+  # Version updates only. GitHub documents no security updates for this
+  # ecosystem, which is recorded here so that nobody later reads the absence as
+  # a misconfiguration.
+  #
+  # `.pre-commit-config.yaml` pins `ruff-pre-commit` to the same version the CI
+  # jobs install, and `tools/quality/supply/inventory.py` fails the gate when the
+  # two disagree. So a bump here that is not matched in the workflow is caught
+  # rather than merged — the hook and the gate cannot silently start disagreeing
+  # about whether a file is clean.
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "tooling"
+    commit-message:
+      prefix: "tooling"

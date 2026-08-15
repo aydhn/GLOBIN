@@ -33,10 +33,17 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-012 are complete. Phase 013 is next and has not started.**
-> Nothing beyond Phase 012 is implemented. GLOBIN does not trade, does not
+> **Phases 001-014 are complete. Phase 015 is next and has not started.**
+> Nothing beyond Phase 014 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
+>
+> **The repository is public as of Phase 014.** That was the decision that made
+> CodeQL, secret scanning, push protection, dependency review and rulesets
+> available at all — every one of them refused with a plan ceiling while it was
+> private. [ADR-0046](docs/adr/0046-the-repository-is-public-and-that-changes-the-threat-model.md)
+> records what that changes about the threat model, which is more than it changes
+> about the settings.
 
 > **Scope amendments.** Three have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
@@ -90,8 +97,8 @@ written down.
 | 010 | Decimal and Numeric Precision Policy | Decide where decimal arithmetic is mandatory versus floating point, and define rounding and tick-size behaviour. | Complete |
 | 011 | Identifier and Naming Registry | Define canonical identifiers for symbols, products, environments, runs, models and orders across the system. | Complete |
 | 012 | Serialization and Persistence Contracts | Establish schema evolution rules and forward and backward compatibility guarantees for persisted structures. | Complete |
-| 013 | Coding Standards and Documentation Conventions | Fix naming, structure, docstring and typing conventions, and tighten the existing lint and type configuration to match them, including the docstring rules Phase 004 deliberately left unselected. | Planned |
-| 014 | Dependency Review and Licence Audit Process | Define how a candidate dependency is reviewed for cost, licence, maintenance health and supply-chain risk. | Planned |
+| 013 | Coding Standards and Documentation Conventions | Fix naming, structure, docstring and typing conventions, and tighten the existing lint and type configuration to match them, including the docstring rules Phase 004 deliberately left unselected. | Complete |
+| 014 | Dependency Review and Licence Audit Process | Define how a candidate dependency is reviewed for cost, licence, maintenance health and supply-chain risk. | Complete |
 | 015 | Security Baseline and Secret Handling Rules | Specify secret storage, redaction, least-privilege API key usage and the prohibition on committing credentials. | Planned |
 | 016 | Foundation Consolidation and Phase Gate Review | Reconcile the foundation band, resolve inconsistencies and certify readiness for environment work. | Planned |
 

@@ -39,6 +39,7 @@ noise, and noise is how a team learns to ignore output.
 | `TRY`, `EM` | Exception antipatterns, and messages that read properly in a traceback |
 | `DTZ` | Naive datetimes. A trading system that loses a timezone loses money |
 | `A`, `SLF`, `INP` | Shadowed builtins, private access across objects, implicit namespace packages |
+| `D` | Docstring conventions, under the **Google** style. Added in Phase 014, closing what Phase 004 parked |
 
 ### What is deliberately not enabled
 
@@ -50,7 +51,6 @@ them inconvenient.
 | `ISC001` | Conflicts with the formatter; the two would fight on every run |
 | `ANN` | Duplicates what mypy already enforces, more precisely |
 | `PLR` magic-value rules | Noise against a codebase built almost entirely from named constants |
-| `D` (pydocstyle) | Docstring conventions belong with the rest of Phase 013 |
 
 ### Checking, fixing and formatting are separate commands
 
@@ -134,6 +134,7 @@ acceptable is an exception nobody can evaluate later.
 | Exception | Where | Reason |
 |---|---|---|
 | `S101` (`assert`) | `tests/**` | `assert` is the assertion mechanism; pytest is never run under `-O` |
+| `D103` (undocumented public function) | `tests/**` | A category error outside a library: a test function is public only in that nothing marks it private, nothing imports it, and its name is already a sentence. The *requirement* is dropped, not the practice — every other `D` rule still applies to the docstrings that exist |
 | `S607` | `tests/support.py` | `git` is resolved from `PATH` on purpose; the argument list is a fixed literal |
 | `S603` | `tools/quality/runner.py` | Arguments come from a frozen table of literals; `shell` is never enabled |
 
@@ -151,6 +152,27 @@ the outcome this procedure is for; one that is reworded to survive a refactor
 usually is not.
 
 ---
+
+### Docstrings, and why the convention is declared rather than inferred
+
+`convention = "google"` in `[tool.ruff.lint.pydocstyle]`. This repository has
+written `Args:`, `Returns:` and `Raises:` since Phase 001; naming the style makes
+that a rule instead of a habit.
+
+Declaring it does more than pick a format. pydocstyle ships two pairs of rules in
+mutual conflict — `D203` against `D211`, and `D212` against `D213` — and running
+`D` without a convention leaves ruff warning about both on every invocation. The
+convention resolves them by argument rather than by an arbitrary entry in an
+ignore list, and it switches off the numpydoc section rules that would otherwise
+fight the Google sections this repository already uses.
+
+**One rule was reworded around rather than suppressed.** `D210` forbids
+whitespace hugging the docstring text, and the formatter *inserts* a space when a
+docstring opens with a quotation mark, to avoid producing four quotes in a row.
+Five docstrings opened with a quoted phrase and hit that conflict. They were
+reworded to lead with a word instead — the sentence is unchanged and the conflict
+is gone. Adding `D210` to the ignore list would have been quicker and would have
+switched off a rule that is right everywhere else.
 
 ## When a rule set change is a decision
 

@@ -1,0 +1,174 @@
+# ---------------------------------------------------------------------------
+# The verdict on every dependency this repository declares.
+#
+# NOT A SNAPSHOT, and nothing writes it. Like `action-pins.toml`, this file is
+# written by a human who checked each fact, and a contract test compares it
+# against the generated inventory in both directions. A dependency the inventory
+# finds and this file does not review fails the suite; so does a review here for
+# something no longer declared.
+#
+# WHY IT EXISTS. ADR-0003 says "every proposed dependency needs a licence and
+# cost review. Phase 014 defines that process." `docs/DEPENDENCY_POLICY.md` is
+# the process; this is its output. Before Phase 014 the six development tools
+# were adopted on judgement recorded in commit messages and ADRs, which is not
+# nothing but is not reviewable either — you cannot diff a decision that was
+# never written down. Everything declared is recorded here, including the six
+# that predate the process, because a register with holes in it is a register
+# nobody can rely on.
+#
+# WHAT IS REVIEWED HERE. PyPI distributions. GitHub Actions are a different
+# ecosystem with a different question — not "may we depend on this" but "is this
+# exact commit the one we verified" — and `action-pins.toml` already answers it.
+# Two registers, one ecosystem each, no overlap and nothing to drift.
+#
+# `licence` IS AN ENGINEERING RECORD, NOT A LEGAL OPINION. It records what the
+# project publishes about itself, and `licence_source` says where that was read.
+# `docs/DEPENDENCY_POLICY.md` states the allow, deny and unknown policy; nothing
+# here claims a legal conclusion.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# Adopted before Phase 014, reviewed retrospectively on 2026-08-15.
+#
+# `reviewed` is the date a human read the licence and the maintenance signals,
+# not the date the dependency was adopted; `adopted` records that separately
+# where the two differ. Recording the retrospective date honestly is the point —
+# claiming these were reviewed in Phase 004 would be inventing a process that
+# did not exist.
+# ---------------------------------------------------------------------------
+
+[[review]]
+name = "hatchling"
+ecosystem = "pypi"
+scope = "build"
+licence = "MIT"
+licence_source = "https://github.com/pypa/hatch/blob/master/backend/LICENSE.txt"
+adopted = "phase-001"
+reviewed = 2026-08-15
+verdict = "adopted"
+reason = """The build backend named in `[build-system] requires`. PyPA's own, \
+and the only entry here that is neither a runtime nor a development dependency: \
+it is fetched by a build frontend in an isolated environment and never installed \
+alongside GLOBIN.
+
+Reviewed anyway, because "we do not build yet" is a reason to check it cheaply \
+rather than a reason to leave it unexamined — Phases 017-032 will build, and a \
+build backend adopted without review is a supply chain nobody looked at."""
+
+[[review]]
+name = "pytest"
+ecosystem = "pypi"
+scope = "development"
+licence = "MIT"
+licence_source = "https://github.com/pytest-dev/pytest/blob/main/LICENSE"
+adopted = "phase-004"
+reviewed = 2026-08-15
+verdict = "adopted"
+reason = """The test runner the whole suite is written against. Permissive \
+licence, an active maintainer organisation, and a release cadence measured in \
+weeks. Replacing it would mean rewriting every test in the repository."""
+
+[[review]]
+name = "pytest-cov"
+ecosystem = "pypi"
+scope = "development"
+licence = "MIT"
+licence_source = "https://github.com/pytest-dev/pytest-cov/blob/master/LICENSE"
+adopted = "phase-004"
+reviewed = 2026-08-15
+verdict = "adopted"
+reason = """Branch coverage, which `QUALITY_GATES.md` gates at 95. Wraps \
+`coverage`, which the evidence gate also invokes directly."""
+
+[[review]]
+name = "ruff"
+ecosystem = "pypi"
+scope = "development"
+licence = "MIT"
+licence_source = "https://github.com/astral-sh/ruff/blob/main/LICENSE"
+adopted = "phase-004"
+reviewed = 2026-08-15
+verdict = "adopted"
+reason = """Lint and format in one tool, replacing four. A single static binary \
+with no Python dependencies of its own, which is the cheapest possible entry in \
+a toolchain. Fast-moving, which is why it is pinned exactly rather than bounded."""
+
+[[review]]
+name = "mypy"
+ecosystem = "pypi"
+scope = "development"
+licence = "MIT"
+licence_source = "https://github.com/python/mypy/blob/master/LICENSE"
+adopted = "phase-004"
+reviewed = 2026-08-15
+verdict = "adopted"
+reason = """The type checker ADR-0018 configures flag by flag rather than with \
+`strict = true`. Maintained by the Python organisation itself."""
+
+[[review]]
+name = "pre-commit"
+ecosystem = "pypi"
+scope = "development"
+licence = "MIT"
+licence_source = "https://github.com/pre-commit/pre-commit/blob/main/LICENSE"
+adopted = "phase-004"
+reviewed = 2026-08-15
+verdict = "adopted"
+reason = """Runs the fast local gate. Note that it manages hook environments of \
+its own, so the hook repositories in `.pre-commit-config.yaml` are a supply \
+chain this file does not cover — `tools/quality/supply/inventory.py` inventories \
+them, and their revisions are pinned."""
+
+[[review]]
+name = "hypothesis"
+ecosystem = "pypi"
+scope = "development"
+licence = "MPL-2.0"
+licence_source = "https://github.com/HypothesisWorks/hypothesis/blob/master/hypothesis-python/LICENSE.txt"
+adopted = "phase-005"
+reviewed = 2026-08-15
+verdict = "adopted"
+reason = """The property level (ADR-0023). MPL-2.0 is weak copyleft and \
+file-scoped: it obliges anyone modifying Hypothesis's own files, and reaches \
+nothing that merely imports it. GLOBIN does not vendor or modify it. Its only \
+runtime requirement is `sortedcontainers`, Apache-2.0, which is what made it \
+cheap enough to accept."""
+
+# ---------------------------------------------------------------------------
+# Adopted in Phase 014, through the process rather than before it.
+# ---------------------------------------------------------------------------
+
+[[review]]
+name = "pip-audit"
+ecosystem = "pypi"
+scope = "development"
+licence = "Apache-2.0"
+licence_source = "https://github.com/pypa/pip-audit/blob/main/LICENSE"
+adopted = "phase-014"
+reviewed = 2026-08-15
+verdict = "adopted"
+reason = """The vulnerability audit this phase is required to produce. \
+Maintained by PyPA, the same organisation that publishes pip itself, which \
+makes it as close to first-party as a Python packaging tool gets.
+
+THE COST WAS THE ARGUMENT AGAINST IT, AND IT IS REAL. Six declared tools \
+resolved to almost nothing transitively; adding this one takes the audited set \
+to twenty-six distributions, including `requests`, `cachecontrol`, `packaging` \
+and `cyclonedx-python-lib`. A supply-chain tool that quadruples the supply chain \
+deserves the obvious question.
+
+Three things answered it. It is development-only and never enters the runtime, \
+so ADR-0003's zero-budget rule is untouched and no shipped artefact carries any \
+of it. It runs in exactly one CI job and in `python -m tools.quality supply`, \
+never in `full` and never in the test suite. And the alternative — querying OSV \
+directly from repository-native code, in the manner of ADR-0033 — was weighed \
+and refused: advisory matching is version-range arithmetic across several \
+ecosystems' conventions, and getting it subtly wrong produces a gate that \
+reports "no vulnerabilities" while missing them, which is precisely the failure \
+this phase exists to prevent. Writing that by hand would trade a dependency for \
+a correctness risk in the one place correctness matters most.
+
+It audits a requirements file generated from the inventory rather than the \
+ambient environment. See ADR-0044."""

@@ -128,8 +128,10 @@ def test_building_with_no_sources_gives_the_declared_defaults() -> None:
 
 
 def test_a_document_with_an_unknown_setting_is_refused_by_name(tmp_path: Path) -> None:
-    """The failure an operator is most likely to cause, and the one that must not
-    pass silently: a setting that looks plausible and does nothing."""
+    """The failure an operator is most likely to cause, and the one that must not.
+
+    pass silently: a setting that looks plausible and does nothing.
+    """
     path = _document(tmp_path, '[logging]\nmin_severty = "WARNING"\n')
     with pytest.raises(ConfigurationError) as refused:
         build_configuration([TomlConfigurationSource(path)])
@@ -166,8 +168,10 @@ def test_a_document_that_cannot_be_parsed_is_reported_even_when_overridden(
 def test_an_unknown_setting_is_reported_even_when_a_later_source_overrides_it(
     tmp_path: Path,
 ) -> None:
-    """Nothing overrides a key that is not a setting, so a typo always survives
-    the fold and is always refused."""
+    """Nothing overrides a key that is not a setting, so a typo always survives.
+
+    the fold and is always refused.
+    """
     sources = _overridden_by_a_working_document(tmp_path, '[logging]\nmin_severty = "WARNING"\n')
     with pytest.raises(ConfigurationError, match="min_severty"):
         build_configuration(sources)

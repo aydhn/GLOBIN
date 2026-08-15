@@ -739,8 +739,10 @@ def test_every_implemented_capability_points_at_its_evidence(repo_root: Path) ->
 
 
 def test_the_readme_names_every_capability_it_says_is_absent(repo_root: Path) -> None:
-    """The list below is the other half of the maturity claim, and it goes stale
-    the moment a phase starts building one of these."""
+    """The list below is the other half of the maturity claim, and it goes stale.
+
+    the moment a phase starts building one of these.
+    """
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
     # Whitespace is collapsed first: the document wraps at 100 columns, so a
     # two-word capability can be split across a line break and a naive substring

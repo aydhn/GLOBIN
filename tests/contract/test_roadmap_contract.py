@@ -134,7 +134,7 @@ def test_roadmap_band_headings_match_the_code_skeleton(roadmap_text: str) -> Non
 #: diff. Raise it only when the phase genuinely satisfies
 #: ``docs/engineering/DEFINITION_OF_DONE.md`` — never in advance, and never to
 #: make a failing test pass.
-LAST_COMPLETED_PHASE: int = 12
+LAST_COMPLETED_PHASE: int = 14
 
 
 def test_no_future_phase_is_marked_complete(roadmap_rows: list[RoadmapRow]) -> None:
@@ -186,8 +186,10 @@ def test_the_readme_states_the_delivered_frontier(repo_root: Path) -> None:
 
 
 def test_the_package_docstring_states_the_delivered_frontier() -> None:
-    """The claim a reader meets first if they open the package rather than the
-    repository."""
+    """The claim a reader meets first if they open the package rather than the.
+
+    repository.
+    """
     assert globin.__doc__ is not None
     expected = f"Phase {LAST_COMPLETED_PHASE} of {ROADMAP_TOTAL_PHASES}"
     assert expected in globin.__doc__, f"globin.__doc__ does not state {expected!r}"

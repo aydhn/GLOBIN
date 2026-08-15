@@ -1,0 +1,104 @@
+# ---------------------------------------------------------------------------
+# CodeQL static analysis.
+#
+# ADVANCED SETUP, DELIBERATELY. GitHub offers a "default setup" configured
+# through the repository's settings page, and it was verified to be
+# `not-configured` before this file was written, so nothing here overrides a
+# working configuration. Advanced setup was chosen because default setup lives
+# in a control plane this repository cannot read, review or diff: what it
+# analyses and with which queries would be a fact about a settings page rather
+# than about a commit. Everything else this repository trusts is version
+# controlled, and there is no reason for its static analysis to be the exception.
+#
+# The two setups are mutually exclusive, and running both would produce two sets
+# of alerts for one codebase.
+#
+# WHY THIS IS A SEPARATE WORKFLOW. `quality.yml` declares `contents: read` at
+# workflow level and every job inherits it. CodeQL needs `security-events:
+# write` to upload its results, and adding that to `quality.yml` would raise the
+# ceiling for six jobs that do not need it. A second file keeps the elevated
+# scope confined to the one job that has a use for it — which is the whole of
+# `docs/engineering/CI_SECURITY.md`'s argument about least privilege, applied to
+# the first job that ever needed more.
+# ---------------------------------------------------------------------------
+
+name: CodeQL
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  # Advisories are published after code is written. A repository analysed only
+  # when it changes is a repository that never learns about a query added last
+  # month. Weekly, at a fixed hour, so the schedule is deterministic and the
+  # results of two consecutive runs are comparable.
+  schedule:
+    - cron: "17 6 * * 1"
+
+# Read-only at workflow level, exactly as `quality.yml` is, so a job added later
+# starts with no privilege and must ask.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # The same rule `quality.yml` applies and for the same reason: a superseded
+  # pull-request run judged a commit nobody will merge, while a master run is
+  # the one that produces that commit's analysis. Master queues rather than
+  # cancels, so the alert history has no gaps.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+  analyse:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    # The one place in this repository that is not `windows-latest`, and it is
+    # not a change of policy. CodeQL's analysis is of source text, not of
+    # runtime behaviour: it compiles nothing here and executes none of the code
+    # it reads, so the platform cannot change what it finds. Ubuntu is what the
+    # CodeQL bundle is fastest on and what GitHub's own documentation uses.
+    # `quality.yml`, which measures behaviour, stays Windows-only.
+    timeout-minutes: 20
+
+    permissions:
+      # Read the code.
+      contents: read
+      # Upload the results. This is the scope the whole file exists to keep in
+      # one place, and it is granted at JOB level rather than at workflow level
+      # so that nothing else in this file could ever inherit it.
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both languages GitHub detected for this repository. `actions` is not
+        # an afterthought: it analyses the workflow files themselves for the
+        # injection and privilege patterns `CI_SECURITY.md` describes, which
+        # makes it the one query pack most relevant to a repository whose only
+        # remote code execution is its own CI.
+        language: [actions, python]
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          languages: ${{ matrix.language }}
+          # `security-and-quality` rather than the default pack. The default
+          # runs security queries only; this adds the maintainability and
+          # correctness packs, which is the right trade for a repository whose
+          # entire current output is tooling and contracts. It produces more
+          # findings, and Phase 014 is the phase that decides what to do with
+          # findings — `docs/DEPENDENCY_POLICY.md` carries the severity
+          # threshold that turns one into a failure.
+          queries: security-and-quality
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          category: "/language:${{ matrix.language }}"

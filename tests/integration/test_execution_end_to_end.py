@@ -239,7 +239,7 @@ def test_help_exits_zero() -> None:
 
 
 def test_a_collection_run_that_fails_is_a_usage_error() -> None:
-    """pytest itself refusing to collect is not a suite failure to report."""
+    """Pytest itself refusing to collect is not a suite failure to report."""
 
     class _BrokenCollector:
         def __call__(

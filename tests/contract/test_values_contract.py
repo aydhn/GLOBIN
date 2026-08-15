@@ -328,7 +328,6 @@ def test_each_documented_attempt_does_what_the_row_claims(policy: str) -> None:
 
 def test_the_outcome_reader_distinguishes_all_three_outcomes() -> None:
     """Guard the guard, again: a classifier collapsing two outcomes would pass everything."""
-
     assert outcome_of(lambda: a_price < an_eth_price) == "ValidationError"
     assert outcome_of(lambda: a_price + a_dearer_price) == "TypeError"
     assert outcome_of(lambda: a_price < a_dearer_price) == "answers"

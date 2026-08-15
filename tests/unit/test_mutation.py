@@ -307,9 +307,11 @@ def test_the_child_keeps_what_it_needs_to_start() -> None:
 
 
 def test_the_child_never_writes_bytecode() -> None:
-    """Not speed: CPython validates a `.pyc` against a whole-second timestamp and a
+    """Not speed: CPython validates a `.pyc` against a whole-second timestamp and a.
+
     byte count, and most mutations here preserve length exactly. Two mutants written
-    in the same second could otherwise run the first one's cached bytecode."""
+    in the same second could otherwise run the first one's cached bytecode.
+    """
     assert plan.child_environment({})["PYTHONDONTWRITEBYTECODE"] == "1"
 
 
@@ -555,8 +557,10 @@ def test_a_module_missing_from_the_baseline_lists_what_survived() -> None:
 
 
 def test_the_suggested_block_is_valid_toml_that_will_not_pass_review() -> None:
-    """It parses, so it can be pasted; every reason is a placeholder, so pasting it
-    unread fails `tests/contract/test_mutation_contract.py` rather than the gate."""
+    """It parses, so it can be pasted; every reason is a placeholder, so pasting it.
+
+    unread fails `tests/contract/test_mutation_contract.py` rather than the gate.
+    """
     rendered = baseline.render("m.py", frozenset({"a::b::c::0"}))
     parsed = tomllib.loads(rendered)
     assert parsed["target"][0]["module"] == "m.py"

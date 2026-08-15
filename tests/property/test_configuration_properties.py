@@ -223,8 +223,10 @@ def test_the_refusal_harness_accepts_a_value_that_ought_to_pass() -> None:
 def test_a_record_is_forwarded_exactly_when_it_clears_the_threshold(
     severity: Severity, minimum: Severity
 ) -> None:
-    """Both directions. A sink that forwarded everything would pass a test that
-    only checked the records it expected to see."""
+    """Both directions. A sink that forwarded everything would pass a test that.
+
+    only checked the records it expected to see.
+    """
     inner = _RecordingSink()
     ThresholdLogSink(inner=inner, minimum=minimum).emit(log_event(severity, "a.b", "corr-1"))
     assert bool(inner.records) is (severity >= minimum)

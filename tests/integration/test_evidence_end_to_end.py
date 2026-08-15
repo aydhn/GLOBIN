@@ -88,7 +88,7 @@ class FakeRunner:
         report_code: What the coverage report commands should return.
     """
 
-    def __init__(
+    def __init__(  # noqa: D107 - the class docstring above documents every argument
         self,
         *,
         junit: str | None = PASSING_JUNIT,

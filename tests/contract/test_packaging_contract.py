@@ -46,7 +46,15 @@ def test_development_extra_is_a_free_toolchain(pyproject: dict[str, Any]) -> Non
     """
     dev = pyproject["project"]["optional-dependencies"]["dev"]
     names = {entry.split(">")[0].split("=")[0].split("[")[0].strip() for entry in dev}
-    assert names == {"pytest", "pytest-cov", "ruff", "mypy", "pre-commit", "hypothesis"}
+    assert names == {
+        "pytest",
+        "pytest-cov",
+        "ruff",
+        "mypy",
+        "pre-commit",
+        "hypothesis",
+        "pip-audit",
+    }
 
 
 def test_contributing_names_every_development_dependency(

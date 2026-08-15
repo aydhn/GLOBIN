@@ -351,8 +351,10 @@ def test_ordinary_content_is_not_reported(line: str) -> None:
 
 
 def test_a_finding_names_the_field_without_reproducing_the_value() -> None:
-    """Printing the suspected secret would be the whole failure, committed by
-    the check meant to prevent it."""
+    """Printing the suspected secret would be the whole failure, committed by.
+
+    the check meant to prevent it.
+    """
     findings = redaction.scan("evidence-manifest.json", "\n\napi_key = NOT-A-REAL-SECRET-0000")
     assert findings[0].line == 3
     assert "NOT-A-REAL-SECRET-0000" not in redaction.describe(findings)
@@ -503,7 +505,7 @@ def test_a_formatted_tree_produces_no_findings() -> None:
 
 
 def test_a_mypy_diagnostic_is_read_from_its_json_line() -> None:
-    """mypy emits JSON Lines rather than an array, with Windows separators."""
+    """Mypy emits JSON Lines rather than an array, with Windows separators."""
     line = json.dumps(
         {
             "file": r"src\globin\a.py",
@@ -521,7 +523,7 @@ def test_a_mypy_diagnostic_is_read_from_its_json_line() -> None:
 
 
 def test_a_line_that_is_not_a_diagnostic_is_skipped() -> None:
-    """mypy writes a summary alongside the diagnostics, and it is not one."""
+    """Mypy writes a summary alongside the diagnostics, and it is not one."""
     text = '{"file": "a.py", "line": 1, "column": 0, "message": "m", "code": "c"}\nFound 1 error\n'
     assert len(diagnostics.from_mypy(text, repo_root=ROOT)) == 1
 

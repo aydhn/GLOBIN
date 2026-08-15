@@ -41,7 +41,7 @@ from tools.quality.evidence import gate
 #: The `dev` extra, restated so that adding a dependency for this tooling has to
 #: edit a test whose docstring says why not.
 TOOLCHAIN: Final[frozenset[str]] = frozenset(
-    {"pytest", "pytest-cov", "ruff", "mypy", "pre-commit", "hypothesis"}
+    {"pytest", "pytest-cov", "ruff", "mypy", "pre-commit", "hypothesis", "pip-audit"}
 )
 
 #: Every module the evidence package is allowed to import from outside itself.
@@ -216,8 +216,10 @@ def test_every_tool_the_gate_runs_writes_its_own_evidence_file() -> None:
 
 
 def test_the_reporting_commands_stay_in_order() -> None:
-    """The command table's order is compared against `QUALITY_GATES.md` byte for
-    byte, so a new command inserted in the wrong place fails two tests at once."""
+    """The command table's order is compared against `QUALITY_GATES.md` byte for.
+
+    byte, so a new command inserted in the wrong place fails two tests at once.
+    """
     names = command_names()
     positions = [
         names.index(name) for name in ("coverage", "shards", "mutation", "evidence", "fix")
@@ -255,7 +257,8 @@ def test_the_quality_gates_document_describes_the_evidence_gate(repo_root: Path)
 
 
 def test_everything_the_gate_prints_is_ascii(package_sources: dict[str, str]) -> None:
-    """A Windows console codepage that cannot render a character turns a report
+    """A Windows console codepage that cannot render a character turns a report.
+
     into a traceback, and this repository's only declared platform is Windows.
 
     The same check `tools/quality/execution` carries, for the same reason.

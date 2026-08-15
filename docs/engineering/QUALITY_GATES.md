@@ -48,6 +48,7 @@ python -m tools.quality full
 | `mutation` | Mutation testing of the declared targets, against the baseline | Proving the tests would notice a change |
 | `evidence` | The suite, coverage, lint and typing in one run, recorded as JUnit XML, coverage in four forms, each tool's findings, a digested manifest and checksums | Producing something a machine can read and a person can check later |
 | `aggregate` | This run's job results and its published evidence, reduced to one verdict | Deciding whether a whole CI run passed, and saying why |
+| `supply` | Dependency inventory, a CycloneDX 1.7 SBOM, a `pip-audit` vulnerability audit, waiver expiry, action pinning, content secret hygiene, and what the platform will and will not do | Establishing what this repository depends on and what that costs |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
 

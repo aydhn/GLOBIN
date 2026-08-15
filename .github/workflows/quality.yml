@@ -207,6 +207,73 @@ jobs:
         # exercising the CRLF rules in `.gitattributes`.
         run: python -m tools.quality shards
 
+  supply:
+    name: Supply chain
+    # After the canonical gate, for the same reason the others are: a
+    # supply-chain result on a tree that does not lint or type-check is a result
+    # about something nobody will merge.
+    needs: quality
+    runs-on: windows-latest
+    # The only job in this file that reaches anything outside the runner:
+    # `pip-audit` resolves a requirements file against an index and queries an
+    # advisory service, and the capability probe asks the GitHub API about
+    # repository settings. Both are bounded by the budget rather than trusted to
+    # return.
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          # The whole history, because the secret scan reads what Git tracks and
+          # the manifest records the commit's own date. A shallow clone would
+          # still answer both, but `git show -s --format=%cI` on a truncated
+          # history is a question with a surprising answer, and this job is
+          # cheap enough not to economise on.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.14'
+
+      - name: Install the audit tool
+        # `pip-audit` and nothing else. This gate lints nothing, type-checks
+        # nothing and runs no test; it reads manifests, renders an SBOM and asks
+        # an advisory service about a list of versions.
+        #
+        # Pinned exactly, like every other tool in this file, and reviewed
+        # through the process this phase introduces —
+        # `docs/engineering/dependency-reviews.toml` carries the record.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pip-audit==2.9.0"
+
+      - name: Run the supply-chain gate
+        env:
+          # So the capability probe can ask. This is the run's own token with
+          # the workflow-level `contents: read` and nothing more, which is the
+          # point: what it CANNOT read is recorded as
+          # UNAVAILABLE_BY_PERMISSION rather than guessed at or skipped. A
+          # settings question answered by an under-scoped token is still a
+          # better record than no question asked.
+          GH_TOKEN: ${{ github.token }}
+        run: python -m tools.quality supply
+
+      - name: Upload the supply-chain evidence
+        # `always()`, for the reason the evidence upload gives: a run that failed
+        # is exactly when somebody needs the manifest, the SBOM and the
+        # inventory. Uploading them does not make the job pass — the step above
+        # has already decided that.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: supply-chain-evidence
+          path: .globin/supply/
+          retention-days: 30
+          if-no-files-found: error
+
   evidence:
     name: Test evidence
     # After the canonical gate, for the same reason the other two are: evidence
@@ -323,7 +390,7 @@ jobs:
     # compares the two, so renaming this job without updating the documentation
     # fails the suite rather than quietly detaching the rule from the check.
     name: Quality gate
-    needs: [quality, mutation, shards, evidence, hygiene]
+    needs: [quality, mutation, shards, supply, evidence, hygiene]
 
     # `!cancelled()` rather than `always()`, and the difference is the point.
     #

@@ -57,6 +57,21 @@ dev = [
     # requirement is `sortedcontainers`, which is why it is cheap enough to be
     # worth the sixth entry in this list. See ADR-0023.
     "hypothesis>=6.130",
+    # Added in Phase 014, and the first dependency this repository adopted
+    # THROUGH a review process rather than before there was one. PyPA's own tool,
+    # Apache-2.0, development-only.
+    #
+    # It is by far the most expensive entry here: six declared packages resolve
+    # to twenty-six distributions once its transitive tree is counted, against a
+    # toolchain that had none worth mentioning. That cost was weighed and
+    # accepted, and the record is in `docs/engineering/dependency-reviews.toml`
+    # rather than in this comment — writing the reasoning down in a reviewable
+    # file is the process Phase 014 exists to build.
+    #
+    # It runs in exactly one CI job and in `python -m tools.quality supply`. It
+    # is NOT in `full`, because it reaches the network and `full` must work on an
+    # aeroplane. See ADR-0044.
+    "pip-audit>=2.9",
 ]
 
 [tool.hatch.version]
@@ -192,12 +207,21 @@ select = [
     "ERA",  # eradicate — commented-out code
     "SLF",  # flake8-self — private member access across objects
     "INP",  # flake8-no-pep420 — implicit namespace packages
+    # --- added in Phase 014, closing what Phase 004 parked -----------------
+    "D",    # pydocstyle — the docstring conventions, under the Google style
 ]
 # Deliberately NOT selected, so the omissions are decisions rather than oversights:
 #   ISC001 conflicts with the formatter and would fight `ruff format`.
 #   ANN duplicates what mypy already enforces more precisely.
 #   PLR magic-value rules are noise against a codebase built from constants.
-#   D (pydocstyle) is Phase 013's call, with the rest of the docstring conventions.
+
+[tool.ruff.lint.pydocstyle]
+# The style this repository has written in since Phase 001, declared rather than
+# inferred. Naming it does more than pick a formatter: it resolves the pairs
+# pydocstyle ships in mutual conflict — D203 against D211, and D212 against
+# D213 — by convention instead of by an arbitrary choice in an ignore list, and
+# it switches off the numpydoc section rules that would fight `Args:`/`Returns:`.
+convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 # Every entry here is an exemption, and an unexplained exemption is how a rule
@@ -206,7 +230,23 @@ select = [
 #
 # S101 forbids `assert`, on the grounds that `python -O` strips it. In a test
 # module `assert` *is* the assertion mechanism, and pytest is never run with -O.
-"tests/**" = ["S101"]
+"tests/**" = [
+    "S101",
+    # D103 requires a docstring on every public function. In a library that is
+    # the right rule; in a test module it is a category error, because a test
+    # function is public only in the sense that nothing marks it private — it is
+    # not API, nothing imports it, and its name is already a sentence:
+    # `test_the_dependency_contract_declares_a_policy_for_every_layer` states its
+    # assertion more precisely than a restating docstring would.
+    #
+    # This exempts the REQUIREMENT, not the practice. Most tests here carry a
+    # docstring and should, because the valuable half is the *why* — the failure
+    # it once caught, the reasoning it pins. D205, D209, D400 and the rest still
+    # apply to every docstring that exists, so the ones written are held to the
+    # same standard as the package's. What is dropped is the obligation to write
+    # one where the name has already said it.
+    "D103",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["globin", "tests", "tools"]
@@ -389,7 +429,7 @@ tests = [
 # names: the key is what appears in the `needs` context, and the display name is
 # what appears as a status check. Conflating them is how a rename silently drops
 # a requirement.
-required_jobs = ["quality", "mutation", "shards", "evidence", "hygiene"]
+required_jobs = ["quality", "mutation", "shards", "supply", "evidence", "hygiene"]
 
 # The single check name to mark as required on `master`. Stable by design: it
 # carries no operating system, no interpreter version and no matrix value, so the
@@ -437,6 +477,16 @@ retention_days = 30
 quality = 15
 mutation = 30
 shards = 15
+# Added in Phase 014. Unlike every other budget here it is NOT derived from an
+# observed run, because there is no observed run to derive it from: this is the
+# job's first commit. It is set to the same 15 the comparable jobs carry, and it
+# is the one number in this table that should be revisited against measurement
+# rather than trusted — see `docs/research/phase_014_sources.md`.
+#
+# It is also the only job that waits on something outside GitHub. A slow package
+# index or an advisory service under load lengthens it in a way no local change
+# explains, which is an argument for margin rather than for precision.
+supply = 15
 evidence = 15
 hygiene = 10
 aggregate = 10

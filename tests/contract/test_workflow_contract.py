@@ -80,19 +80,51 @@ def package_sources(repo_root: Path) -> dict[str, str]:
 # --------------------------------------------------------------------------
 
 
-def test_the_tooling_added_no_dependency(pyproject: dict[str, object]) -> None:
-    """Condition 3, which rules out most tools worth wanting.
+def test_every_declared_dependency_was_reviewed(
+    repo_root: Path, pyproject: dict[str, object]
+) -> None:
+    """Condition 3, restated as the rule it was always a proxy for.
 
-    The aggregate reads two files and some environment variables. A reporting
-    action or a YAML library would each have needed Phase 014's review process,
-    which does not exist yet.
+    Until Phase 014 this asserted that the ``dev`` extra held exactly six names.
+    The number was standing in for the real invariant — *the tooling added no
+    dependency* — because with no review process there was no other way to say
+    it, and ADR-0032's third condition "rules out most tools worth wanting".
+
+    Phase 014 built the process ADR-0003 promised, so the invariant can now be
+    written directly: nothing may be declared without a recorded verdict in
+    ``dependency-reviews.toml``. That is strictly stronger than a count. A count
+    permits swapping one tool for another silently and forbids a reviewed
+    adoption; this permits the reviewed adoption and forbids the silent swap.
+
+    The ADR-0032 tooling itself still adds nothing, and that is checked below by
+    what it imports rather than by how many packages exist.
     """
     project = pyproject["project"]
     assert isinstance(project, dict)
     extras = project["optional-dependencies"]
     assert isinstance(extras, dict)
-    declared = {re.split(r"[<>=!\[]", name, maxsplit=1)[0].strip() for name in extras["dev"]}
-    assert len(declared) == 6
+    build = pyproject["build-system"]
+    assert isinstance(build, dict)
+
+    # Every declared requirement, not only the `dev` extra. The build backend is
+    # fetched by a build frontend rather than installed beside GLOBIN, which makes
+    # it easy to forget and no less a supply chain for that.
+    requirements = [*extras["dev"], *build["requires"], *project["dependencies"]]
+    declared = {re.split(r"[<>=!\[]", name, maxsplit=1)[0].strip() for name in requirements}
+
+    register = tomllib.loads(
+        (repo_root / "docs" / "engineering" / "dependency-reviews.toml").read_text(encoding="utf-8")
+    )
+    reviewed = {str(entry["name"]) for entry in register["review"]}
+
+    assert not declared - reviewed, (
+        f"declared in pyproject.toml with no review record: {sorted(declared - reviewed)}. "
+        "See docs/DEPENDENCY_POLICY.md"
+    )
+    assert not reviewed - declared, (
+        f"reviewed but no longer declared: {sorted(reviewed - declared)}. "
+        "A review record for something nothing depends on is a decision nobody can act on"
+    )
 
 
 def test_the_package_imports_only_the_standard_library_and_this_repository(
@@ -359,7 +391,8 @@ def test_the_quality_gates_document_says_branch_protection_is_not_configured_her
 
 
 def test_every_reproduction_command_is_one_that_exists(repo_root: Path) -> None:
-    """A troubleshooting section naming a command that does not exist costs the
+    """A troubleshooting section naming a command that does not exist costs the.
+
     reader the time to find out.
 
     Each entry is either a quality command in the table or the verification
@@ -377,6 +410,8 @@ def test_every_reproduction_command_is_one_that_exists(repo_root: Path) -> None:
 
 
 def test_every_command_in_the_table_is_documented() -> None:
-    """The table and the document agree, which `test_quality_contract.py` also
-    asserts — repeated here only as the guard for this package's own row."""
+    """The table and the document agree, which `test_quality_contract.py` also.
+
+    asserts — repeated here only as the guard for this package's own row.
+    """
     assert len({command.name for command in COMMANDS}) == len(COMMANDS)
