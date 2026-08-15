@@ -19,6 +19,10 @@ uses only free components and only officially documented interfaces.
 **It does not trade yet.** Check [`ROADMAP.md`](ROADMAP.md) for the current
 phase before assuming any capability exists.
 
+Phase 016 closed the first band and cut `v0.1.0`, the foundation baseline. What
+that certifies — and the one criterion it could not — is in
+[`docs/release/FOUNDATION_ACCEPTANCE.md`](docs/release/FOUNDATION_ACCEPTANCE.md).
+
 ---
 
 ## Read these first
@@ -49,6 +53,9 @@ phase before assuming any capability exists.
 | Which checks must pass? | [`docs/engineering/QUALITY_GATES.md`](docs/engineering/QUALITY_GATES.md) |
 | Why these lint and type rules? | [`docs/engineering/STATIC_ANALYSIS.md`](docs/engineering/STATIC_ANALYSIS.md) |
 | How do I commit? | [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) |
+| How is a version chosen, and a release cut? | [`docs/release/RELEASE_POLICY.md`](docs/release/RELEASE_POLICY.md) |
+| What changed between versions? | [`CHANGELOG.md`](CHANGELOG.md) |
+| Is the foundation band complete, and on what evidence? | [`docs/release/FOUNDATION_ACCEPTANCE.md`](docs/release/FOUNDATION_ACCEPTANCE.md), [`docs/engineering/foundation-acceptance.toml`](docs/engineering/foundation-acceptance.toml) |
 | What does this term mean? | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
 
 ---
@@ -191,6 +198,33 @@ Its job in CI is the check named `Quality gate`, which is the one to mark as
 required on `master`. Branch protection is a repository setting and no file here
 can change it — see
 [`docs/engineering/QUALITY_GATES.md`](docs/engineering/QUALITY_GATES.md).
+
+A third sibling asks whether the foundation may be **frozen** — and, like
+`governance`, reaches nothing:
+
+```bash
+python -m tools.quality release
+```
+
+It reads [`docs/engineering/foundation-acceptance.toml`](docs/engineering/foundation-acceptance.toml)
+and checks the release contract against the tree: no criterion identifier
+repeated or misfiled, every criterion naming evidence that exists, every blocking
+criterion passing, the version a taggable final release, the changelog announcing
+it exactly once, and the release documents and notes configuration present and
+well formed. It writes the manifest, the machine-readable acceptance record and
+`SHA256SUMS` into `.globin/release/`.
+
+A second subcommand adds the questions that are about the working tree rather
+than the commit — branch, cleanliness, agreement with the remote:
+
+```bash
+python -m tools.quality release ready
+```
+
+Run `ready` immediately before cutting a release, not on every push: two runs of
+it can legitimately disagree, which is why CI runs `check`. Procedure and
+reasoning: [`docs/release/RELEASE_POLICY.md`](docs/release/RELEASE_POLICY.md) and
+[ADR-0049](docs/adr/0049-a-version-has-one-source-and-a-release-is-frozen-evidence.md).
 
 One gate sits outside `full`, because it takes minutes rather than seconds:
 

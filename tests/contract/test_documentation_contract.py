@@ -66,6 +66,12 @@ REQUIRED_DOCS: tuple[str, ...] = (
     # names as the third a phase adding a ledger must make.
     "docs/research/phase_014_sources.md",
     "docs/research/phase_015_sources.md",
+    "docs/research/phase_016_sources.md",
+    # Added in Phase 016 with the release governance they carry. The changelog is
+    # deliberately not here: it is required by the release gate, which checks the
+    # version it announces rather than only that it exists.
+    "docs/release/RELEASE_POLICY.md",
+    "docs/release/FOUNDATION_ACCEPTANCE.md",
 )
 
 #: Minimum byte length for a document to count as substantive rather than a

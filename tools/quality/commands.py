@@ -239,6 +239,31 @@ _SUPPLY = Step("supply", ("pip_audit",), ("-m", "tools.quality.supply"))
 # as clean, which is a verdict rather than a missing tool.
 _GOVERNANCE = Step("governance", (), ("-m", "tools.quality.governance"))
 
+# The release gate. Reads the foundation acceptance matrix in
+# `docs/engineering/foundation-acceptance.toml` and checks the release contract
+# against the tree: that no criterion identifier repeats, that every criterion
+# names evidence that exists, that no blocking criterion is unmet, that the
+# version is a taggable final release, that the changelog announces it, and that
+# the release documents and the notes configuration are present and well formed.
+#
+# It REACHES NOTHING, like `governance` and unlike `supply`. Whether the platform
+# has immutable releases switched on, and whether the tag ruleset exists, are
+# platform questions and belong to the capability probe inside `supply`, which
+# already holds the credential and the network for them.
+#
+# In neither `fast` nor `full`, for the reason `governance` gives rather than the
+# reason `supply` does: it WRITES artefacts — the manifest, the machine-readable
+# acceptance record and `SHA256SUMS` — and `full` runs before every commit and
+# reports rather than produces. The assertions that must gate a commit are in
+# `tests/contract/test_release_contract.py`, which the coverage step already
+# runs.
+#
+# No modules are declared. Like `aggregate` and `governance`, its own judgement
+# starts no child process. The `ready` subcommand does consult Git for the
+# release preconditions, and a machine without Git records that as unmeasured
+# rather than as clean — which is a verdict rather than a missing tool.
+_RELEASE = Step("release", (), ("-m", "tools.quality.release"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -297,6 +322,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "governance",
         "Code ownership, security policy and sensitive-path coverage, against the tree.",
         (_GOVERNANCE,),
+    ),
+    Command(
+        "release",
+        "The foundation acceptance matrix, the version, its tag and the changelog.",
+        (_RELEASE,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

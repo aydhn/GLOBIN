@@ -281,6 +281,29 @@ jobs:
         if: always()
         run: python -m tools.quality governance
 
+      - name: Run the release gate
+        # In this job for the reason the governance step gives, plus one of its
+        # own: the release gate REPUBLISHES the SBOM the supply gate just wrote
+        # to `.globin/supply/`. In a job of its own it would need that artifact
+        # downloaded, or would have to regenerate a document that ought to be
+        # byte-identical and would then have to be compared. Running it here
+        # means the file it copies is the file that was produced.
+        #
+        # `check` rather than `ready`, and that is the whole reason there are two
+        # subcommands. `ready` asks about the working tree — branch, cleanliness,
+        # agreement with the remote — and a CI checkout legitimately differs from
+        # a developer's tree. Asking it here would make an unmeasurable condition
+        # fail every run, and since unmeasured outranks failed it would be the
+        # loudest possible failure for the least real reason.
+        #
+        # NO TOKEN and no `env:` block. Like governance and unlike supply, this
+        # reaches nothing.
+        #
+        # `always()`, on the same reasoning: a failing supply-chain gate must not
+        # hide a release finding.
+        if: always()
+        run: python -m tools.quality release
+
       - name: Upload the supply-chain evidence
         # `always()`, for the reason the evidence upload gives: a run that failed
         # is exactly when somebody needs the manifest, the SBOM and the
@@ -323,6 +346,32 @@ jobs:
         with:
           name: governance-evidence
           path: .globin/governance/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload the release evidence
+        # Its own artifact, for the reason the governance upload gives about
+        # `attest`'s expected layout: adding a second path to an existing upload
+        # re-roots that archive at the least common ancestor and silently breaks
+        # whatever consumes it.
+        #
+        # These are the files a release publishes — the acceptance record, the
+        # manifest and SHA256SUMS. Uploading them here means a run can be shown
+        # to have produced the same bytes that were attached to the release,
+        # which is the point of them being deterministic.
+        #
+        # NOT ATTESTED, on the same reasoning as the governance manifest: the
+        # `attest` job signs a provenance statement about supply-chain evidence
+        # because an SBOM is a claim somebody downstream might rely on. Widening
+        # a privileged job's subject is a decision to record, not a default to
+        # inherit. The published release carries GitHub's own release
+        # attestation, which is a different mechanism and covers the assets as
+        # published.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-evidence
+          path: .globin/release/
           retention-days: 30
           if-no-files-found: error
 

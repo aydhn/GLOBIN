@@ -143,6 +143,27 @@ absent, or the request fails for any reason, **say the run was not read** rather
 than leaving it out — an omitted CI result is indistinguishable from a passing
 one, and Phase 004 was already reported once before its run existed.
 
+## Tags and releases
+
+**This document does not cover them, deliberately.** A tag is a Git operation, so
+it would sit here naturally — but a release is a version decision, a changelog
+entry, an acceptance matrix and an immutability guarantee as well, and splitting
+that across two documents is how the two copies diverge that
+[ADR-0011](adr/0011-documentation-authority-hierarchy.md) exists to prevent.
+
+The single owner is [`release/RELEASE_POLICY.md`](release/RELEASE_POLICY.md): how
+a version is chosen, how a tag is named, what must hold before one is created,
+and why a published release is superseded rather than repaired.
+
+Two things are worth knowing from here, because they constrain ordinary work:
+
+- **A published tag cannot be moved or deleted.** Ruleset `release-tags`
+  restricts `deletion` and `update` on `refs/tags/v*` with no bypass actors, and
+  the release is immutable besides. The recovery for a mistake is the next
+  version.
+- **The version is bumped in the release commit itself**, so the commit a tag
+  names is also the commit whose source declares that version.
+
 ## Definition of done
 
 The Git-facing half of "done" is steps 1-8 above: verified, committed on

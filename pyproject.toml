@@ -2,9 +2,12 @@
 # GLOBIN project metadata.
 #
 # Phase 1 scope note: this file deliberately declares ZERO runtime dependencies.
-# That is not an oversight — it is an enforced invariant. `tests/test_packaging_
-# contract.py` asserts `project.dependencies == []`, so any future phase that
-# adds a runtime dependency must do so consciously and update the contract test.
+# That is not an oversight — it is an enforced invariant.
+# `tests/contract/test_packaging_contract.py` asserts `project.dependencies == []`,
+# so any future phase that adds a runtime dependency must do so consciously and
+# update the contract test. (The path was corrected in Phase 016: the file moved
+# into `tests/contract/` when Phase 005 introduced the taxonomy directories, and
+# this comment kept naming the old location.)
 # Dependency management and lockfiles are the subject of Phases 17-32.
 # ---------------------------------------------------------------------------
 

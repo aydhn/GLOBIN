@@ -33,10 +33,14 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-015 are complete. Phase 016 is next and has not started.**
-> Nothing beyond Phase 015 is implemented. GLOBIN does not trade, does not
+> **Phases 001-016 are complete. Phase 017 is next and has not started.**
+> Nothing beyond Phase 016 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
+>
+> **Phase 016 closed the first band and cut `v0.1.0`.** What that certifies, and
+> the one criterion it could not, are in
+> [`docs/release/FOUNDATION_ACCEPTANCE.md`](docs/release/FOUNDATION_ACCEPTANCE.md).
 >
 > **Phase 015 wrote the secret-handling rules; it built no secret store.** Where
 > a credential may live, how it is redacted and what an API key may do are
@@ -108,7 +112,7 @@ written down.
 | 013 | Coding Standards and Documentation Conventions | Fix naming, structure, docstring and typing conventions, and tighten the existing lint and type configuration to match them, including the docstring rules Phase 004 deliberately left unselected. | Complete |
 | 014 | Dependency Review and Licence Audit Process | Define how a candidate dependency is reviewed for cost, licence, maintenance health and supply-chain risk. | Complete |
 | 015 | Security Baseline and Secret Handling Rules | Specify secret storage, redaction, least-privilege API key usage and the prohibition on committing credentials. | Complete |
-| 016 | Foundation Consolidation and Phase Gate Review | Reconcile the foundation band, resolve inconsistencies and certify readiness for environment work. | Planned |
+| 016 | Foundation Consolidation and Phase Gate Review | Reconcile the foundation band, resolve inconsistencies and certify readiness for environment work. | Complete |
 
 ---
 

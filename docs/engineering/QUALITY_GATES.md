@@ -50,6 +50,7 @@ python -m tools.quality full
 | `aggregate` | This run's job results and its published evidence, reduced to one verdict | Deciding whether a whole CI run passed, and saying why |
 | `supply` | Dependency inventory, a CycloneDX 1.7 SBOM, a `pip-audit` vulnerability audit, waiver expiry, action pinning, content secret hygiene, and what the platform will and will not do | Establishing what this repository depends on and what that costs |
 | `governance` | Code ownership, the security policy's required sections, sensitive-path coverage, the reporting channel, and that no public issue template collects vulnerability detail | Establishing that the governance arrangement still describes this repository |
+| `release` | The foundation acceptance matrix, the version, the tag it implies, the changelog, the release documents and the notes configuration. `release ready` adds the preconditions — branch, clean worktree, agreement with the remote | Establishing that a release may be cut, and publishing the evidence it will carry |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
 

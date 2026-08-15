@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 015 of 320 complete — foundation only
+## Current status: Phase 016 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -28,7 +28,7 @@ capability cannot be claimed here without pointing at something real.
 |---|---|
 | Repository, branch policy, engineering contract — [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) | Implemented |
 | 320-phase roadmap, every phase named — [`ROADMAP.md`](ROADMAP.md) | Implemented |
-| Architecture decision records (48) — [`docs/adr/`](docs/adr/README.md) | Implemented |
+| Architecture decision records (49) — [`docs/adr/`](docs/adr/README.md) | Implemented |
 | Research source ledgers with primary sources — [`docs/research/`](docs/research/phase_001_sources.md) | Implemented |
 | UTC-only internal time: an injected clock, aware instants, milliseconds as a floored projection — [`TIME_POLICY.md`](docs/TIME_POLICY.md) | Implemented |
 | Exact decimal arithmetic, four rounding modes, tick and step alignment — [`PRECISION_POLICY.md`](docs/PRECISION_POLICY.md) | Implemented |
@@ -47,6 +47,8 @@ capability cannot be claimed here without pointing at something real.
 | Typed configuration model: declared defaults, layered overrides, unknown settings refused — [`CONFIGURATION_POLICY.md`](docs/CONFIGURATION_POLICY.md) | Implemented |
 | Denominated value types: a price knows its market, a quantity knows its asset, and neither can be a float — [`VALUE_TYPES_POLICY.md`](docs/VALUE_TYPES_POLICY.md) | Implemented |
 | Mutation testing over the pure core, gated by a committed survivor set — [`mutation-baseline.toml`](docs/engineering/mutation-baseline.toml) | Implemented |
+| Single-source versioning, release policy and a deterministic release gate — [`RELEASE_POLICY.md`](docs/release/RELEASE_POLICY.md) | Implemented |
+| Phase 001-016 foundation acceptance, in prose and machine-readable form — [`FOUNDATION_ACCEPTANCE.md`](docs/release/FOUNDATION_ACCEPTANCE.md) | Implemented |
 | Everything else | Not started |
 
 ### What does not exist
@@ -202,6 +204,9 @@ the charter, principles and decision records.
 | Which checks must pass? | [`QUALITY_GATES.md`](docs/engineering/QUALITY_GATES.md) |
 | Why these lint and type rules? | [`STATIC_ANALYSIS.md`](docs/engineering/STATIC_ANALYSIS.md) |
 | Where does a new test go? | [`TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
+| How is a version chosen and a release cut? | [`RELEASE_POLICY.md`](docs/release/RELEASE_POLICY.md) |
+| What changed between versions? | [`CHANGELOG.md`](CHANGELOG.md) |
+| Is the foundation band complete, and by what evidence? | [`FOUNDATION_ACCEPTANCE.md`](docs/release/FOUNDATION_ACCEPTANCE.md) |
 
 This file is orientation only. It links to policy rather than restating it, so
 that a rule has exactly one home — see

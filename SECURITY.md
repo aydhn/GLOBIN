@@ -28,18 +28,28 @@ and anything that could cause a credential to exist where it should not.
 
 ## Supported versions
 
-**There is no release, and this table deliberately does not invent one.**
+**Support means the tip of `master`, and a release is a marker rather than a supported branch.**
 
 | Version | Supported |
 |---|---|
 | `master` at its current commit | Yes |
+| `v0.1.0` and any earlier release | No — superseded by `master` |
 | Anything else | No |
 
-GLOBIN has never been published, tagged, packaged or distributed. `pyproject.toml` carries
-`Private :: Do Not Upload`. There is therefore exactly one supported version — the tip of
-`master` — and a fix is delivered by a commit to it rather than by a patch release. Versioning
-and release policy belong to a later phase; until they exist, a supported-versions table listing
-version numbers would be fiction.
+Until Phase 016 this section said GLOBIN "has never been published, tagged, packaged or
+distributed" and that "Versioning and release policy belong to a later phase". That was accurate
+when written. Phase 016 was that later phase: GLOBIN now has a version contract, a release
+policy, and the tag `v0.1.0`. The claim is corrected here rather than left standing.
+
+What has **not** changed is where a fix lands. `pyproject.toml` still carries
+`Private :: Do Not Upload`; nothing is published to an index, no packaging build has been run,
+and there are no downstream consumers pinned to a version. A fix is therefore delivered by a
+commit to `master`, not by patching a past release — and a past release is never modified in
+place, because [`docs/release/RELEASE_POLICY.md`](docs/release/RELEASE_POLICY.md) makes a
+published release immutable and answers a defect with the next version.
+
+Releases are points in history that evidence refers to. They are not branches anybody
+backports to, and listing one as "supported" would promise maintenance that does not exist.
 
 ## What counts as a vulnerability here
 

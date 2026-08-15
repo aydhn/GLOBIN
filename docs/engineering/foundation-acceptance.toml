@@ -1,0 +1,832 @@
+# ---------------------------------------------------------------------------
+# GLOBIN foundation acceptance matrix.
+#
+# The machine-readable half of `docs/release/FOUNDATION_ACCEPTANCE.md`. Read by
+# `tools/quality/release/plan.py`; compared against the tree, in both
+# directions, by `tests/contract/test_release_contract.py`.
+#
+# WHAT THIS FILE IS. A record of what the foundation band (Phases 001-016) had
+# to satisfy before it could be frozen as `v0.1.0`, and what answers each
+# requirement. It is the same kind of document as `mutation-baseline.toml` and
+# `dependency-reviews.toml`: a human judgement written down where it can be
+# reviewed, argued with and diffed.
+#
+# WHAT THIS FILE IS NOT. It is not a test run. The gate that reads it does not
+# re-execute fifteen phases of checks to decide whether a criterion holds; it
+# checks the mechanical half — that no identifier repeats, that every evidence
+# path exists, that no blocking criterion is left unmet, that every category is
+# populated. Re-running the gates is what `full`, `supply`, `governance`,
+# `shards` and `mutation` are each already for, and the `command` field below
+# names which one answers a given criterion.
+#
+# NOTHING WRITES THIS FILE. Like the mutation baseline, it is edited by a person
+# who has read the evidence. A generator would turn a judgement into a
+# transcription, and the value of the record is precisely that somebody decided.
+#
+# STATUS VOCABULARY — four words, and no fifth:
+#   PASS            met, with evidence that exists
+#   FAIL            not met; a blocking criterion in this state stops a release
+#   BLOCKED         the answer depends on something outside this repository.
+#                   Never a pass: the gate maps it onto the unmeasured verdict,
+#                   which ADR-0045 established outranks a failure.
+#   NOT_APPLICABLE  genuinely out of scope, with the reason recorded
+#
+# There is deliberately no WARN. A warning has no release semantics until
+# somebody writes them down, and the semantics it acquires in practice are
+# "proceed anyway".
+#
+# IDENTIFIERS. `FND-<letter>-<NN>`, where the letter is the category's position
+# in `CATEGORIES` (A for the first, P for the sixteenth). The identifier and the
+# category therefore say the same thing twice, on purpose: the identifier is
+# what gets quoted in a report months later, the category is what groups the
+# matrix, and `misfiled_identifiers` checks that the two agree.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+[release]
+# One version source, named once. Hatchling reads the same file through
+# `[tool.hatch.version] path`, so the build backend and this gate cannot
+# disagree about which line is the version.
+version_source = "src/globin/__init__.py"
+changelog = "CHANGELOG.md"
+release_notes = ".github/release.yml"
+policy = "docs/release/RELEASE_POLICY.md"
+acceptance = "docs/release/FOUNDATION_ACCEPTANCE.md"
+
+# ---------------------------------------------------------------------------
+# A — Repository foundation
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-A-01"
+category = "repository-foundation"
+requirement = "Project identity is executable rather than merely documented."
+evidence = ["src/globin/project_contract.py", "tests/contract/test_project_contract.py"]
+command = "python -m tools.quality architecture"
+blocking = true
+status = "PASS"
+reason = """
+`CONTRACT` is one frozen instance and every module-level constant is derived
+from it, so identity cannot be restated inconsistently in two places. The
+contract test asserts each field against `docs/PROJECT_CHARTER.md`.
+"""
+
+[[criterion]]
+id = "FND-A-02"
+category = "repository-foundation"
+requirement = "The 320-phase band structure is fixed and machine-readable."
+evidence = ["src/globin/roadmap.py", "ROADMAP.md", "tests/contract/test_roadmap_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+Twenty bands of sixteen phases. The module holds the band skeleton and the
+titles live in ROADMAP.md alone, so neither is a copy of the other. The contract
+test restates the bounds literally as a tripwire and parses the document against
+them.
+"""
+
+[[criterion]]
+id = "FND-A-03"
+category = "repository-foundation"
+requirement = "No credential-shaped file and no generated artefact can be committed."
+evidence = [".gitignore", "tests/contract/test_repository_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+The ignore rules were written before the first byte of runtime output existed.
+The filename tripwire runs over tracked and untracked-but-unignored files alike,
+so it fires before staging rather than after.
+"""
+
+# ---------------------------------------------------------------------------
+# B — Engineering contract
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-B-01"
+category = "engineering-contract"
+requirement = "One document states what all code must satisfy."
+evidence = ["docs/engineering/ENGINEERING_CONTRACT.md"]
+blocking = true
+status = "PASS"
+reason = "Present, substantive, and bound by the documentation contract test."
+
+[[criterion]]
+id = "FND-B-02"
+category = "engineering-contract"
+requirement = "One document states when a phase is finished, and it is the only copy."
+evidence = ["docs/engineering/DEFINITION_OF_DONE.md"]
+blocking = true
+status = "PASS"
+reason = """
+`docs/GIT_WORKFLOW.md` previously carried a second checklist and now links to
+this one instead. Two copies of one rule diverge, which is the defect ADR-0011
+exists to remove.
+"""
+
+[[criterion]]
+id = "FND-B-03"
+category = "engineering-contract"
+requirement = "Conflicts between documents are resolved by a declared authority order."
+evidence = ["docs/engineering/SOURCE_OF_TRUTH.md", "docs/adr/0011-documentation-authority-hierarchy.md"]
+blocking = true
+status = "PASS"
+reason = "Nine tiers, code and tests at the top, README and CLAUDE.md at the bottom."
+
+[[criterion]]
+id = "FND-B-04"
+category = "engineering-contract"
+requirement = "Every error raised has one root and a category chosen by who must act."
+evidence = ["src/globin/errors.py", "tests/contract/test_error_taxonomy_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+One root, five categories, and no inheritance from a builtin — so catching
+`GlobinError` cannot accidentally catch a `ValueError` from a library. ADR-0022
+records the reasoning.
+"""
+
+# ---------------------------------------------------------------------------
+# C — Architecture boundaries
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-C-01"
+category = "architecture-boundaries"
+requirement = "The permitted import directions are declared once, machine-readably."
+evidence = ["docs/architecture/dependency-rules.toml"]
+blocking = true
+status = "PASS"
+reason = """
+Five layers pointing inward. The matrix exists in exactly one place; a second
+hard-coded copy is itself asserted against.
+"""
+
+[[criterion]]
+id = "FND-C-02"
+category = "architecture-boundaries"
+requirement = "The declared direction is enforced against the real import graph."
+evidence = ["tests/architecture/test_architecture_contract.py"]
+command = "python -m tools.quality architecture"
+blocking = true
+status = "PASS"
+reason = """
+Imports are read from the AST rather than by importing the package, so a
+violation is found without executing it. The checker's own failing case is
+exercised against synthetic graphs.
+"""
+
+[[criterion]]
+id = "FND-C-03"
+category = "architecture-boundaries"
+requirement = "Dependencies are wired in one composition root, and importing performs no work."
+evidence = ["src/globin/runtime/composition.py"]
+blocking = true
+status = "PASS"
+reason = """
+ADR-0015. A blanket check walks the AST of every layer package for calls at
+module level, so import-time work is refused structurally rather than by
+convention.
+"""
+
+# ---------------------------------------------------------------------------
+# D — Decision records
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-D-01"
+category = "decision-records"
+requirement = "Every architectural decision is recorded, indexed and numbered without gaps."
+evidence = ["docs/adr/README.md", "docs/adr/TEMPLATE.md"]
+blocking = true
+status = "PASS"
+reason = """
+The index must list every record and agree with each record's own status. The
+README's ADR count is parsed and compared, and the regular expression failing to
+match is itself a failure — so removing the claim to avoid maintaining it is not
+available without editing the test.
+"""
+
+[[criterion]]
+id = "FND-D-02"
+category = "decision-records"
+requirement = "A superseded decision is marked as superseded rather than deleted."
+evidence = ["docs/adr/0031-value-types-compare-but-do-not-compute.md"]
+blocking = true
+status = "PASS"
+reason = """
+ADR-0031 is the worked example: superseded by ADR-0037 and still present, so the
+reasoning that was overturned survives alongside what overturned it.
+"""
+
+# ---------------------------------------------------------------------------
+# E — Living documentation
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-E-01"
+category = "living-documentation"
+requirement = "Required documents exist, are substantive, and carry no placeholder debt."
+evidence = ["tests/contract/test_documentation_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+A minimum size, an opening heading, and a ban on placeholder markers in prose.
+Documentation is a deliverable kept live by tests (ADR-0010), not a folder that
+is allowed to rot.
+"""
+
+[[criterion]]
+id = "FND-E-02"
+category = "living-documentation"
+requirement = "Every repository-relative Markdown link resolves."
+evidence = ["tests/contract/test_repository_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+Checked over every committable Markdown file, including untracked-but-unignored
+ones, so a document written this phase is checked before it is staged. External
+URLs are deliberately not fetched: that would be a network test.
+"""
+
+[[criterion]]
+id = "FND-E-03"
+category = "living-documentation"
+requirement = "A number or table written in prose is compared against its source."
+evidence = ["tests/contract/test_roadmap_contract.py", "tests/contract/test_quality_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+The delivered-phase frontier, the ADR count, the command table, the marker
+table, the test-module table and the toolchain list are each parsed out of prose
+and compared to what the code knows. A hand-maintained number is a number that
+goes stale.
+"""
+
+# ---------------------------------------------------------------------------
+# F — Static analysis
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-F-01"
+category = "static-analysis"
+requirement = "Tool configuration lives in pyproject.toml and nowhere else."
+evidence = ["pyproject.toml"]
+command = "python -m tools.quality lint"
+blocking = true
+status = "PASS"
+reason = """
+`setup.cfg`, `tox.ini`, `pytest.ini`, `mypy.ini`, `.flake8` and `ruff.toml` are
+each asserted absent. One file answers "how is this configured".
+"""
+
+[[criterion]]
+id = "FND-F-02"
+category = "static-analysis"
+requirement = "Type checking is strict, and the strictness is written out flag by flag."
+evidence = ["pyproject.toml", "tests/contract/test_packaging_contract.py"]
+command = "python -m tools.quality typecheck"
+blocking = true
+status = "PASS"
+reason = """
+Thirteen explicit flags rather than `strict = true`, so that a future mypy
+release cannot silently add or drop one. ADR-0018.
+"""
+
+[[criterion]]
+id = "FND-F-03"
+category = "static-analysis"
+requirement = "Every lint family selected, and every exemption, has a recorded reason."
+evidence = ["docs/engineering/STATIC_ANALYSIS.md"]
+blocking = true
+status = "PASS"
+reason = """
+Including the families deliberately not selected. An unexplained exemption is
+how a rule set quietly stops meaning anything.
+"""
+
+# ---------------------------------------------------------------------------
+# G — Deterministic tests
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-G-01"
+category = "deterministic-tests"
+requirement = "A test's level is decided by its directory, not by a decorator."
+evidence = ["tests/conftest.py", "tests/support.py"]
+blocking = true
+status = "PASS"
+reason = """
+The marker is applied by a collection hook, so `pytest -m unit` cannot disagree
+with the layout and a moved file cannot keep a stale label. ADR-0017.
+"""
+
+[[criterion]]
+id = "FND-G-02"
+category = "deterministic-tests"
+requirement = "The suite is offline by construction, and refuses a socket rather than trusting convention."
+evidence = ["tests/contract/test_isolation_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+An autouse fixture refuses outbound connections, failing with `pytest.fail` —
+a BaseException — so retry-and-backoff code cannot swallow the refusal. ADR-0024.
+The guard stops at the process boundary, which is why anything starting a child
+takes an injected runner.
+"""
+
+[[criterion]]
+id = "FND-G-03"
+category = "deterministic-tests"
+requirement = "Invariants are asserted over generated input under a deterministic CI profile."
+evidence = ["tests/property/test_values_properties.py", "tests/property/test_roadmap_properties.py"]
+command = "python -m tools.quality property"
+blocking = true
+status = "PASS"
+reason = """
+Two Hypothesis profiles (ADR-0023). The CI profile is derandomised and keeps no
+example database, so the same code examines the same inputs on every machine.
+"""
+
+# ---------------------------------------------------------------------------
+# H — Regression controls
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-H-01"
+category = "regression-controls"
+requirement = "Branch coverage is measured over the package and the tooling, against a floor."
+evidence = ["pyproject.toml"]
+command = "python -m tools.quality coverage"
+blocking = true
+status = "PASS"
+reason = """
+`branch = true`, `source = ["globin", "tools"]`, `fail_under = 95`. The tooling
+is measured because a quality entrypoint that decides whether a gate ran could,
+untested, report success for a check that never executed.
+"""
+
+[[criterion]]
+id = "FND-H-02"
+category = "regression-controls"
+requirement = "Surviving mutants are recorded with an argument, and compared in both directions."
+evidence = ["docs/engineering/mutation-baseline.toml"]
+command = "python -m tools.quality mutation"
+blocking = true
+status = "PASS"
+reason = """
+An unlisted survivor fails, and a listed survivor a run kills also fails.
+Nothing writes the file: the harness prints a block for a human to read, judge
+and paste, and a minimum reason length is what stops it being pasted unread.
+ADR-0033.
+"""
+
+[[criterion]]
+id = "FND-H-03"
+category = "regression-controls"
+requirement = "Narrow disciplines are enforced structurally, not by review."
+evidence = ["tests/architecture/test_clock_discipline.py", "tests/architecture/test_precision_discipline.py"]
+blocking = false
+status = "PASS"
+reason = """
+No ambient decimal context, no venue vocabulary as a live constant in the
+domain, no direct clock read. Non-blocking because these are narrower than the
+layer contract itself, which is blocking as FND-C-02.
+"""
+
+# ---------------------------------------------------------------------------
+# I — Runtime isolation
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-I-01"
+category = "runtime-isolation"
+requirement = "A test leaves the environment and working directory as it found them."
+evidence = ["tests/conftest.py", "tests/contract/test_isolation_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+The guard repairs the damage and then fails, so one leaking test does not cascade
+into every test after it while still being reported by name.
+"""
+
+[[criterion]]
+id = "FND-I-02"
+category = "runtime-isolation"
+requirement = "The suite's result is invariant under partitioning into separate processes."
+evidence = ["tools/quality/execution/shard.py"]
+command = "python -m tools.quality shards"
+blocking = true
+status = "PASS"
+reason = """
+Sharded by a stable digest rather than by a plugin (ADR-0036), with every test
+accounted for exactly once. It is slower than the plain run and buys evidence
+rather than time: that no test depends on sharing a process with another.
+"""
+
+[[criterion]]
+id = "FND-I-03"
+category = "runtime-isolation"
+requirement = "Time is an injected clock, and reading it directly is refused."
+evidence = ["src/globin/domain/clock.py", "src/globin/ports/clock.py"]
+blocking = true
+status = "PASS"
+reason = """
+Two ports, internal time UTC, and the adapter owns the timestamp (ADR-0034,
+ADR-0026). No test synchronises itself with the clock by sleeping.
+"""
+
+# ---------------------------------------------------------------------------
+# J — Test evidence
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-J-01"
+category = "test-evidence"
+requirement = "One run produces machine-readable evidence whose schema version is a contract."
+evidence = ["tools/quality/evidence/manifest.py", "docs/adr/0040-evidence-records-every-gate-and-its-schema-version-is-a-contract.md"]
+command = "python -m tools.quality evidence"
+blocking = true
+status = "PASS"
+reason = """
+Canonical JSON, no wall clock, no absolute path, and a self-digest over
+everything but the digest field. What was measured, on which commit, with which
+interpreter — answerable six months later from files.
+"""
+
+[[criterion]]
+id = "FND-J-02"
+category = "test-evidence"
+requirement = "Every published evidence file is covered by a checksum manifest."
+evidence = ["tools/quality/evidence/checksums.py"]
+blocking = true
+status = "PASS"
+reason = """
+Sorted by name, lowercase hexadecimal, sha256sum-compatible separator. A
+duplicate name is refused rather than resolved last-wins.
+"""
+
+[[criterion]]
+id = "FND-J-03"
+category = "test-evidence"
+requirement = "Generated artefacts are scanned for material they must not carry."
+evidence = ["tools/quality/evidence/redaction.py"]
+blocking = true
+status = "PASS"
+reason = """
+Findings carry no matched text, deliberately. An absolute path on this host
+contains the account holder's full name, and evidence is uploaded from a public
+repository.
+"""
+
+# ---------------------------------------------------------------------------
+# K — CI aggregation
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-K-01"
+category = "ci-aggregation"
+requirement = "One aggregate check decides a run, and a job that never ran cannot pass it."
+evidence = [
+    "tools/quality/workflow/gate.py",
+    "docs/adr/0042-one-aggregate-check-decides-a-run-and-the-artifact-digest-lives-outside-the-artifact.md",
+]
+command = "python -m tools.quality aggregate"
+blocking = true
+status = "PASS"
+reason = """
+GitHub reports a job that never started as skipped, and a skipped required check
+is not reported to branch protection as a failure — so a workflow that did
+nothing could satisfy a rule that trusts the check view. The aggregate maps
+skipped and cancelled to unmeasured.
+"""
+
+[[criterion]]
+id = "FND-K-02"
+category = "ci-aggregation"
+requirement = "The jobs a run requires are declared, and compared to the workflow both ways."
+evidence = ["pyproject.toml", "tests/contract/test_workflow_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+`[tool.globin.workflow]` names the required jobs, the publishing jobs, the
+required check and every job's timeout. A job present in one and absent from the
+other fails the suite.
+"""
+
+# ---------------------------------------------------------------------------
+# L — CI hardening
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-L-01"
+category = "ci-hardening"
+requirement = "Every action is pinned to a full commit SHA and declared in a manifest."
+evidence = ["docs/engineering/action-pins.toml"]
+blocking = true
+status = "PASS"
+reason = """
+The manifest and the workflows are compared in both directions, and the version
+comment beside each pin is checked against the commit it names. That comment has
+been wrong twice, which is why it is verified rather than trusted.
+"""
+
+[[criterion]]
+id = "FND-L-02"
+category = "ci-hardening"
+requirement = "The token starts read-only, and a privileged scope is bound to a trigger a fork cannot reach."
+evidence = ["tests/contract/test_ci_security_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+`pull_request_target` and `workflow_run` are absent. The one job holding
+`id-token: write` is guarded to a push to master, and the contract test checks
+the guard rather than only the scope — a permission is only as safe as the
+trigger that can reach it.
+"""
+
+[[criterion]]
+id = "FND-L-03"
+category = "ci-hardening"
+requirement = "No repository secret exists, and adding one requires a recorded decision."
+evidence = ["docs/engineering/CI_SECURITY.md"]
+blocking = true
+status = "PASS"
+reason = """
+A rule rather than a circumstance since Phase 015. On a public repository a pull
+request can carry code anybody wrote, and a secret would give every run a
+credential to leak.
+"""
+
+# ---------------------------------------------------------------------------
+# M — Supply chain
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-M-01"
+category = "supply-chain"
+requirement = "Dependencies are inventoried from every register that declares one, and drift is reported."
+evidence = ["tools/quality/supply/inventory.py"]
+command = "python -m tools.quality supply"
+blocking = true
+status = "PASS"
+reason = """
+Three registers: the dev extra's lower bounds, the workflows' exact installs,
+and the pre-commit hook revisions. Where they disagree, the gate says so.
+"""
+
+[[criterion]]
+id = "FND-M-02"
+category = "supply-chain"
+requirement = "A CycloneDX SBOM is generated here, deterministically."
+evidence = ["tools/quality/supply/sbom.py"]
+blocking = true
+status = "PASS"
+reason = """
+Hand-written rather than delegated to a tool that would emit a random serial
+number and a wall clock. The serial is derived from repository and commit, the
+timestamp is the commit's own date, and the gate builds it twice and compares
+bytes.
+"""
+
+[[criterion]]
+id = "FND-M-03"
+category = "supply-chain"
+requirement = "A dependency is adopted through a written review, not a commit."
+evidence = ["docs/DEPENDENCY_POLICY.md", "docs/engineering/dependency-reviews.toml"]
+blocking = true
+status = "PASS"
+reason = """
+Licence, maintenance signals and transitive cost weighed and recorded before
+adoption. `pip-audit` was the first dependency adopted through the process
+rather than before there was one.
+"""
+
+[[criterion]]
+id = "FND-M-04"
+category = "supply-chain"
+requirement = "Tracked content is scanned for credentials, and findings never carry the value."
+evidence = ["tools/quality/supply/secrets.py"]
+blocking = true
+status = "PASS"
+reason = """
+Eight high-confidence patterns, reported as truncated digests. The allowlist is
+keyed per file-and-pattern pair rather than per file, and a stale entry fails.
+"""
+
+[[criterion]]
+id = "FND-M-05"
+category = "supply-chain"
+requirement = "A vulnerability is either open or waived with an expiry, judged against the commit date."
+evidence = ["docs/engineering/vulnerability-waivers.toml"]
+blocking = true
+status = "PASS"
+reason = """
+Against the commit date rather than the clock, so a waiver cannot expire
+differently on two machines examining the same commit.
+"""
+
+# ---------------------------------------------------------------------------
+# N — Security governance
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-N-01"
+category = "security-governance"
+requirement = "Ownership and change control are declared once and validated offline."
+evidence = ["docs/engineering/governance.toml", "docs/security/GOVERNANCE.md"]
+command = "python -m tools.quality governance"
+blocking = true
+status = "PASS"
+reason = """
+ADR-0047. Every governing file present, exactly one CODEOWNERS, every
+security-sensitive path specifically owned, and every owned pattern matching
+something real.
+"""
+
+[[criterion]]
+id = "FND-N-02"
+category = "security-governance"
+requirement = "Every security-sensitive path is owned more specifically than by the catch-all."
+evidence = [".github/CODEOWNERS"]
+blocking = true
+status = "PASS"
+reason = """
+A check satisfied by `*` would be satisfied on any repository with a catch-all
+line, which is to say it would assert nothing. The specific entry is what
+survives the day a second maintainer makes the catch-all wrong.
+"""
+
+[[criterion]]
+id = "FND-N-03"
+category = "security-governance"
+requirement = "A vulnerability has a private reporting channel and a written response procedure."
+evidence = ["SECURITY.md", "docs/security/VULNERABILITY_RESPONSE.md"]
+blocking = true
+status = "PASS"
+reason = """
+The policy names its channel, the gate checks the section that names it is still
+there, and no public issue template solicits vulnerability detail.
+"""
+
+[[criterion]]
+id = "FND-N-04"
+category = "security-governance"
+requirement = "Where a secret may live is written down, and redaction happens before a record exists."
+evidence = ["docs/security/SECURITY_BASELINE.md"]
+blocking = true
+status = "PASS"
+reason = "ADR-0048. A secret lives outside the tree, and is redacted at the point of formatting."
+
+# ---------------------------------------------------------------------------
+# O — Release governance
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-O-01"
+category = "release-governance"
+requirement = "The project version has exactly one source, and the build backend reads it."
+evidence = ["src/globin/__init__.py", "pyproject.toml", "tests/contract/test_packaging_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+`__version__` in the package, read by Hatchling through
+`[tool.hatch.version] path`. The contract test asserts the configured path names
+the file that defines it, so the two cannot drift apart. The PyPA-recommended
+`importlib.metadata` comparison is deliberately not used: it needs an installed
+distribution, and this repository runs against the source tree with no build.
+"""
+
+[[criterion]]
+id = "FND-O-02"
+category = "release-governance"
+requirement = "How a version is chosen, tagged and published is written down in one place."
+evidence = ["docs/release/RELEASE_POLICY.md"]
+blocking = true
+status = "PASS"
+reason = """
+Version format, tag naming, preconditions, the draft-then-publish order,
+immutability, and why a mistaken release rolls forward rather than being
+repaired.
+"""
+
+[[criterion]]
+id = "FND-O-03"
+category = "release-governance"
+requirement = "Every released version is announced in a changelog."
+evidence = ["CHANGELOG.md"]
+blocking = true
+status = "PASS"
+reason = """
+The gate checks the target version is announced exactly once and that an
+Unreleased heading exists for work in flight. Announcing a version twice means a
+section was appended rather than edited.
+"""
+
+[[criterion]]
+id = "FND-O-04"
+category = "release-governance"
+requirement = "Automatic release notes are configured, with a catch-all category."
+evidence = [".github/release.yml"]
+blocking = true
+status = "PASS"
+reason = """
+Only labels that exist in this repository's taxonomy are used. Without the `*`
+catch-all a pull request matching no category is dropped silently, which reads
+to a release's audience as "nothing else changed". Dependabot is deliberately
+not excluded.
+"""
+
+[[criterion]]
+id = "FND-O-05"
+category = "release-governance"
+requirement = "A published release tag cannot be moved or deleted."
+evidence = ["docs/release/RELEASE_POLICY.md"]
+command = "gh api repos/aydhn/GLOBIN/rulesets"
+blocking = true
+status = "PASS"
+reason = """
+Ruleset 20890821, `release-tags`: target `tag`, pattern `refs/tags/v*`, rules
+`deletion` and `update`, enforcement active, no bypass actors. `creation` is
+deliberately not restricted — restricting it would refuse the very push that
+publishes a release. Verified by read-back; recorded in
+docs/research/phase_016_sources.md as S-13.
+"""
+
+# ---------------------------------------------------------------------------
+# P — Release readiness
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "FND-P-01"
+category = "release-readiness"
+requirement = "A deterministic gate checks the release contract before anything is published."
+evidence = ["tools/quality/release/gate.py", "tools/quality/release/plan.py"]
+command = "python -m tools.quality release"
+blocking = true
+status = "PASS"
+reason = """
+Built twice and compared byte for byte on every run, so determinism is checked
+rather than asserted. The preconditions that depend on the working tree rather
+than on the commit are a separate subcommand, because folding them in would make
+a legitimately different CI checkout fail every run.
+"""
+
+[[criterion]]
+id = "FND-P-02"
+category = "release-readiness"
+requirement = "Every published asset is covered by a SHA-256 digest."
+evidence = ["tools/quality/release/assets.py"]
+blocking = true
+status = "PASS"
+reason = """
+`SHA256SUMS` covers the manifest, and the manifest covers everything else — so
+every published byte is described exactly once, and the checksum file is never
+one of its own entries.
+"""
+
+[[criterion]]
+id = "FND-P-03"
+category = "release-readiness"
+requirement = "The foundation matrix is readable by a person, not only by the gate."
+evidence = ["docs/release/FOUNDATION_ACCEPTANCE.md"]
+blocking = true
+status = "PASS"
+reason = """
+The prose document is the one a reviewer argues with; this file is what the gate
+reads. A contract test compares the two so neither can drift.
+"""
+
+[[criterion]]
+id = "FND-P-04"
+category = "release-readiness"
+requirement = "The release is published under immutability, so its tag and assets cannot change."
+evidence = ["docs/release/RELEASE_POLICY.md"]
+command = "gh api repos/aydhn/GLOBIN/immutable-releases"
+blocking = true
+status = "PASS"
+reason = """
+Enabled before v0.1.0 was published, which is the only order that works:
+immutability applies to future releases only, so a release published first would
+sit outside the guarantee permanently. `PUT` returned 204 and the confirming
+read returned `{"enabled":true}`. Recorded as S-12.
+"""
+
+[[criterion]]
+id = "FND-P-05"
+category = "release-readiness"
+requirement = "The release tag's cryptographic status is recorded as what it actually is."
+evidence = ["tools/quality/release/manifest.py"]
+blocking = false
+status = "BLOCKED"
+reason = """
+This host holds no signing key material: no `user.signingkey`, no `gpg.format`,
+no GPG secret key and no SSH key (S-14). The tag is therefore annotated and
+UNSIGNED, and is recorded as `ANNOTATED_UNSIGNED` rather than described as
+signed. Non-blocking because no policy in this repository requires a signed
+release, and manufacturing a key to satisfy a checklist would produce a
+signature that proves possession of a key created for the purpose — worth
+nothing, and reading as worth something. Resolving this needs key material the
+owner must provide; it is not resolvable inside the repository.
+"""

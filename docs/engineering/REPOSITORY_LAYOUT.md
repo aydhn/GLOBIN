@@ -84,6 +84,7 @@ responsibilities and the test that enforces them.
 | `docs/engineering/` | Process contracts: how work is done, and the measured evidence a gate compares against | Domain reasoning, decisions |
 | `docs/research/` | One source ledger per phase, `phase_NNN_sources.md` | Copied vendor documentation |
 | `docs/security/` | The secret-handling rules, the vulnerability response runbook and the ownership model | The reporter-facing policy, which GitHub requires at `SECURITY.md` in the root |
+| `docs/release/` | How a version is chosen and a release cut, and what a phase band's completion rests on | The changelog, which convention puts at `CHANGELOG.md` in the root, and the machine-readable acceptance matrix, which lives with the other declarations in `docs/engineering/` |
 | `scripts/` | Host-specific entry points that must not be importable — currently the PowerShell gate | Logic worth testing; that belongs in `tools/` |
 | `tools/` | Importable, typed, tested development tooling that acts on the repository | Anything the application imports, or that ships in a distribution |
 | `.github/` | Repository templates | Configuration that belongs in `pyproject.toml` |

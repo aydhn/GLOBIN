@@ -53,6 +53,9 @@ Every class of fact has exactly one document that owns it. Others link.
 | Where a secret may live, and what redaction guarantees | [`SECURITY_BASELINE.md`](../security/SECURITY_BASELINE.md) |
 | Who owns which change, and which paths are security-sensitive | [`GOVERNANCE.md`](../security/GOVERNANCE.md) |
 | Git procedure | [`GIT_WORKFLOW.md`](../GIT_WORKFLOW.md) |
+| How a version is chosen, tagged and published | [`RELEASE_POLICY.md`](../release/RELEASE_POLICY.md) |
+| What changed between released versions | [`CHANGELOG.md`](../../CHANGELOG.md) |
+| Whether a phase band is complete, and on what evidence | [`FOUNDATION_ACCEPTANCE.md`](../release/FOUNDATION_ACCEPTANCE.md) |
 | Where files live | [`REPOSITORY_LAYOUT.md`](REPOSITORY_LAYOUT.md) |
 | Precedence between artefacts | [`SOURCE_OF_TRUTH.md`](SOURCE_OF_TRUTH.md) |
 | Terminology | [`GLOSSARY.md`](../GLOSSARY.md) |

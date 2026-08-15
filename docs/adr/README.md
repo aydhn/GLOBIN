@@ -113,6 +113,7 @@ a future reader can judge whether the reason still holds.
 | [0046](0046-the-repository-is-public-and-that-changes-the-threat-model.md) | The repository is public, and that changes the threat model rather than only the settings | Accepted |
 | [0047](0047-repository-governance-is-declared-once-and-validated-offline.md) | Repository governance is declared once and validated offline | Accepted |
 | [0048](0048-a-secret-lives-outside-the-tree-and-is-redacted-before-a-record-exists.md) | A secret lives outside the tree, and is redacted before a record exists | Accepted |
+| [0049](0049-a-version-has-one-source-and-a-release-is-frozen-evidence.md) | A version has one source, and a release is frozen evidence | Accepted |
 
 ## Relationship to other documents
 

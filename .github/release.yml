@@ -1,0 +1,67 @@
+# ---------------------------------------------------------------------------
+# GLOBIN automatic release notes.
+#
+# Schema: GitHub Docs — Automatically generated release notes. Recorded as S-06
+# in docs/research/phase_016_sources.md.
+#
+# EVERY LABEL BELOW EXISTS. The categories are built from this repository's real
+# label taxonomy — the defaults plus `accessibility`, plus the three
+# `.github/dependabot.yml` applies (`dependencies`, `ci`, `tooling`). A category
+# naming a label nobody applies is a heading that never appears, which looks like
+# configuration and behaves like a comment.
+#
+# ORDER IS SIGNIFICANT. A pull request is filed under the first category whose
+# labels it matches, so `*` must come last or it would swallow everything.
+#
+# NOTHING IS EXCLUDED, and that is a decision rather than an omission:
+#
+#   - No `exclude.authors`. Excluding Dependabot would hide precisely the
+#     dependency changes docs/DEPENDENCY_POLICY.md exists to keep visible. A
+#     release whose notes omit its dependency updates is a release whose notes
+#     are wrong about its supply chain.
+#
+#   - No `exclude.labels`. `invalid`, `duplicate` and `wontfix` mark work that
+#     does not get merged, so excluding them would remove nothing that could
+#     appear.
+#
+# WHAT THIS FILE DOES NOT DO. It shapes the notes GitHub generates from merged
+# pull requests. It is not the changelog: CHANGELOG.md is written by a person and
+# is the record this project stands behind. On a master-only workflow most
+# commits never become a pull request at all, so these notes will usually be
+# sparser than the changelog — which is the expected relationship between them,
+# not a defect in either.
+# ---------------------------------------------------------------------------
+
+changelog:
+  categories:
+    - title: Features
+      labels:
+        - enhancement
+
+    - title: Fixes
+      labels:
+        - bug
+
+    - title: Accessibility
+      labels:
+        - accessibility
+
+    - title: Documentation
+      labels:
+        - documentation
+
+    - title: Dependencies
+      labels:
+        - dependencies
+
+    - title: Continuous Integration and Tooling
+      labels:
+        - ci
+        - tooling
+
+    # The catch-all. Without it, a pull request matching none of the above is
+    # dropped from the notes silently, which reads to a release's audience as
+    # "nothing else changed".
+    - title: Other Changes
+      labels:
+        - "*"
