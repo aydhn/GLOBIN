@@ -270,6 +270,15 @@ guarantee the code cannot give.
 |---|---|---|
 | `test-evidence-windows-py314` | The nine evidence files and the browsable coverage tree | 30 days |
 | `quality-gate-verdict` | `aggregate-quality.json` — the verdict and its reasons | 30 days |
+| `supply-chain-evidence` | `supply-manifest.json`, the CycloneDX SBOM and the dependency inventory | 30 days |
+| `governance-evidence` | `governance-manifest.json` — the ownership arrangement and what it was checked against | 30 days |
+
+**Each artifact uploads exactly one directory, and that is load-bearing rather
+than tidy.** `upload-artifact` roots an archive at the *least common ancestor* of
+its paths, so adding a second path silently moves every file down a level.
+Phase 015 did exactly that to `supply-chain-evidence` and broke the `attest`
+job, whose `subject-path` then matched nothing. A new artefact gets a new
+artifact, not another line in an existing one.
 
 Thirty days is long enough to diagnose a failure somebody noticed late, short
 enough not to accumulate, and unchanged since Phase 010. GitHub permits 1 to 90,

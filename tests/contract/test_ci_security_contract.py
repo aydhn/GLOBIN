@@ -270,6 +270,55 @@ def duplicate_display_names(text: str) -> tuple[str, ...]:
     return tuple(sorted({name for name in names if names.count(name) > 1}))
 
 
+UPLOAD_ACTION: Final[str] = "actions/upload-artifact@"
+"""The action whose path handling this repository has already been caught by."""
+
+BLOCK_SCALARS: Final[frozenset[str]] = frozenset({"|", "|-", "|+", ">", ">-", ">+"})
+"""The YAML spellings that introduce a multi-line value."""
+
+STEP_STARTS: Final[tuple[str, ...]] = ("- name:", "- uses:", "- run:")
+
+
+def multi_path_uploads(text: str) -> tuple[str, ...]:
+    """Artifacts uploaded with more than one path.
+
+    Args:
+        text: The workflow.
+
+    Returns:
+        The artifact names, sorted. An unnamed step is reported as ``<unnamed>``
+        rather than skipped.
+
+    ``upload-artifact`` roots an archive at the **least common ancestor** of its
+    paths, so a step given one directory produces an archive of that directory's
+    files and the same step given two produces an archive of two subdirectories.
+    Every file moves down a level, with no error and no diff outside this file.
+
+    Phase 015 did this to ``supply-chain-evidence`` and broke ``attest``, whose
+    ``subject-path`` then matched nothing. The aggregate still passed, because
+    ``attest`` publishes rather than judges and is deliberately outside
+    ``required_jobs`` — so nothing failed, and the breakage was visible only by
+    reading the run. This turns that into a check.
+    """
+    offending: list[str] = []
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if UPLOAD_ACTION not in line:
+            continue
+        artifact = "<unnamed>"
+        for follower in lines[index + 1 :]:
+            stripped = follower.strip()
+            if stripped.startswith(STEP_STARTS):
+                break
+            if stripped.startswith("name:"):
+                artifact = stripped.removeprefix("name:").strip()
+            if stripped.startswith("path:"):
+                if stripped.removeprefix("path:").strip() in BLOCK_SCALARS:
+                    offending.append(artifact)
+                break
+    return tuple(sorted(offending))
+
+
 # ---------------------------------------------------------------------------
 # The tree
 # ---------------------------------------------------------------------------
@@ -494,6 +543,21 @@ def test_no_step_is_permitted_to_fail_quietly(workflow: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_no_artifact_is_uploaded_from_more_than_one_path(every_workflow: str) -> None:
+    """An archive rooted at a least common ancestor is an archive with a different shape.
+
+    Every consumer of an artifact addresses its contents by path, so adding a
+    second directory to an upload moves every file without changing a line
+    anywhere else. Phase 015 did exactly that and broke the attestation, which
+    reported an error while the run reported success.
+
+    A new artefact therefore gets a new artifact rather than another line in an
+    existing one — ``QUALITY_GATES.md`` says so, and this is what holds it.
+    """
+    offending = multi_path_uploads(every_workflow)
+    assert not offending, f"uploaded from more than one path: {list(offending)}"
+
+
 def test_every_job_declares_a_timeout(workflow: str) -> None:
     """Undeclared is not unbounded; it is GitHub's ceiling of six hours."""
     unbounded = sorted(set(job_blocks(workflow)) - set(job_timeouts(workflow)))
@@ -637,6 +701,7 @@ def test_the_clean_fixture_offends_nothing() -> None:
     assert not permission_violations(CLEAN)
     assert not masked_failures(CLEAN)
     assert not duplicate_display_names(CLEAN)
+    assert not multi_path_uploads(CLEAN)
     assert set(job_blocks(CLEAN)) == {"build", "gate"}
     assert job_timeouts(CLEAN) == {"build": 10, "gate": 10}
     assert triggers(CLEAN) == ("push", "merge_group")
@@ -826,3 +891,42 @@ def test_a_duplicated_display_name_is_caught() -> None:
     """Two jobs, one status check, and a branch rule pointing at whichever spoke last."""
     mutant = CLEAN.replace("    name: Build", "    name: Quality gate")
     assert duplicate_display_names(mutant) == ("Quality gate",)
+
+
+UPLOAD_STEP: Final[str] = """\
+      - name: Upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evidence
+          path: {paths}
+          if-no-files-found: error
+
+      - name: Next
+        run: echo done
+"""
+
+
+def test_a_single_path_upload_offends_nothing() -> None:
+    """The control, so the mutant below is not passing because the checker is blind."""
+    assert not multi_path_uploads(UPLOAD_STEP.format(paths=".globin/supply/"))
+
+
+def test_a_multi_path_upload_is_caught() -> None:
+    """The mistake Phase 015 actually made, and which nothing failed on.
+
+    Two paths move every file down a level, because the archive is rooted at
+    their least common ancestor. The `attest` job's `subject-path` then matched
+    nothing — and the aggregate still passed, because a publishing job is
+    deliberately not a required one.
+    """
+    mutant = UPLOAD_STEP.format(
+        paths="|\n            .globin/supply/\n            .globin/governance/"
+    )
+    assert multi_path_uploads(mutant) == ("evidence",)
+
+
+@pytest.mark.parametrize("scalar", ["|", "|-", ">", ">-"])
+def test_every_block_scalar_spelling_is_caught(scalar: str) -> None:
+    """One spelling missed would let the same mistake back in wearing different punctuation."""
+    mutant = UPLOAD_STEP.format(paths=f"{scalar}\n            a/\n            b/")
+    assert multi_path_uploads(mutant) == ("evidence",)

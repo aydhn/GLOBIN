@@ -286,16 +286,43 @@ jobs:
         # is exactly when somebody needs the manifest, the SBOM and the
         # inventory. Uploading them does not make the job pass — the step above
         # has already decided that.
+        #
+        # ONE PATH, DELIBERATELY. Phase 015 briefly added `.globin/governance/`
+        # to this same upload and broke the `attest` job, which is worth
+        # recording rather than quietly reverting: with two paths,
+        # `upload-artifact` roots the archive at their LEAST COMMON ANCESTOR, so
+        # the files moved from `supply-manifest.json` to `supply/supply-manifest.json`
+        # and `attest`'s `supply-evidence/*.json` matched nothing. The aggregate
+        # still passed, because `attest` publishes rather than judges and is
+        # deliberately outside `required_jobs` — which is the design working, and
+        # is also why the breakage had to be read out of the run rather than
+        # inferred from the verdict.
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: supply-chain-evidence
-          # Both manifests, under one artifact name. They describe the same
-          # commit from two angles and are read together; splitting them would
-          # be a second upload and a second thing to find.
-          path: |
-            .globin/supply/
-            .globin/governance/
+          path: .globin/supply/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload the governance evidence
+        # Its own artifact rather than a second path above, so that the layout
+        # `attest` depends on cannot be changed by adding one. Named for what it
+        # holds, which is also easier to find than a subdirectory of something
+        # else.
+        #
+        # NOT ATTESTED, and that is a decision. The `attest` job signs a
+        # provenance statement about supply-chain evidence, because an SBOM is a
+        # claim somebody downstream might rely on. The governance manifest is
+        # this repository's verdict about its own ownership arrangement; nothing
+        # consumes it elsewhere, so signing it would widen a privileged job's
+        # subject for no reader. Extending it later is a decision to record, not
+        # a default to inherit.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: governance-evidence
+          path: .globin/governance/
           retention-days: 30
           if-no-files-found: error
 
