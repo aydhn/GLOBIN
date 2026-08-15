@@ -52,6 +52,7 @@ python -m tools.quality full
 | `governance` | Code ownership, the security policy's required sections, sensitive-path coverage, the reporting channel, and that no public issue template collects vulnerability detail | Establishing that the governance arrangement still describes this repository |
 | `release` | The foundation acceptance matrix, the version, the tag it implies, the changelog, the release documents and the notes configuration. `release ready` adds the preconditions — branch, clean worktree, agreement with the remote | Establishing that a release may be cut, and publishing the evidence it will carry |
 | `runtime` | The Windows host and its kernel version, the interpreter's implementation, minor line, patch floor, architecture, width and build, the project environment's provenance and settings, and where `pip` would install from. `runtime bootstrap` adds building the environment | Establishing which machine and which interpreter the other gates were measured on |
+| `wheels` | The wheel survey in [`wheel-survey.toml`](wheel-survey.toml) against the runtime contract, with every recorded verdict recomputed from the wheel filenames recorded beside it. `wheels probe` adds asking the index whether the record is still true | Establishing that the libraries the roadmap schedules can be installed on the pinned interpreter |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
 
@@ -225,10 +226,14 @@ local gate. Selecting it in the command table rather than from an environment
 variable is what keeps CI and a developer's machine examining the same inputs; a
 machine with the variable unset would otherwise run a quietly different gate.
 
-The interpreter matrix is **provisional**. Interpreter selection and pinning is
-Phase 018; dependency resolution and locking is Phase 020. Until those phases
-run, the versions pinned in the workflow are a reproducibility measure, not a
-supported-platform claim.
+The interpreter matrix is **still provisional, for one remaining reason.** Phase
+017 pinned the interpreter — [`runtime-contract.toml`](runtime-contract.toml)
+names CPython 3.14 exactly — and Phase 018 verified that the libraries the roadmap
+schedules publish wheels for it ([`WHEEL_AVAILABILITY.md`](WHEEL_AVAILABILITY.md)).
+What has not happened is dependency resolution and locking, which is Phase 020.
+Until it does, the versions pinned in the workflow are a reproducibility measure,
+not a supported-platform claim, and the second matrix entry is a compatibility
+check rather than a second supported runtime.
 
 ### The aggregate gate, and which check to require
 
@@ -247,8 +252,9 @@ rather than quietly changing what the check means.
 **Why not require the other checks instead.** Two of them are named
 `Quality (Python 3.12)` and `Quality (Python 3.14)`, because a matrix job's check
 name carries its matrix value. A rule naming those breaks the day an interpreter
-is added or removed, and Phase 018 will do exactly that. `Quality gate` carries
-no operating system, no version and no matrix value, so it survives.
+is added or removed, and Phase 020 may still do exactly that when it decides what
+a lock file is resolved for. `Quality gate` carries no operating system, no
+version and no matrix value, so it survives.
 
 **Why the check view alone is not enough.** GitHub skips a job whose dependency
 failed, and a skipped required check is not reported to branch protection as a
@@ -331,18 +337,23 @@ Recorded here so that their absence is a decision rather than an oversight.
 
 | Deferred | Owning phase |
 |---|---|
-| Virtual environment lifecycle | 019 |
+| Environment drift detection and repair — creating and recreating are Phase 017's and are done; bringing a diverged environment back is not | 019 |
 | Dependency resolution and lockfiles | 020 |
-| Interpreter selection and pinning | 018 |
 | Packaging build verification | 017-032 |
 | Secret *storage* — the rules are Phase 015's and are now written; the store itself is not | 028, with credential collection in 029 |
 
-Two rows left this table when the phases owning them delivered. Docstring linting
-and naming conventions were Phase 013's and are now part of the `D` rules in
-`pyproject.toml`; the `pytest-xdist` question was Phase 014's and was answered by
-`shards`, which partitions the suite by a stable digest rather than by a plugin
+Four rows have left this table when the phases owning them delivered. Docstring
+linting and naming conventions were Phase 013's and are now part of the `D` rules
+in `pyproject.toml`; the `pytest-xdist` question was Phase 014's and was answered
+by `shards`, which partitions the suite by a stable digest rather than by a plugin
 ([ADR-0036](../adr/0036-test-execution-is-sharded-by-a-stable-digest-not-by-a-plugin.md)).
-A deferral that has been met is removed rather than left to read as outstanding.
+*Interpreter selection and pinning* and *virtual environment lifecycle* were both
+delivered by Phase 017 under the fourth scope amendment
+([ADR-0051](../adr/0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md)),
+and this table went on naming them against phases 018 and 019 until Phase 018
+noticed and corrected it. A deferral that has been met is removed rather than left
+to read as outstanding — including when what met it was a phase other than the one
+recorded here.
 
 Phase 004 configures the quality tools it uses and pins the versions it runs
 against. It does not solve dependency management, and nothing here should be

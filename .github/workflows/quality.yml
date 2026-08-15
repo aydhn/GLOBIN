@@ -367,6 +367,36 @@ jobs:
         if: always()
         run: python -m tools.quality release
 
+      - name: Run the wheel-availability gate
+        # In this job for the reason the governance step gives. Like governance
+        # and release, `check` reaches nothing: the survey's evidence is the set
+        # of wheel filenames recorded in `docs/engineering/wheel-survey.toml`, so
+        # deciding it needs no index.
+        #
+        # NO TOKEN and no `env:` block, for the same reason.
+        #
+        # `always()`, on the same reasoning: a failing supply-chain gate must not
+        # hide a survey finding.
+        if: always()
+        run: python -m tools.quality wheels
+
+      - name: Ask the index whether the survey is still true
+        # THE SECOND HALF, AND THE ONE THAT REACHES THE NETWORK. `check` above
+        # decides the record against itself; this asks PyPI whether the record
+        # still describes what is published — a new release, a withdrawn wheel, a
+        # `Requires-Python` cap tightened to exclude the pinned line.
+        #
+        # It belongs in this job precisely because this job is already the only
+        # one that reaches outside the runner, so the network dependency is
+        # declared in one place rather than two.
+        #
+        # An index that cannot be read reports UNMEASURED and exits 3, which is
+        # never a pass. There is no `continue-on-error` here and there must not
+        # be: `docs/DEPENDENCY_POLICY.md` prohibits it by name, because "could
+        # not look" and "found nothing" look alike from a distance.
+        if: always()
+        run: python -m tools.quality.wheels probe
+
       - name: Upload the supply-chain evidence
         # `always()`, for the reason the evidence upload gives: a run that failed
         # is exactly when somebody needs the manifest, the SBOM and the
@@ -435,6 +465,23 @@ jobs:
         with:
           name: release-evidence
           path: .globin/release/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload the wheel-survey evidence
+        # Its own artifact, for the reason the two uploads above give: a second
+        # path on an existing upload re-roots that archive at the least common
+        # ancestor and silently breaks whatever consumes it.
+        #
+        # Worth keeping because this manifest answers a question that outlives
+        # the run. When a later phase asks why the interpreter is pinned to this
+        # line, the answer is a set of wheel filenames read on a particular day,
+        # and this is where the run that read them recorded what it found.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheel-survey-evidence
+          path: .globin/wheels/
           retention-days: 30
           if-no-files-found: error
 

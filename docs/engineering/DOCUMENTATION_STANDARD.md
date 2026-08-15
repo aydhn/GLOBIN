@@ -56,6 +56,7 @@ Every class of fact has exactly one document that owns it. Others link.
 | How a version is chosen, tagged and published | [`RELEASE_POLICY.md`](../release/RELEASE_POLICY.md) |
 | What changed between released versions | [`CHANGELOG.md`](../../CHANGELOG.md) |
 | Whether a phase band is complete, and on what evidence | [`FOUNDATION_ACCEPTANCE.md`](../release/FOUNDATION_ACCEPTANCE.md) |
+| Whether the planned stack has wheels for the pinned interpreter | [`WHEEL_AVAILABILITY.md`](WHEEL_AVAILABILITY.md) |
 | Where files live | [`REPOSITORY_LAYOUT.md`](REPOSITORY_LAYOUT.md) |
 | Precedence between artefacts | [`SOURCE_OF_TRUTH.md`](SOURCE_OF_TRUTH.md) |
 | Terminology | [`GLOSSARY.md`](../GLOSSARY.md) |

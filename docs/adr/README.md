@@ -116,6 +116,7 @@ a future reader can judge whether the reason still holds.
 | [0049](0049-a-version-has-one-source-and-a-release-is-frozen-evidence.md) | A version has one source, and a release is frozen evidence | Accepted |
 | [0050](0050-the-runtime-is-a-declared-contract-and-venv-is-its-only-environment.md) | The runtime is a declared contract checked against the host, and `.venv` is its only environment | Accepted |
 | [0051](0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md) | Phase 017 absorbs interpreter pinning and the environment lifecycle, and this is not covered by precedent | Accepted |
+| [0052](0052-wheel-availability-is-a-recorded-survey-whose-verdict-is-recomputed.md) | Wheel availability is a recorded survey whose verdict is recomputed, and a gap is owned rather than fixed | Accepted |
 
 ## Relationship to other documents
 

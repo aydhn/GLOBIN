@@ -291,6 +291,26 @@ _RELEASE = Step("release", (), ("-m", "tools.quality.release"))
 # than quietly describing the wrong one.
 _RUNTIME = Step("runtime", (), ("-m", "tools.quality.runtime"))
 
+# The wheel-availability gate. Reads the survey in
+# `docs/engineering/wheel-survey.toml` and recomputes every recorded verdict from
+# the wheel filenames recorded beside it: whether each library the roadmap
+# schedules publishes something the pinned interpreter could install, on the
+# pinned platform.
+#
+# It REACHES NOTHING, like `governance`, `release` and `runtime`. The survey's
+# evidence is in the file, so deciding it needs no index. Its `probe` subcommand
+# does reach PyPI to ask whether that evidence is still true, and that is exactly
+# why `probe` is a subcommand rather than this step — the same split `runtime`
+# makes for `bootstrap`.
+#
+# In neither `fast` nor `full`, for the reason `governance` gives rather than the
+# reason `supply` does: it WRITES an artefact, and `full` runs before every commit
+# and reports rather than produces. The assertions that must gate a commit are in
+# `tests/contract/test_wheels_contract.py`, which the coverage step already runs.
+#
+# No modules are declared. It starts no child at all, Python or otherwise.
+_WHEELS = Step("wheels", (), ("-m", "tools.quality.wheels"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -359,6 +379,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "runtime",
         "This Windows host, its CPython and the project environment, against the contract.",
         (_RUNTIME,),
+    ),
+    Command(
+        "wheels",
+        "Whether the libraries the roadmap schedules have wheels for the pinned interpreter.",
+        (_WHEELS,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

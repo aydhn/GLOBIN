@@ -103,6 +103,33 @@ def test_engineering_documents_are_committable(committable_files: tuple[str, ...
     assert not missing, f"engineering contracts are ignored by Git: {missing}"
 
 
+def test_every_source_module_is_committable(
+    repo_root: Path, committable_files: tuple[str, ...]
+) -> None:
+    """A module Git would not commit is a module CI cannot import.
+
+    Phase 018 hit this and it is why the test exists. ``.gitignore`` carried a
+    bare ``wheels/`` for build output, and a bare pattern matches at every depth,
+    so ``tools/quality/wheels/`` — a source package — was swallowed whole.
+    ``git add -A`` reported nothing, the local gate passed because the files were
+    on disk, and the commit would have registered a quality command whose
+    implementation was not in the repository.
+
+    Checking the *documents* was not enough, because the accident is not about
+    documents. It is about a rule written for an artefact directory matching a
+    source directory that happens to share its name.
+    """
+    committable = set(committable_files)
+    ignored = [
+        relative
+        for directory in ("src", "tools")
+        for path in sorted((repo_root / directory).rglob("*.py"))
+        if "__pycache__" not in path.parts
+        and (relative := path.relative_to(repo_root).as_posix()) not in committable
+    ]
+    assert not ignored, f"source modules Git would not commit: {ignored}"
+
+
 # --------------------------------------------------------------------------
 # Cross-references
 # --------------------------------------------------------------------------

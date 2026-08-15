@@ -45,7 +45,14 @@ __pycache__/
 build/
 dist/
 sdist/
-wheels/
+# ANCHORED, unlike its neighbours, and Phase 018 is why. A pattern without a
+# leading slash matches at every depth, so a bare `wheels/` also ignored
+# `tools/quality/wheels/` — a source package, silently, with `git add -A`
+# reporting nothing. The gate would have been committed without its
+# implementation. This rule is about a build output directory at the repository
+# root, which is what the anchor now says. The same hazard applies to `build/`
+# and `dist/` above should a package ever legitimately take one of those names.
+/wheels/
 *.egg-info/
 *.egg
 .eggs/

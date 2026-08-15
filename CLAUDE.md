@@ -47,6 +47,7 @@ that certifies — and the one criterion it could not — is in
 | How do I report or respond to a vulnerability? | [`SECURITY.md`](SECURITY.md), [`docs/security/VULNERABILITY_RESPONSE.md`](docs/security/VULNERABILITY_RESPONSE.md) |
 | Who owns this path, and is a change to it security-sensitive? | [`docs/security/GOVERNANCE.md`](docs/security/GOVERNANCE.md), [`.github/CODEOWNERS`](.github/CODEOWNERS) |
 | Which Windows, which Python, and how do I build `.venv`? | [`docs/engineering/RUNTIME_BASELINE.md`](docs/engineering/RUNTIME_BASELINE.md), [`docs/engineering/runtime-contract.toml`](docs/engineering/runtime-contract.toml) |
+| Does the library I need have a wheel for that Python? | [`docs/engineering/WHEEL_AVAILABILITY.md`](docs/engineering/WHEEL_AVAILABILITY.md), [`docs/engineering/wheel-survey.toml`](docs/engineering/wheel-survey.toml) |
 | How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 | Which error do I raise? | [`src/globin/errors.py`](src/globin/errors.py), [ADR-0022](docs/adr/0022-error-taxonomy-rooted-in-one-type.md) |
 | How do I express a price or a quantity? | [`docs/VALUE_TYPES_POLICY.md`](docs/VALUE_TYPES_POLICY.md) |
@@ -268,6 +269,34 @@ Nothing in it edits the registry, the PATH, the execution policy, or any
 interpreter outside `.venv`. Reasoning:
 [`docs/engineering/RUNTIME_BASELINE.md`](docs/engineering/RUNTIME_BASELINE.md) and
 [ADR-0050](docs/adr/0050-the-runtime-is-a-declared-contract-and-venv-is-its-only-environment.md).
+
+A fifth sibling asks whether the libraries this programme schedules can actually
+run on that interpreter, and like the three above it **reaches nothing**:
+
+```bash
+python -m tools.quality wheels
+```
+
+It reads [`docs/engineering/wheel-survey.toml`](docs/engineering/wheel-survey.toml)
+and recomputes every recorded verdict from the wheel filenames recorded beside it,
+comparing its target against the runtime contract as it goes. The filenames are in
+the file precisely so the verdict can be checked rather than believed: an entry
+claiming a wheel exists whose own evidence does not support it fails without
+asking anything. It writes `.globin/wheels/wheel-manifest.json`.
+
+Its `probe` subcommand is the half that **does** reach PyPI, asking whether the
+record is still true — a new release, a withdrawn wheel, a `Requires-Python` cap
+tightened to exclude the pinned line:
+
+```bash
+python -m tools.quality.wheels probe
+```
+
+A gap is recorded and owned, never assumed: a verdict other than `available` must
+name the phase answering for it, and only an unowned gap fails. Nothing here is
+installed, resolved, locked or adopted — that is Phases 020-021. Reasoning:
+[`docs/engineering/WHEEL_AVAILABILITY.md`](docs/engineering/WHEEL_AVAILABILITY.md)
+and [ADR-0052](docs/adr/0052-wheel-availability-is-a-recorded-survey-whose-verdict-is-recomputed.md).
 
 One gate sits outside `full`, because it takes minutes rather than seconds:
 

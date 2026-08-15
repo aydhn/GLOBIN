@@ -68,6 +68,7 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/research/phase_015_sources.md",
     "docs/research/phase_016_sources.md",
     "docs/research/phase_017_sources.md",
+    "docs/research/phase_018_sources.md",
     # Added in Phase 016 with the release governance they carry. The changelog is
     # deliberately not here: it is required by the release gate, which checks the
     # version it announces rather than only that it exists.

@@ -19,6 +19,24 @@ can be opened and read.
 
 ## [Unreleased]
 
+### Wheel availability
+
+- The libraries the roadmap schedules are surveyed against the pinned interpreter
+  in [`docs/engineering/wheel-survey.toml`](docs/engineering/wheel-survey.toml),
+  recording for each the version read, its published `Requires-Python` and the
+  wheel filenames the index offers. `python -m tools.quality wheels` recomputes
+  every recorded verdict from those filenames offline and writes
+  `.globin/wheels/wheel-manifest.json`; `python -m tools.quality.wheels probe`
+  asks the index whether the record is still true.
+- **Every scheduled library has a wheel for CPython 3.14 on `win_amd64`**, so the
+  runtime contract is unchanged. Reasoning and the three findings are in
+  [`docs/engineering/WHEEL_AVAILABILITY.md`](docs/engineering/WHEEL_AVAILABILITY.md).
+- A gap is recorded and owned rather than treated as a failure: a verdict of
+  `source-only` or `absent` must name the phase answering for it, and only an
+  unowned gap fails the gate.
+- Nothing is resolved, locked or adopted. `project.dependencies` is still empty
+  and dependency resolution remains Phase 020's.
+
 ### Runtime baseline
 
 - The supported Windows host, CPython and project environment are declared in
