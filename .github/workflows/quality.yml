@@ -24,6 +24,22 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  # So the aggregate check below can be required by a merge queue without the
+  # queue then waiting forever for a check that never starts. Nothing here
+  # enables a merge queue — that is a repository setting no file can change — but
+  # a workflow that cannot run on `merge_group` is a workflow that quietly rules
+  # the option out.
+  #
+  # `checks_requested` is the only activity type GitHub documents for this event.
+  # Naming it is the documentation's own advice: an unlisted type added later
+  # would otherwise start triggering this workflow without anybody deciding so.
+  #
+  # Safe here because no expression in this file is pull-request-only. The whole
+  # set is `github.workflow`, `github.ref`, `matrix.*`, `needs.*`, `toJSON(needs)`
+  # and `!cancelled()`, and every one of them is defined under a merge-group
+  # event.
+  merge_group:
+    types: [checks_requested]
 
 # Least privilege. The quality jobs read the repository and write nothing back,
 # so the token they are handed can do exactly that and no more. Declaring it at
@@ -34,9 +50,24 @@ permissions:
 
 # Supersede an in-flight run when a newer commit arrives on the same ref. The
 # older run's verdict is about code nobody will merge.
+#
+# The group is namespaced by `github.workflow`, so a second workflow added later
+# cannot land in this one's group and cancel runs it knows nothing about.
+#
+# Cancellation is conditional, and master is the exception. Everywhere else a
+# superseded run is worth nothing: the commit it judged has already been replaced.
+# On master the run is the only thing that produces that commit's evidence
+# bundle, and a cancelled job reports `cancelled`, which the aggregate reads as
+# UNMEASURED rather than passed. Cancelling master runs would therefore trade a
+# few runner-minutes for a permanent hole in the evidence chain, one commit wide.
+# Pushes to master queue instead.
+#
+# A merge-group run is not master: `github.ref` under that event is the ref of
+# the merge group, so a queue entry superseded by a new queue state is still
+# cancelled, which is what should happen to it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   quality:
@@ -46,6 +77,16 @@ jobs:
     # platform that actually exercises the CRLF/LF rules in `.gitattributes`,
     # which a Linux runner would never test.
     runs-on: windows-latest
+    # Every job in this file declares a budget, and every budget is declared
+    # twice: here, and in `[tool.globin.workflow.timeouts]`, which
+    # `tests/contract/test_ci_security_contract.py` compares against this file in
+    # both directions. Without one, a job runs until GitHub's platform ceiling of
+    # six hours terminates it — long enough that a job wedged on a network read
+    # looks, for most of a working day, like a job still working.
+    #
+    # The numbers come from measured runs rather than from caution. See the
+    # settings file for the observed maxima each was derived from.
+    timeout-minutes: 15
 
     strategy:
       # Run every interpreter even after one fails. Knowing a break is
@@ -65,12 +106,12 @@ jobs:
       # runs against this repository. The trailing comment records which release
       # each SHA was, for humans; the SHA is what executes.
       - name: Check out the repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -99,15 +140,19 @@ jobs:
     # nothing on a commit that was going to fail anyway.
     needs: quality
     runs-on: windows-latest
+    # The largest budget in the file, and the only one whose cost scales with
+    # something a later phase will change: the harness runs a pytest subset once
+    # per mutant, so declaring another target lengthens this job.
+    timeout-minutes: 30
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.14'
 
@@ -133,15 +178,16 @@ jobs:
     # partitioning result on a tree that does not lint or type-check is noise.
     needs: quality
     runs-on: windows-latest
+    timeout-minutes: 15
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.14'
 
@@ -168,6 +214,7 @@ jobs:
     # nobody will merge.
     needs: quality
     runs-on: windows-latest
+    timeout-minutes: 15
 
     outputs:
       # The artifact's own SHA-256, which GitHub computes as the upload
@@ -180,12 +227,12 @@ jobs:
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.14'
 
@@ -240,15 +287,16 @@ jobs:
   hygiene:
     name: Pre-commit hooks
     runs-on: windows-latest
+    timeout-minutes: 10
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.14'
 
@@ -285,23 +333,32 @@ jobs:
     # every job it depends on had failed. That is the hole this job exists to
     # close, so it has to run precisely when something upstream did not.
     #
-    # `always()` would also run it when the whole run was cancelled. With
-    # `cancel-in-progress: true` above, every push cancels the run before it, so
-    # `always()` would spend a runner and post a confusing failing check on every
-    # superseded run. `!cancelled()` skips those and still runs after a failure.
-    # A single job that was cancelled while the run was not still reaches the
-    # aggregate, which reads it as unmeasured.
+    # `always()` would also run it when the whole run was cancelled. The
+    # concurrency rule above still cancels superseded runs everywhere except
+    # master, so on a pull request or a merge-group entry `always()` would spend a
+    # runner and post a confusing failing check on every run that a newer commit
+    # had already made irrelevant. `!cancelled()` skips those and still runs after
+    # a failure. A single job that was cancelled while the run was not still
+    # reaches the aggregate, which reads it as unmeasured.
+    #
+    # On master nothing is cancelled, so this condition costs nothing there and
+    # the evidence chain has no gaps to explain.
     if: ${{ !cancelled() }}
     runs-on: windows-latest
+    # The smallest amount of work in the file and deliberately not the smallest
+    # budget: this job downloads an artifact, and a stalled download is exactly
+    # the failure a timeout exists to bound. A required check that hangs blocks
+    # the branch as effectively as one that fails, and says less about why.
+    timeout-minutes: 10
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.14'
 

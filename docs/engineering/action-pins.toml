@@ -1,0 +1,71 @@
+# ---------------------------------------------------------------------------
+# Every remote GitHub Actions dependency this repository executes, and what each
+# pinned commit actually is.
+#
+# NOT A SNAPSHOT. Nothing writes this file. There is no command that refreshes
+# it, deliberately: a manifest generated from the workflow could only ever agree
+# with the workflow, which is not a check, it is a mirror. This file is written
+# by a human who verified each SHA against its upstream repository, and
+# `tests/contract/test_ci_security_contract.py` compares it against
+# `.github/workflows/quality.yml` in both directions. A pin the workflow uses
+# and this file does not list fails the suite; so does an entry here for an
+# action the workflow no longer uses.
+#
+# WHY IT EXISTS. A forty-character SHA is unreadable, so every pin in the
+# workflow carries a trailing `# vX.Y.Z` comment. A comment is not checked by
+# anything the platform runs, and two of the four in this repository were wrong
+# until this file was written: `actions/checkout@fbc6f39` was labelled v5.0.0
+# and is v5.1.0, `actions/setup-python@ece7cb06` was labelled v6.0.0 and is
+# v6.3.0. Nothing broke, because the SHA is what executes — which is exactly why
+# nobody noticed. The comments were the only human-readable account of what runs
+# against this repository, and half of them were fiction.
+#
+# `version` is the tag the SHA carried when it was verified, not the tag the
+# workflow asked for. Those differ whenever a pin was taken from a moving major
+# tag such as `v5`: the SHA is frozen at that moment, the tag is not.
+#
+# `verified` is the date a human resolved the tag and saw this SHA. It is not a
+# build timestamp and nothing regenerates it, so this file is byte-for-byte
+# stable across runs. It goes stale on purpose: a date years old is a fact worth
+# seeing.
+#
+# UPDATING A PIN is a documented procedure, not an edit. See
+# `docs/engineering/CI_SECURITY.md`.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# Every entry below was resolved on the date it records, against two independent
+# sources that agreed exactly: the GitHub REST API tag listing for the
+# repository, and `git ls-remote --tags` against `https://github.com/<repo>.git`.
+# One API is a single point of trust; the raw git protocol is a different code
+# path to the same upstream. See `docs/research/phase_013_sources.md`.
+#
+# All four are first-party `actions/*` repositories. No third-party action, no
+# fork, and no mirror executes in this workflow.
+# ---------------------------------------------------------------------------
+
+[[action]]
+repository = "actions/checkout"
+sha = "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"
+version = "v5.1.0"
+verified = "2026-08-15"
+
+[[action]]
+repository = "actions/setup-python"
+sha = "ece7cb06caefa5fff74198d8649806c4678c61a1"
+version = "v6.3.0"
+verified = "2026-08-15"
+
+[[action]]
+repository = "actions/upload-artifact"
+sha = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+version = "v7.0.1"
+verified = "2026-08-15"
+
+[[action]]
+repository = "actions/download-artifact"
+sha = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+version = "v8.0.1"
+verified = "2026-08-15"

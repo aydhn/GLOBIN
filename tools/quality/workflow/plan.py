@@ -87,12 +87,15 @@ class Configuration:
             required on ``master``.
         artifact: The name the evidence bundle is uploaded under.
         retention_days: How long GitHub keeps that bundle.
+        timeouts: Each job key paired with the minutes it may run for, in the
+            order declared.
     """
 
     required_jobs: tuple[str, ...]
     required_check: str
     artifact: str
     retention_days: int
+    timeouts: tuple[tuple[str, int], ...]
 
 
 def read_configuration(document: Mapping[str, object]) -> Configuration:
@@ -130,6 +133,7 @@ def read_configuration(document: Mapping[str, object]) -> Configuration:
         required_check=_text(table, "required_check"),
         artifact=_text(table, "artifact"),
         retention_days=_integer(table, "retention_days"),
+        timeouts=_timeouts(table, "timeouts"),
     )
 
 
@@ -274,6 +278,41 @@ def _text(table: Mapping[str, object], key: str) -> str:
         msg = f"[tool.globin.workflow] {key} must be a non-empty string"
         raise WorkflowError(msg)
     return value
+
+
+def _timeouts(table: Mapping[str, object], key: str) -> tuple[tuple[str, int], ...]:
+    """Read the per-job minute budgets out of the table.
+
+    Args:
+        table: The configuration table.
+        key: Which setting.
+
+    Returns:
+        Each job key paired with its budget, in declared order.
+
+    Raises:
+        WorkflowError: If the sub-table is absent or empty, or any budget is a
+            :class:`bool`, is not an :class:`int`, or is not positive.
+
+    A tuple of pairs rather than the mapping ``tomllib`` handed over, for the
+    reason :data:`RESULTS` gives: this is scanned a handful of times against six
+    entries, and a tuple cannot be edited by a caller that happens to hold it.
+
+    Empty is refused rather than defaulted. A timeouts table with nothing in it
+    would leave every job on GitHub's six-hour default while reading, to anyone
+    scanning the settings file, as though the question had been considered.
+    """
+    value = table.get(key)
+    if not isinstance(value, Mapping) or not value:
+        msg = f"[tool.globin.workflow] {key} must be a non-empty table of job budgets"
+        raise WorkflowError(msg)
+    budgets: list[tuple[str, int]] = []
+    for job, minutes in value.items():
+        if isinstance(minutes, bool) or not isinstance(minutes, int) or minutes < 1:
+            msg = f"[tool.globin.workflow] {key}.{job} must be a positive integer"
+            raise WorkflowError(msg)
+        budgets.append((str(job), minutes))
+    return tuple(budgets)
 
 
 def _integer(table: Mapping[str, object], key: str) -> int:

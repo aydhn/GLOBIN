@@ -44,6 +44,8 @@ ENGINEERING_DOCS: tuple[str, ...] = (
     # Added in Phase 004 with the quality gates they describe.
     "docs/engineering/QUALITY_GATES.md",
     "docs/engineering/STATIC_ANALYSIS.md",
+    # Added in Phase 013 with the CI hardening it describes (ADR-0043).
+    "docs/engineering/CI_SECURITY.md",
 )
 
 #: Change templates. Paths are fixed by GitHub, not chosen — see

@@ -107,6 +107,7 @@ a future reader can judge whether the reason still holds.
 | [0040](0040-evidence-records-every-gate-and-its-schema-version-is-a-contract.md) | Evidence records every gate, and its schema version is a compatibility contract | Accepted |
 | [0041](0041-serialization-is-exact-or-refused-and-a-version-is-refused-when-unknown.md) | Serialization is exact or refused, and an unknown version is refused rather than read | Accepted |
 | [0042](0042-one-aggregate-check-decides-a-run-and-the-artifact-digest-lives-outside-the-artifact.md) | One aggregate check decides a run, and the artifact digest lives outside the artifact | Accepted |
+| [0043](0043-ci-trust-is-declared-in-a-manifest-and-every-job-is-bounded.md) | CI trust is declared in a manifest the workflow is compared against, and every job is bounded | Accepted |
 
 ## Relationship to other documents
 

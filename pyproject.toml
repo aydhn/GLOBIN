@@ -409,3 +409,34 @@ artifact = "test-evidence-windows-py314"
 # permitted range is 1 to 90, and a repository or organisation setting can cap it
 # below whatever is written here — this is a request, not a guarantee.
 retention_days = 30
+
+# How long each job may run before GitHub stops it, in minutes.
+#
+# An undeclared timeout is not "no timeout": it is GitHub's default of six hours,
+# which is long enough that a job wedged on a network read looks like a job still
+# working, for most of a working day. Every value here is therefore deliberate.
+#
+# The numbers are derived from measured runs, not chosen for roundness. Across
+# runs 31848929219, 31853639648 and 31854207475 the observed maxima were
+# `quality` 2.5, `mutation` 6.5, `shards` 1.8, `evidence` 2.1, `hygiene` 1.0 and
+# `aggregate` 0.7 minutes. Each budget below is roughly five to ten times its
+# job's observed maximum, with a floor of ten minutes so that a cold runner or a
+# slow package index produces a slower run rather than a red one.
+#
+# `mutation` gets the largest budget because it is the only job whose cost scales
+# with something a later phase will change: it runs a pytest subset once per
+# mutant, so adding a target lengthens it. `aggregate` gets the smallest work but
+# not the smallest budget, because it downloads an artifact and a stalled
+# download is exactly the failure this table exists to bound.
+#
+# `tests/contract/test_ci_security_contract.py` compares these against
+# `.github/workflows/quality.yml` in both directions, so a job added there
+# without a budget here, or a budget here for a job that no longer exists, fails
+# the suite rather than quietly going unbounded.
+[tool.globin.workflow.timeouts]
+quality = 15
+mutation = 30
+shards = 15
+evidence = 15
+hygiene = 10
+aggregate = 10

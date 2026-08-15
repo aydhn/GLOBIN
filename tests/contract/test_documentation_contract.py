@@ -45,6 +45,7 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/engineering/DOCUMENTATION_STANDARD.md",
     "docs/engineering/QUALITY_GATES.md",
     "docs/engineering/STATIC_ANALYSIS.md",
+    "docs/engineering/CI_SECURITY.md",
     "docs/adr/README.md",
     "docs/adr/TEMPLATE.md",
     "docs/research/phase_001_sources.md",
@@ -59,6 +60,7 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/research/phase_010_sources.md",
     "docs/research/phase_011_sources.md",
     "docs/research/phase_012_sources.md",
+    "docs/research/phase_013_sources.md",
 )
 
 #: Minimum byte length for a document to count as substantive rather than a
@@ -185,6 +187,14 @@ REQUIRED_CONCEPTS: dict[str, tuple[str, ...]] = {
         "noqa",
         "type: ignore",
         "exception",
+    ),
+    "docs/engineering/CI_SECURITY.md": (
+        "pin",
+        "least privilege",
+        "merge queue",
+        "timeout",
+        "concurrency",
+        "fail-closed",
     ),
     "docs/adr/TEMPLATE.md": (
         "## status",

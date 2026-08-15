@@ -50,6 +50,7 @@ def _settings(**overrides: object) -> dict[str, object]:
         "required_check": "Quality gate",
         "artifact": "test-evidence-windows-py314",
         "retention_days": 30,
+        "timeouts": {"quality": 15, "evidence": 15},
     }
     table.update(overrides)
     return {"tool": {"globin": {"workflow": table}}}
@@ -163,6 +164,7 @@ def test_the_configuration_is_read() -> None:
         required_check="Quality gate",
         artifact="test-evidence-windows-py314",
         retention_days=30,
+        timeouts=(("quality", 15), ("evidence", 15)),
     )
 
 
@@ -197,6 +199,20 @@ def test_a_retention_that_is_not_a_positive_integer_is_refused(value: object) ->
     """``True`` is an ``int`` to :func:`isinstance` and would pass as one day."""
     with pytest.raises(WorkflowError, match="retention_days"):
         read_configuration(_settings(retention_days=value))
+
+
+@pytest.mark.parametrize("value", [{}, None, [], "15", 15])
+def test_a_missing_or_empty_timeout_table_is_refused(value: object) -> None:
+    """Empty is not "no opinion"; it is every job left on GitHub's six-hour default."""
+    with pytest.raises(WorkflowError, match="timeouts"):
+        read_configuration(_settings(timeouts=value))
+
+
+@pytest.mark.parametrize("value", [0, -1, True, "15", None, 1.5])
+def test_a_timeout_that_is_not_a_positive_integer_is_refused(value: object) -> None:
+    """Guard the checker with its failing case, ``True`` included for the reason above."""
+    with pytest.raises(WorkflowError, match=r"timeouts\.quality"):
+        read_configuration(_settings(timeouts={"quality": value}))
 
 
 # --------------------------------------------------------------------------

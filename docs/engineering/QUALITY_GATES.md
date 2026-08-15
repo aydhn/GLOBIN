@@ -191,10 +191,14 @@ two pins agree.
 
 ## Continuous integration
 
-`.github/workflows/quality.yml` runs on pushes to `master` and on pull requests
-targeting it. It exists to verify, never to repair, and it runs under the
-principle of least privilege: the token it is handed can read the repository and
-do nothing else.
+`.github/workflows/quality.yml` runs on pushes to `master`, on pull requests
+targeting it, and on merge-group entries. It exists to verify, never to repair,
+and it runs under the principle of least privilege: the token it is handed can
+read the repository and do nothing else.
+
+The table below is the summary. What CI is trusted with, why each setting is what
+it is, and the procedure for changing a pin belong to
+[`CI_SECURITY.md`](CI_SECURITY.md).
 
 | Property | Setting | Why |
 |---|---|---|
@@ -203,6 +207,8 @@ do nothing else.
 | Secrets | None | Quality checks need no credential, and GLOBIN has none |
 | Network | Package index only | No exchange, no market data, no external API under test |
 | Runner | `windows-latest` | The only platform GLOBIN declares, and the one that exercises the CRLF rules |
+| Job timeouts | Declared per job, derived from measured runs | Undeclared is not unbounded; it is GitHub's six-hour ceiling |
+| Cancellation | Superseded runs, except on `master` | A cancelled master run leaves that commit with no evidence |
 | Interpreters | 3.12 and 3.14 | The floor `requires-python` declares, and the version development happens on |
 
 Nothing in the workflow commits, pushes, formats or applies a fix. The GLOBIN

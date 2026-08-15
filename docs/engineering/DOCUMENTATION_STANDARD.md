@@ -47,6 +47,7 @@ Every class of fact has exactly one document that owns it. Others link.
 | What is tested and why | [`TESTING_STRATEGY.md`](../TESTING_STRATEGY.md) |
 | Which checks are mandatory, and what a failure means | [`QUALITY_GATES.md`](QUALITY_GATES.md) |
 | Lint and type rules, and how to obtain an exception | [`STATIC_ANALYSIS.md`](STATIC_ANALYSIS.md) |
+| What CI is trusted with, and how a pin is verified | [`CI_SECURITY.md`](CI_SECURITY.md) |
 | Git procedure | [`GIT_WORKFLOW.md`](../GIT_WORKFLOW.md) |
 | Where files live | [`REPOSITORY_LAYOUT.md`](REPOSITORY_LAYOUT.md) |
 | Precedence between artefacts | [`SOURCE_OF_TRUTH.md`](SOURCE_OF_TRUTH.md) |
