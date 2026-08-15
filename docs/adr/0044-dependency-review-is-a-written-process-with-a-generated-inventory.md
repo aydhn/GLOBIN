@@ -18,9 +18,16 @@ Meanwhile the repository had three registers describing one toolchain and nothin
 comparing them. `pyproject.toml`'s `dev` extra carries lower bounds. The workflow
 installs exact versions. `.pre-commit-config.yaml` pins a hook revision, and its
 own comment states that the revision must match the version the gate runs "so the
-hook and the gate cannot disagree about whether a file is clean". Nothing checked
-that. A developer could commit through a hook calling a file clean and watch CI
-call it dirty, with no diff to explain why.
+hook and the gate cannot disagree about whether a file is clean".
+
+**A correction to an earlier draft of this record.** That draft said nothing
+checked it. That was wrong: `test_the_hook_ruff_and_the_ci_ruff_are_the_same_version`
+in `test_quality_contract.py` has compared the ruff pair since Phase 004, and it
+is the check that actually caught the first Dependabot pull request this phase
+produced. What was missing is narrower than "nothing": that check names `ruff`
+in two hand-written regular expressions, so it covers one pair and would not
+notice a second hook added later. The inventory generalises it to any
+`<tool>-pre-commit` repository against any pinned distribution.
 
 ## Decision
 

@@ -13,8 +13,13 @@ that writing pins a version or merely bounds one.
 exact versions. ``.pre-commit-config.yaml`` pins a hook revision. They describe
 one toolchain from three angles, on purpose — the extra says what is required,
 the workflow says what was measured, the hook says what runs before a commit.
-Nothing compared them until now. :func:`drift` does, and a disagreement is a
-finding rather than a merge.
+:func:`drift` compares them, and a disagreement is a finding rather than a merge.
+
+One pair was already compared: ``test_quality_contract.py`` has checked the ruff
+hook against the ruff CI installs since Phase 004, by naming ``ruff`` in two
+regular expressions. What is new here is generality — the same rule for any
+``<tool>-pre-commit`` repository against any pinned distribution, so a second
+hook is covered the day it is added.
 
 **Canonical output.** Entries sort by a total key and render as one line of
 JSON with sorted keys, so the same tree produces the same bytes on any machine.
@@ -384,13 +389,17 @@ def drift(dependencies: tuple[Dependency, ...]) -> tuple[str, ...]:
     excludes is a pin nobody could satisfy.
 
     And a hook revision that disagrees with the version CI installs is the one
-    that bites hardest, because both halves pass on their own.
-    ``.pre-commit-config.yaml`` states the requirement in prose — the hook is
-    pinned to "the SAME version as the `ruff` the quality gate runs, so the hook
-    and the gate cannot disagree about whether a file is clean" — and until this
-    function existed nothing checked it. A developer would then commit through a
-    hook that called the file clean and watch CI call it dirty, with no diff
-    between them to explain why.
+    that bites hardest, because both halves pass on their own: a developer would
+    commit through a hook calling a file clean and watch CI call it dirty, with
+    no diff between them to explain why.
+
+    ``test_the_hook_ruff_and_the_ci_ruff_are_the_same_version`` in
+    ``tests/contract/test_quality_contract.py`` has checked that for **ruff**
+    since Phase 004, and it is what caught this repository's first Dependabot
+    pull request. It names ``ruff`` in two regular expressions, so it covers one
+    pair. This generalises the same rule to any ``<tool>-pre-commit`` repository
+    against any pinned distribution, so a second hook is covered the day it is
+    added rather than the day somebody remembers to widen a regex.
     """
     declared = {entry.name: entry for entry in dependencies if entry.source == PYPROJECT}
     installed = {
