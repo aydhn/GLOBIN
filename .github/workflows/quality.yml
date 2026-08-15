@@ -207,6 +207,69 @@ jobs:
         # exercising the CRLF rules in `.gitattributes`.
         run: python -m tools.quality shards
 
+  runtime:
+    name: Runtime baseline
+    # After the canonical gate, for the same reason the mutation and shards jobs
+    # are: a statement about the host a tree was measured on is worth little if
+    # the tree does not lint or type-check.
+    needs: quality
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.14'
+
+      # No `pip install` step. This job's whole point is that `bootstrap.ps1`
+      # installs the toolchain itself, from the pins these workflows already
+      # declare — a job that pre-installed them would be testing something other
+      # than the thing developers run.
+
+      - name: Build the environment from a clean machine
+        # The strongest evidence Phase 017 can produce: a hosted runner that has
+        # never seen this repository builds the environment the same way a
+        # developer does, from the same script, with no step in between.
+        #
+        # `setup-python` resolves `3.14` to the newest patch it publishes, which
+        # is at or above the contract's floor. If it ever resolves below one, this
+        # job fails with RUNTIME_INTERPRETER_NONCOMPLIANT and names both versions,
+        # which is the report to act on rather than a mystery.
+        run: powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
+
+      - name: Check the host through the environment it just built
+        # Deliberately a second run, and deliberately through the same script a
+        # developer runs. The manifest that survives is the one written by the
+        # environment's own interpreter, which `preflight.ps1` resolves; a
+        # manifest describing the interpreter that built it would be evidence
+        # about the wrong Python.
+        #
+        # Invoked as the script rather than as the environment's interpreter
+        # directly, so that this workflow contains no path into the environment.
+        # `tests/contract/test_evidence_contract.py` forbids one anywhere in this
+        # file, on the grounds that an uploaded artifact must carry evidence and
+        # not a machine's state — and a coarse rule that holds is worth more than
+        # a precise one nobody maintains.
+        run: powershell -ExecutionPolicy Bypass -File scripts/preflight.ps1
+
+      - name: Upload the runtime evidence
+        # One path, like every other upload here: adding a second re-roots the
+        # archive at the least common ancestor and silently breaks whatever
+        # consumes it, which is how `attest` broke in Phase 015.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: runtime-evidence
+          path: .globin/runtime/
+          retention-days: 30
+          if-no-files-found: error
+
   supply:
     name: Supply chain
     # After the canonical gate, for the same reason the others are: a
@@ -536,7 +599,7 @@ jobs:
     # compares the two, so renaming this job without updating the documentation
     # fails the suite rather than quietly detaching the rule from the check.
     name: Quality gate
-    needs: [quality, mutation, shards, supply, evidence, hygiene]
+    needs: [quality, mutation, shards, runtime, supply, evidence, hygiene]
 
     # `!cancelled()` rather than `always()`, and the difference is the point.
     #

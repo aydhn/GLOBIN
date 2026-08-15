@@ -114,6 +114,8 @@ a future reader can judge whether the reason still holds.
 | [0047](0047-repository-governance-is-declared-once-and-validated-offline.md) | Repository governance is declared once and validated offline | Accepted |
 | [0048](0048-a-secret-lives-outside-the-tree-and-is-redacted-before-a-record-exists.md) | A secret lives outside the tree, and is redacted before a record exists | Accepted |
 | [0049](0049-a-version-has-one-source-and-a-release-is-frozen-evidence.md) | A version has one source, and a release is frozen evidence | Accepted |
+| [0050](0050-the-runtime-is-a-declared-contract-and-venv-is-its-only-environment.md) | The runtime is a declared contract checked against the host, and `.venv` is its only environment | Accepted |
+| [0051](0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md) | Phase 017 absorbs interpreter pinning and the environment lifecycle, and this is not covered by precedent | Accepted |
 
 ## Relationship to other documents
 

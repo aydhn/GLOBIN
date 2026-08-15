@@ -264,6 +264,33 @@ _GOVERNANCE = Step("governance", (), ("-m", "tools.quality.governance"))
 # rather than as clean — which is a verdict rather than a missing tool.
 _RELEASE = Step("release", (), ("-m", "tools.quality.release"))
 
+# The runtime gate. Reads the runtime baseline in
+# `docs/engineering/runtime-contract.toml` and checks this host against it: the
+# operating system and its kernel version, the interpreter's implementation,
+# minor line, patch floor, architecture, width and build, the project
+# environment's provenance and settings, and where `pip` would install from.
+#
+# It REACHES NOTHING, like `governance` and `release`. It starts at most one child
+# — the launcher, to enumerate the runtimes this host has — and opens no socket.
+# Its `bootstrap` subcommand does call `pip`, which plainly does reach an index,
+# and that is exactly why `bootstrap` is a subcommand rather than this step.
+#
+# In neither `fast` nor `full`, for the reason `governance` gives rather than the
+# reason `supply` does: it WRITES an artefact, and `full` runs before every commit
+# and reports rather than produces. The assertions that must gate a commit are in
+# `tests/contract/test_runtime_contract.py`, which the coverage step already runs.
+#
+# No modules are declared. Like `aggregate`, `governance` and `release`, it starts
+# no *Python* child; the launcher it consults is an executable rather than a
+# module, and a host without one records that as a state rather than as a missing
+# tool (ADR-0045).
+#
+# RUN IT THROUGH THE ENVIRONMENT'S OWN INTERPRETER. Invoked any other way it
+# measures whichever Python the PATH resolved, which is the precise ambiguity the
+# gate exists to remove — so it reports a foreign interpreter as a failure rather
+# than quietly describing the wrong one.
+_RUNTIME = Step("runtime", (), ("-m", "tools.quality.runtime"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -327,6 +354,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "release",
         "The foundation acceptance matrix, the version, its tag and the changelog.",
         (_RELEASE,),
+    ),
+    Command(
+        "runtime",
+        "This Windows host, its CPython and the project environment, against the contract.",
+        (_RUNTIME,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

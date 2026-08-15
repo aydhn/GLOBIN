@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 016 of 320 complete — foundation only
+## Current status: Phase 017 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -28,7 +28,7 @@ capability cannot be claimed here without pointing at something real.
 |---|---|
 | Repository, branch policy, engineering contract — [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) | Implemented |
 | 320-phase roadmap, every phase named — [`ROADMAP.md`](ROADMAP.md) | Implemented |
-| Architecture decision records (49) — [`docs/adr/`](docs/adr/README.md) | Implemented |
+| Architecture decision records (51) — [`docs/adr/`](docs/adr/README.md) | Implemented |
 | Research source ledgers with primary sources — [`docs/research/`](docs/research/phase_001_sources.md) | Implemented |
 | UTC-only internal time: an injected clock, aware instants, milliseconds as a floored projection — [`TIME_POLICY.md`](docs/TIME_POLICY.md) | Implemented |
 | Exact decimal arithmetic, four rounding modes, tick and step alignment — [`PRECISION_POLICY.md`](docs/PRECISION_POLICY.md) | Implemented |
@@ -157,11 +157,28 @@ Placement rules are in
 
 ## Running the checks
 
-Requires Python 3.12 or later. The development toolchain is `pytest`,
-`pytest-cov`, `hypothesis`, `ruff`, `mypy` and `pre-commit`.
+Requires Windows and a CPython the runtime contract accepts; the values are in
+[`docs/engineering/runtime-contract.toml`](docs/engineering/runtime-contract.toml)
+and the reasoning is in
+[`docs/engineering/RUNTIME_BASELINE.md`](docs/engineering/RUNTIME_BASELINE.md).
+Build the project environment once:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
+```
+
+Then run the gate. It uses `.venv` and refuses to run without one, so which
+interpreter measured a result is a recorded fact rather than whatever `PATH`
+resolved:
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
+```
+
+To diagnose a host without changing anything:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/preflight.ps1
 ```
 
 This runs lint, format verification, strict type checking and the test suite

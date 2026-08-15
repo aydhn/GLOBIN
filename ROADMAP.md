@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-016 are complete. Phase 017 is next and has not started.**
-> Nothing beyond Phase 016 is implemented. GLOBIN does not trade, does not
+> **Phases 001-017 are complete. Phase 018 is next and has not started.**
+> Nothing beyond Phase 017 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
 >
@@ -57,7 +57,7 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Three have been made. Each cost an ADR, and each is
+> **Scope amendments.** Four have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
 > unchanged by all three.
@@ -86,6 +86,22 @@ the contract:
 > [ADR-0021](docs/adr/0021-phase-005-widens-to-include-the-test-foundation.md)
 > answers that warning rather than arguing it away, and states the four
 > conditions that would have to hold before this precedent applies again.
+>
+> **Fourth.** Phase 017 originally read *Windows Host Requirements Survey*, Phase
+> 018 *Python Interpreter Selection and Pinning*, and Phase 019 *Virtual
+> Environment Lifecycle Management*. Phase 017 now delivers all three. Phase 018
+> takes the wheel-availability survey that its own title made a precondition of
+> pinning and that Phase 017 did not do; Phase 019 takes drift detection and
+> repair, which Phase 017 also did not do.
+>
+> **This one fails the test.** ADR-0021 said an amendment must be able to say
+> *nothing displaced, nothing deferred, no phase owns the work, and the two halves
+> need each other*, and that one which cannot say all four is not covered by its
+> precedent. This displaces two phases, and both owned their work by name.
+> [ADR-0051](docs/adr/0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md)
+> records that rather than arguing it, on the owner's decision and with the
+> alternatives that were declined. A fifth amendment has a higher bar than a
+> fourth did, not a lower one.
 
 ---
 
@@ -123,9 +139,9 @@ host, including honest verification of GPU capability rather than assumption.
 
 | Phase | Title | Purpose | Status |
 |:-----:|-------|---------|:------:|
-| 017 | Windows Host Requirements Survey | Enumerate and verify the operating system, hardware, storage and network prerequisites for a GLOBIN host. | Planned |
-| 018 | Python Interpreter Selection and Pinning | Select and pin the runtime interpreter version after verifying wheel availability for the full planned stack. | Planned |
-| 019 | Virtual Environment Lifecycle Management | Define creation, validation, repair and recreation of the project virtual environment. | Planned |
+| 017 | Windows Host and CPython Runtime Baseline | Declare the supported host and interpreter, check both against the machine, and build the project virtual environment deterministically. | Complete |
+| 018 | Wheel Availability Survey for the Planned Stack | Verify every library the roadmap schedules has a Windows wheel for the pinned interpreter, and record each gap rather than assuming one. | Planned |
+| 019 | Environment Drift Detection and Repair | Detect divergence from the runtime contract as it appears, and define repair short of recreating the environment. | Planned |
 | 020 | Dependency Resolution and Lockfile Strategy | Choose the locking mechanism and define reproducible resolution, upgrade and audit procedures. | Planned |
 | 021 | Core Runtime Dependency Introduction | Introduce the first runtime dependencies under the zero-budget policy with explicit justification per package. | Planned |
 | 022 | Scientific Stack Installation and Verification | Install and verify the numerical and dataframe stack, confirming correctness rather than assuming it. | Planned |

@@ -41,6 +41,8 @@ GLOBIN/
 │   ├── engineering/            Process contracts, and the mutation baseline
 │   └── research/               Per-phase source ledgers
 ├── scripts/
+│   ├── bootstrap.ps1           Builds the project environment
+│   ├── preflight.ps1           Diagnoses the host; changes nothing
 │   └── verify.ps1              The single verification gate
 ├── src/
 │   └── globin/                 The Python package
@@ -97,9 +99,13 @@ product, so the boundary needs stating.
 - `tools/` is **importable Python**: typed, unit-tested, and type-checked by the
   same gate as everything else. `tools/quality` decides whether a check passed,
   which is exactly the kind of logic that must not be untestable.
-- `scripts/` is **host-specific glue that cannot be imported**: today one
-  PowerShell file that resolves the repository root, invokes the gate and
-  inspects the working tree. It is thin on purpose.
+- `scripts/` is **host-specific glue that cannot be imported**: today three
+  PowerShell files that resolve the repository root, choose an interpreter, and
+  invoke a gate. They are thin on purpose, and Phase 017 is where that was tested:
+  `bootstrap.ps1` can remove a directory, and the decision about *which* directory
+  is safe to remove lives in `tools/quality/runtime/plan.py` rather than in the
+  script, because a recursive delete composed from a shell variable is one bad
+  join away from removing something that matters.
 
 The test: if it contains a decision worth getting wrong, it belongs in `tools/`
 where a test can pin it. If it only exists because the host needs a particular

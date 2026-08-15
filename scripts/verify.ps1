@@ -15,6 +15,11 @@
     a check added to CI and not here — or the reverse — was invisible until it
     mattered.
 
+    Since Phase 017 it also does not decide *which Python* runs them. It uses the
+    project environment's interpreter and refuses to run without one. Before that,
+    this script invoked whichever `python` the PATH resolved first — on the
+    development host that is one of two, and "the checks passed" named neither.
+
     Because GLOBIN uses a master-only workflow with no pull request and no
     reviewer (ADR-0005), this script is the gate. Run it before staging, not
     after committing.
@@ -49,17 +54,36 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
+# `.venv` is spelled here and declared in `docs/engineering/runtime-contract.toml`.
+# See the same note in `preflight.ps1`: the duplication is a tripwire that
+# `tests/contract/test_runtime_contract.py` compares, not a second source.
+$EnvironmentDirectory = '.venv'
+$Python = Join-Path (Join-Path (Join-Path $RepoRoot $EnvironmentDirectory) 'Scripts') 'python.exe'
+
+# No fallback to a PATH interpreter, deliberately. An escape hatch here would be
+# used on exactly the day the environment was wrong, which is the day the gate's
+# answer matters most — and a gate that quietly measures a different interpreter
+# from the one the project declares is not a gate.
+if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
+    Write-Host ''
+    Write-Host "No interpreter at $EnvironmentDirectory\Scripts\python.exe." -ForegroundColor Red
+    Write-Host 'Create the environment first:' -ForegroundColor Red
+    Write-Host '  powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1' -ForegroundColor Red
+    Write-Host 'Reasoning: docs/engineering/RUNTIME_BASELINE.md' -ForegroundColor Red
+    exit 1
+}
+
 Write-Host ''
 Write-Host '=== GLOBIN verification gate ===' -ForegroundColor White
 Write-Host "Repository: $RepoRoot"
-Write-Host "Python:     $(python --version 2>&1)"
+Write-Host "Python:     $(& $Python --version 2>&1) ($EnvironmentDirectory)"
 Write-Host "Command:    $Command"
 
 Write-Host ''
 Write-Host "[1] Quality gate (python -m tools.quality $Command)" -ForegroundColor Cyan
 Write-Host ('-' * 70) -ForegroundColor DarkGray
 
-python -m tools.quality $Command
+& $Python -m tools.quality $Command
 $qualityExit = $LASTEXITCODE
 
 if ($qualityExit -ne 0) {

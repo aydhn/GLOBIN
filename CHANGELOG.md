@@ -19,8 +19,27 @@ can be opened and read.
 
 ## [Unreleased]
 
-Nothing yet. Phase 017 opens the environment-and-tooling band; see
-[`ROADMAP.md`](ROADMAP.md).
+### Runtime baseline
+
+- The supported Windows host, CPython and project environment are declared in
+  [`docs/engineering/runtime-contract.toml`](docs/engineering/runtime-contract.toml)
+  and checked against the machine by `python -m tools.quality runtime`, which
+  writes `.globin/runtime/runtime-manifest.json`.
+- `scripts/bootstrap.ps1` builds `.venv` from a verified interpreter and installs
+  the toolchain the workflows already pin; `scripts/preflight.ps1` diagnoses a
+  host and changes nothing.
+- `scripts/verify.ps1` now runs under `.venv\Scripts\python.exe` and refuses to
+  run without it, so which interpreter measured a result is recorded rather than
+  decided by `PATH` order. No automation depends on activation.
+- Every path outside the repository is recorded in the evidence as a fingerprint
+  rather than a path, and `pip` configuration is recorded as which scopes exist —
+  never a value.
+- A `Runtime baseline` job builds the environment on a clean Windows runner with
+  the same script a developer runs.
+- Reasoning:
+  [ADR-0050](docs/adr/0050-the-runtime-is-a-declared-contract-and-venv-is-its-only-environment.md),
+  and [ADR-0051](docs/adr/0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md)
+  for the roadmap amendment it required.
 
 ---
 

@@ -26,7 +26,7 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Fact | Value |
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
-| Completed phases | **001-015** |
+| Completed phases | **001-017** |
 | Phase 001 | **Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
 | Phase 002 | **Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Commit `9c46313`, pushed. |
 | Phase 003 | **Architecture Boundaries and Dependency Direction.** Five layers under `src/globin/`, the inward dependency contract in `docs/architecture/dependency-rules.toml`, C4 system context and container views, the ADR lifecycle with supersession rules, and `tests/architecture/test_architecture_contract.py` enforcing all of it. Commit `990e5f4`, pushed. |
@@ -42,8 +42,9 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Phase 013 | **013 — Coding Standards and Documentation Conventions.** Delivered in two halves, a phase apart. The CI trust hardening landed first as tooling under ADR-0032 — action pins declared in a manifest the workflow is compared against, per-job timeouts, `merge_group`, and cancellation that spares master (ADR-0043) — with the phase left `Planned` and its own scope untouched. Phase 014 closed that scope: pydocstyle `D` is now selected under the **Google** convention, which resolves the D203/D211 and D212/D213 conflicts by argument rather than by an arbitrary ignore entry. 801 findings became 347 under the convention, then 55 once `D103` was exempted in `tests/**` — a category error outside a library, since a test function is public only in that nothing marks it private and its name is already a sentence. The *requirement* was dropped, not the practice: every other `D` rule still holds every docstring that exists to the package's standard. The last five were a real conflict — the formatter inserts a space when a docstring opens with a quotation mark, and `D210` forbids it — and were **reworded rather than suppressed**. Commits `c5cf451` and the Phase 014 commit. |
 | Phase 014 | **014 — Dependency Review and Licence Audit Process.** `tools/quality/supply/`, the fifth gate package, and the process eleven places in the repository had been deferring to since ADR-0003. **The repository is now public** (ADR-0046) — that was the decision, and it was the owner's: every one of CodeQL, secret scanning, push protection, dependency review, attestations and rulesets refused with a plan ceiling while it was private, and going public unlocked all of them for nothing. Gated on a full-history scan first, because publishing exposes 32 commits rather than a working tree; 269 paths, 2.8 MB of diff, zero findings. The inventory reads three registers that describe one toolchain — the `dev` extra's lower bounds, the workflows' exact pins, the hook revision — and **compares them**. A correction to the first telling: the ruff pair was already compared, by `test_the_hook_ruff_and_the_ci_ruff_are_the_same_version` since Phase 004 — and that is the check which caught the first Dependabot pull request. What the inventory adds is generality: the old check names `ruff` in two regexes and would not notice a second hook. The SBOM is CycloneDX 1.7, generated here rather than by `cyclonedx-py`, because a tool that stamps a random serial and the wall clock cannot produce the same bytes twice; the serial is a UUIDv5 over the commit and the timestamp is the commit's own date, and the gate **builds it twice and compares** rather than asserting determinism. `pip-audit` is the first dependency adopted *through* the process rather than before it, at a measured cost of 7 declared packages becoming 26 audited. Three corrections found by running the thing: auditing the ambient environment measured the developer's machine rather than the repository; `--strict` exit 1 with empty stdout is a collection failure, not a finding count of zero; and `--offline` was a false name, because ADR-0024's socket guard does not cross a child process. ADR-0044 to ADR-0046. |
 | Phase 015 | **015 — Security Baseline and Secret Handling Rules.** Two halves that the roadmap's title already contained. The **secret-handling rules** are `docs/security/SECURITY_BASELINE.md` (ADR-0048): a secret lives outside the tree in an OS-protected store, is referred to by name and never by value, reaches an environment variable only as a hand-off, and is redacted *while the record is constructed* rather than at any sink — the clause `observability.py` and `evidence/redaction.py` were already implementing without a document saying why. CI holding no secret became a rule rather than a circumstance. Nothing was built: the store is 028's and the credential flow 029's. The **security baseline** is the governance layer the public repository had been missing — `SECURITY.md`, `.github/CODEOWNERS`, an issue chooser that routes reports away from public issues, a security-impact section in the change template, and `docs/security/VULNERABILITY_RESPONSE.md`, a nine-state runbook with a deterministic five-band triage matrix that is explicitly **not** CVSS. Private vulnerability reporting was `{"enabled": false}` and was switched on — `PUT` returned `204`, read-back `{"enabled":true}` — which is what let the policy name a real channel instead of an invented address. A sixth gate package, `tools/quality/governance/`, compares `docs/engineering/governance.toml` against the tree in both directions; the platform half is two new controls on the *existing* capability probe rather than a second one. ADR-0047 and ADR-0048. |
-| Last completed | **016 — Foundation Consolidation and Phase Gate Review.** The band-closing phase, and the first release: **`v0.1.0`**. The version was **already there** — `__version__ = "0.1.0"` in `src/globin/__init__.py`, read by Hatchling through `[tool.hatch.version] path` since Phase 001 — so the phase tagged what was declared rather than renumbering it, and the PyPA-recommended `importlib.metadata` comparison was deliberately **not** added because it needs an installed distribution and this repository runs against the source tree. A seventh gate package, `tools/quality/release/`, checks the contract; `docs/engineering/foundation-acceptance.toml` records **54 criteria across sixteen categories, 52 blocking**, compared against `docs/release/FOUNDATION_ACCEPTANCE.md` in both directions. The gate has **two subcommands** because there are two questions: `check` is deterministic over a commit and is what CI runs, `ready` asks about the working tree — folding the second into the first would fail every CI run, and since unmeasured outranks failed it would fail loudest for the least reason. **One criterion is `BLOCKED` and non-blocking:** `FND-P-05`, tag signing. The host holds no key material at all, and none was manufactured — a key created to satisfy a checklist proves possession of a key created to satisfy a checklist. Immutable releases were switched on **before** publishing (they apply only to future releases) and the tag ruleset `release-tags` restricts `deletion` and `update` on `refs/tags/v*`, deliberately **not** `creation`, which would refuse the publishing push. Consolidation found real drift: `SECURITY.md` asserted GLOBIN "has never been published, tagged, packaged or distributed", `GIT_WORKFLOW.md` had no tag procedure, and `pyproject.toml` cited a test path that moved in Phase 005. ADR-0049. |
-| Next phase | **017 — Windows Host Requirements Survey.** Not started. It opens the second band, *Environment and Tooling* (017-032): host prerequisites, interpreter pinning, `.venv` lifecycle, dependency locking, configuration and credential onboarding. Phase 015 wrote the secret-handling rules and built no store; that store is this band's. |
+| Phase 016 | **Foundation Consolidation and Phase Gate Review.** The band-closing phase, and the first release: **`v0.1.0`**. The version was **already there** — `__version__ = "0.1.0"` in `src/globin/__init__.py`, read by Hatchling through `[tool.hatch.version] path` since Phase 001 — so the phase tagged what was declared rather than renumbering it, and the PyPA-recommended `importlib.metadata` comparison was deliberately **not** added because it needs an installed distribution and this repository runs against the source tree. A seventh gate package, `tools/quality/release/`, checks the contract; `docs/engineering/foundation-acceptance.toml` records **54 criteria across sixteen categories, 52 blocking**, compared against `docs/release/FOUNDATION_ACCEPTANCE.md` in both directions. The gate has **two subcommands** because there are two questions: `check` is deterministic over a commit and is what CI runs, `ready` asks about the working tree — folding the second into the first would fail every CI run, and since unmeasured outranks failed it would fail loudest for the least reason. **One criterion is `BLOCKED` and non-blocking:** `FND-P-05`, tag signing. The host holds no key material at all, and none was manufactured — a key created to satisfy a checklist proves possession of a key created to satisfy a checklist. Immutable releases were switched on **before** publishing (they apply only to future releases) and the tag ruleset `release-tags` restricts `deletion` and `update` on `refs/tags/v*`, deliberately **not** `creation`, which would refuse the publishing push. Consolidation found real drift: `SECURITY.md` asserted GLOBIN "has never been published, tagged, packaged or distributed", `GIT_WORKFLOW.md` had no tag procedure, and `pyproject.toml` cited a test path that moved in Phase 005. ADR-0049. |
+| Last completed | **017 — Windows Host and CPython Runtime Baseline.** The band-opening phase, and the **fourth roadmap scope amendment**: the roadmap split this work across 017 (host survey), 018 (interpreter pinning) and 019 (`.venv` lifecycle), and the owner chose to deliver all three at once. ADR-0021's four conditions were shown to fail on two of them — *nothing displaced* and *no phase owns the work* — and [ADR-0051](docs/adr/0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md) records the failure rather than arguing it. 018 and 019 were retitled to work Phase 017 genuinely did not do: wheel availability, and drift-and-repair. **The defect this phase removed was real and measurable**: the host carries two interpreters and two `py.exe` launchers on `PATH`, and `pip` resolved to a *user-site* directory, so sixteen phases of "the tests passed" named no interpreter and `pip install` here would have written into a directory shared with every project on the machine — the new gate's first run reported exactly that, as `RUNTIME_PIP_FOREIGN`. An eighth gate package, `tools/quality/runtime/`, compares `docs/engineering/runtime-contract.toml` against the machine. The patch is a **floor, not an exact pin** (`3.14.5`, the version installed): an exact pin fails the build the day a security patch lands, and one re-derived from whatever is installed when that becomes inconvenient is a mirror rather than a check. `pyvenv.cfg` turned out to record the creating interpreter's **full three-component version** — undocumented, verified in `Lib/venv/__init__.py` — which makes exact-patch and stale-environment checks a file read rather than a process launch. ADR-0050. |
+| Next phase | **018 — Wheel Availability Survey for the Planned Stack.** Not started. Phase 017 pinned an interpreter *before* anything verified the planned stack has wheels for it, which inverts the order the roadmap stated; this phase is what closes that, and **if the survey finds the pinned line unusable, the contract Phase 017 wrote is what changes**. It also owns the two refusals ADR-0050 recorded as provisional on exactly this survey: free-threaded builds and prereleases. Phase 015 wrote the secret-handling rules and built no store; that store is still this band's. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
 
 **The roadmap has been amended three times.** Band ranges, phase numbers and band
@@ -193,7 +194,13 @@ no market data, no strategy, no models. Anything claiming otherwise is wrong.
 - Not a high-frequency context: tens of trades per hour at most. Reliability
   outranks latency.
 - Interpreter floor is **Python 3.12**, set by XGBoost's requirement — the
-  strictest among the planned stack.
+  strictest among the planned stack. That is `requires-python`, and it is what
+  the *package* supports. Since Phase 017 the *development host* is held to
+  something narrower and separate:
+  [`docs/engineering/runtime-contract.toml`](docs/engineering/runtime-contract.toml)
+  declares the CPython line and a patch floor, and a contract test asserts the
+  floor sits inside `requires-python`. Do not merge the two — they answer
+  different questions.
 
 ---
 
@@ -237,6 +244,30 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
 
 ## Working rules
 
+- **Bootstrap before anything, once per clone:**
+  `powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1`. Since Phase
+  017 `verify.ps1` runs under `.venv\Scripts\python.exe` and **refuses to run
+  without it**, with no fallback to a `PATH` interpreter — a fallback would be
+  used on exactly the day the environment was wrong. Never activate the
+  environment in automation; address the interpreter directly.
+- **Never run a bare `pip install` for this project.** Before Phase 017 it would
+  have installed into a user-level directory shared with every other project on
+  this machine, and nothing recorded that it happened. Use
+  `.venv\Scripts\python.exe -m pip`.
+- **A new `tools/quality` package must be measured on its own before it is
+  believed covered.** The 95 floor is a repository-wide average, and Phase 017's
+  package sat at 89% while the whole tree read 96%. Run
+  `--cov=tools.quality.<name>` against just its tests; the gaps were entirely in
+  the observation and failure paths, which is where they always will be.
+- **The `## Supersedes` section of an ADR is machine-parsed, and Phase 017 hit
+  this again.** Writing "the four conditions in ADR-0021 are *not* superseded by
+  this record" made the suite read a supersession claim and fail. Say it anywhere
+  else in the document.
+- **`python -m tools.quality <gate> <subcommand>` is a usage error.** The command
+  table takes exactly one word, so a subcommand goes to the sub-package with a
+  **dot**: `python -m tools.quality.release ready`,
+  `python -m tools.quality.runtime bootstrap`. `CLAUDE.md` documented the space
+  form for `release ready` from Phase 016 until Phase 017 corrected it.
 - **Verify before committing:** `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`
   runs `python -m tools.quality full` — lint, format check, type check and the
   branch-coverage suite — then inspects the branch and working tree. There is no
@@ -504,9 +535,20 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
   untouched.
 - The system Git config sets `core.autocrlf=true`; `.gitattributes` overrides it
   so the repository always stores LF while Windows scripts check out as CRLF.
-- `pytest`, `pytest-cov`, `ruff`, `mypy` and `pre-commit` are installed at user
-  level; no virtual environment exists yet by design (Phases 17-32). The
-  `pre-commit` executable is not on `PATH`; invoke it as `python -m pre_commit`.
+- **The toolchain lives in `.venv` since Phase 017**, built by
+  `scripts/bootstrap.ps1` from the versions the workflows pin. A user-level copy
+  of it still exists on this machine and is now the *wrong* one to use; the
+  `pre-commit` executable is still not on `PATH`, so invoke it as
+  `.venv\Scripts\python.exe -m pre_commit`.
+- **This host carries two interpreters and two `py.exe` launchers on `PATH`**
+  (`C:\Python314` and a 3.12 under `AppData\Local\Programs`; `C:\Windows\py.exe`
+  and a launcher under `AppData\Local\Programs\Python\Launcher`). It is the legacy
+  launcher, not the Python install manager: `py -0p` and `py -V:3.14` work, `py
+  list` and `py install` do not. Enabling the manager means uninstalling "Python
+  Launcher" from Installed apps, which no phase has done.
+- Long paths are **disabled** on this host, recorded rather than fixed — enabling
+  them is a machine-wide registry change requiring elevation, and nothing needs
+  them yet.
 - The CI workflow pins exact tool versions matching this machine. Those pins are
   a reproducibility measure, not a lockfile; Phase 020 owns the real one.
 - No packaging build has been run. Build verification is deferred to Phases

@@ -23,10 +23,27 @@ and the disagreement is a defect worth fixing, not just working around.
 
 ## Environment
 
-Python 3.12 or later. The floor is evidence-based rather than arbitrary: XGBoost,
-scheduled for Phase 182, requires 3.12 while the rest of the planned stack
-requires 3.10. Choosing the strictest known constraint now avoids a breaking
-change later. See `docs/research/phase_001_sources.md`.
+Build the project environment once, before anything else:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
+```
+
+Since Phase 017 the verification gate runs under `.venv\Scripts\python.exe` and
+refuses to run without it. You never need to activate it — every script addresses
+the interpreter directly, so `PATH` order cannot change what runs. Which Windows
+and which CPython are required, and what to do about each way a host can be wrong,
+are in
+[`docs/engineering/RUNTIME_BASELINE.md`](docs/engineering/RUNTIME_BASELINE.md).
+
+`pyproject.toml` declares Python 3.12 or later, and that floor is evidence-based
+rather than arbitrary: XGBoost, scheduled for Phase 182, requires 3.12 while the
+rest of the planned stack requires 3.10. Choosing the strictest known constraint
+now avoids a breaking change later. See `docs/research/phase_001_sources.md`. The
+*development host* is held to something narrower, declared separately in
+[`docs/engineering/runtime-contract.toml`](docs/engineering/runtime-contract.toml)
+— what the package supports and what the gates were measured on are different
+facts, and a test asserts the second sits inside the first.
 
 The development toolchain is `pytest`, `pytest-cov`, `hypothesis`, `ruff`, `mypy`,
 `pre-commit` and `pip-audit`, declared
@@ -42,8 +59,10 @@ is recorded in
 Tests import the package straight from `src/` because `pythonpath = ["src"]` is
 configured, so **no build or install step is required** to work on the project.
 
-Formal virtual environment and dependency locking are the subject of Phases
-17-32 and are deliberately not solved yet.
+Phase 017 solved the virtual environment; dependency locking is Phase 020 and is
+deliberately not solved yet. `bootstrap.ps1` installs the exact toolchain versions
+`.github/workflows/` already pins, read from there rather than declared again —
+that is reproducible enough to work with, and it is not a lock file.
 
 ## The verification gate
 

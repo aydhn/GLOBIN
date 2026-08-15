@@ -1,0 +1,93 @@
+# ---------------------------------------------------------------------------
+# The declared runtime baseline: which Windows host, which CPython, and which
+# virtual environment GLOBIN is developed and verified on.
+#
+# NOT A SNAPSHOT. Nothing writes this file, for the reason `governance.toml`
+# gives about itself: a manifest generated from the host could only ever agree
+# with the host, which is a mirror rather than a check. This file is what a human
+# decided; `tools/quality/runtime/` compares it against the real host, and
+# `tests/contract/test_runtime_contract.py` asserts its shape offline as part of
+# the ordinary suite.
+#
+# NOT A SECOND `requires-python`. `pyproject.toml` declares `requires-python`,
+# which is the range the *package* supports and is evidence-based: XGBoost, due
+# in Phase 182, is the strictest constraint at >=3.12. That is a different fact
+# from the one below. This file declares the baseline the *development and
+# verification host* must meet, which is narrower on purpose — the gates are only
+# ever run on one interpreter, and "it passed somewhere" is not evidence about
+# here. A contract test asserts the floor below satisfies `requires-python`, so
+# the two cannot drift into contradiction.
+#
+# A FLOOR, NOT AN EXACT PIN. `minimum_patch` is the oldest patch this baseline
+# was verified on; anything later in the same minor line passes. An exact pin
+# would fail the build on the day a security patch was installed, which is the
+# day it is least welcome — and a pin that is re-derived from whatever happens to
+# be installed whenever it becomes inconvenient is a mirror again. Raising the
+# floor is a deliberate edit, made when the tree has actually been verified on
+# the newer patch.
+#
+# WHY THESE VALUES, in `RUNTIME_BASELINE.md` and ADR-0050. What appears below is
+# the conclusion and a pointer, not a second copy of the argument.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# The interpreter.
+#
+# `minor_line` is the series, and it is exact rather than a floor: a repository
+# verified on 3.14 has not been verified on 3.15, and the day 3.15 arrives is the
+# day to run the gates and decide, not to have already silently accepted it.
+#
+# `free_threaded` is false because the free-threaded build (`3.14t`) is a
+# different ABI with a different wheel set, and Phase 018 has not yet surveyed
+# whether the planned stack publishes for it. Refusing it is not a judgement
+# about the build; it is a refusal to assume an answer nobody has looked up.
+#
+# `allow_prerelease` is false for the same reason in a sharper form: a release
+# candidate can change behaviour before its final release, so a gate that passed
+# on one is evidence about a runtime that no longer exists.
+# ---------------------------------------------------------------------------
+
+[interpreter]
+implementation = "CPython"
+minor_line = "3.14"
+minimum_patch = "3.14.5"
+architecture = "AMD64"
+pointer_bits = 64
+free_threaded = false
+allow_prerelease = false
+
+# ---------------------------------------------------------------------------
+# The host.
+#
+# Windows only, which is ADR-0009's decision rather than this file's: GLOBIN
+# declares one platform and CI runs on it alone. `minimum_release` is Windows 10
+# because that is the floor CPython 3.14 itself supports on Windows, and because
+# PyTorch — scheduled far later, but already surveyed — states the same floor.
+# Naming an older release would be declaring support for something no component
+# of the planned stack supports.
+# ---------------------------------------------------------------------------
+
+[host]
+system = "Windows"
+minimum_release = "10"
+
+# ---------------------------------------------------------------------------
+# The environment.
+#
+# One directory name, at the repository root, and it is not configurable. A
+# project whose environment can live anywhere is a project where "which Python
+# ran that" has no answer, and this repository already has enough interpreters on
+# PATH to make that question real.
+#
+# `system_site_packages` is false because the alternative makes the environment's
+# contents depend on the machine it was created on, which is the precise property
+# a locked environment exists to remove. It is checked rather than assumed:
+# `pyvenv.cfg` records it, so an environment created with the flag is detected
+# rather than trusted.
+# ---------------------------------------------------------------------------
+
+[environment]
+directory = ".venv"
+system_site_packages = false

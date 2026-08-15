@@ -51,6 +51,7 @@ python -m tools.quality full
 | `supply` | Dependency inventory, a CycloneDX 1.7 SBOM, a `pip-audit` vulnerability audit, waiver expiry, action pinning, content secret hygiene, and what the platform will and will not do | Establishing what this repository depends on and what that costs |
 | `governance` | Code ownership, the security policy's required sections, sensitive-path coverage, the reporting channel, and that no public issue template collects vulnerability detail | Establishing that the governance arrangement still describes this repository |
 | `release` | The foundation acceptance matrix, the version, the tag it implies, the changelog, the release documents and the notes configuration. `release ready` adds the preconditions — branch, clean worktree, agreement with the remote | Establishing that a release may be cut, and publishing the evidence it will carry |
+| `runtime` | The Windows host and its kernel version, the interpreter's implementation, minor line, patch floor, architecture, width and build, the project environment's provenance and settings, and where `pip` would install from. `runtime bootstrap` adds building the environment | Establishing which machine and which interpreter the other gates were measured on |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
 

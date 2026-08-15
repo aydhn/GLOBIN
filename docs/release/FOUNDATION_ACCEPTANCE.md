@@ -269,11 +269,18 @@ Phase 016 closes the first band. **Phase 017 may begin.**
 The next band — *Phases 017-032, Environment and Tooling* — owns everything Phase
 016 deliberately did not touch:
 
+The three rows below were written by Phase 016 and amended by Phase 017, which
+absorbed the second and third into the first. The amendment, and why it is not
+covered by the precedent that governs amendments, is
+[ADR-0051](../adr/0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md).
+The `v0.1.0` tag is untouched; this document describes the plan for the band that
+follows it, and a plan that has changed is corrected rather than left standing.
+
 | Area | Owner |
 |---|---|
-| Windows host requirements: operating system, hardware, storage, network | Phase 017 |
-| Python interpreter selection and pinning, verified against wheel availability | Phase 018 |
-| Virtual environment lifecycle: creation, validation, repair, recreation | Phase 019 |
+| Windows host requirements, interpreter pinning, and the virtual environment lifecycle | Phase 017 — **delivered** |
+| Wheel availability across the planned stack, against the pinned interpreter | Phase 018 |
+| Environment drift detection, and repair short of recreation | Phase 019 |
 | Dependency resolution and lock files | Phase 020 |
 | Runtime configuration bootstrap | Phases 021-032 |
 | Credential and secret onboarding — the *store*, not the rules | Phases 021-032 |
@@ -294,3 +301,8 @@ run, and describing one as verified before Phases 017-032 is specifically
 forbidden by [`../../MEMORY.md`](../../MEMORY.md). That a `.venv` exists or is
 managed. That any credential exists anywhere. That anything in this repository
 has ever contacted Binance.
+
+Of those, the second no longer holds: Phase 017 built the environment and the
+gates run under it. The rest stand. In particular **no packaging build has been
+run**, and Phase 017 did not run one — it installs a toolchain into an
+environment, which is not the same thing as building this package.

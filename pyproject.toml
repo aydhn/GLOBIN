@@ -432,7 +432,7 @@ tests = [
 # names: the key is what appears in the `needs` context, and the display name is
 # what appears as a status check. Conflating them is how a rename silently drops
 # a requirement.
-required_jobs = ["quality", "mutation", "shards", "supply", "evidence", "hygiene"]
+required_jobs = ["quality", "mutation", "shards", "runtime", "supply", "evidence", "hygiene"]
 
 # The single check name to mark as required on `master`. Stable by design: it
 # carries no operating system, no interpreter version and no matrix value, so the
@@ -507,4 +507,11 @@ hygiene = 10
 # for the network, not for the work. Like `supply`, it has no measured run
 # behind it yet.
 attest = 10
+# Added in Phase 017. Like `supply` and `attest` when they arrived, it has no
+# measured run behind it yet, and like `supply` it waits on something outside
+# GitHub: `bootstrap.ps1` installs the pinned toolchain from a package index, so
+# a slow index lengthens it in a way no local change explains. Ten is the budget
+# the comparable jobs carry, and it is a number to revisit against measurement
+# rather than to trust — see `docs/research/phase_017_sources.md`.
+runtime = 10
 aggregate = 10

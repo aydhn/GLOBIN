@@ -46,6 +46,7 @@ that certifies — and the one criterion it could not — is in
 | Where may a secret live, and what is redacted? | [`docs/security/SECURITY_BASELINE.md`](docs/security/SECURITY_BASELINE.md) |
 | How do I report or respond to a vulnerability? | [`SECURITY.md`](SECURITY.md), [`docs/security/VULNERABILITY_RESPONSE.md`](docs/security/VULNERABILITY_RESPONSE.md) |
 | Who owns this path, and is a change to it security-sensitive? | [`docs/security/GOVERNANCE.md`](docs/security/GOVERNANCE.md), [`.github/CODEOWNERS`](.github/CODEOWNERS) |
+| Which Windows, which Python, and how do I build `.venv`? | [`docs/engineering/RUNTIME_BASELINE.md`](docs/engineering/RUNTIME_BASELINE.md), [`docs/engineering/runtime-contract.toml`](docs/engineering/runtime-contract.toml) |
 | How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 | Which error do I raise? | [`src/globin/errors.py`](src/globin/errors.py), [ADR-0022](docs/adr/0022-error-taxonomy-rooted-in-one-type.md) |
 | How do I express a price or a quantity? | [`docs/VALUE_TYPES_POLICY.md`](docs/VALUE_TYPES_POLICY.md) |
@@ -110,6 +111,18 @@ when they hold real content. Full placement rules:
 
 The host is **Windows**. The primary shell is PowerShell; a Bash tool is also
 available and takes POSIX syntax. Do not mix the two in one invocation.
+
+**Build the project environment before anything else.** Since Phase 017 the gate
+runs under `.venv\Scripts\python.exe` and refuses to run without it. Once, per
+clone:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
+```
+
+Automation never activates the environment; it addresses the interpreter directly,
+so `PATH` order cannot change what runs. Reasoning and troubleshooting:
+[`docs/engineering/RUNTIME_BASELINE.md`](docs/engineering/RUNTIME_BASELINE.md).
 
 The full gate, which is what you must run before committing:
 
@@ -215,16 +228,46 @@ well formed. It writes the manifest, the machine-readable acceptance record and
 `SHA256SUMS` into `.globin/release/`.
 
 A second subcommand adds the questions that are about the working tree rather
-than the commit — branch, cleanliness, agreement with the remote:
+than the commit — branch, cleanliness, agreement with the remote. Note the **dot**
+rather than a space: the command table takes one word, so a subcommand is passed
+to the sub-package directly, and `python -m tools.quality release ready` is a
+usage error rather than a run.
 
 ```bash
-python -m tools.quality release ready
+python -m tools.quality.release ready
 ```
 
 Run `ready` immediately before cutting a release, not on every push: two runs of
 it can legitimately disagree, which is why CI runs `check`. Procedure and
 reasoning: [`docs/release/RELEASE_POLICY.md`](docs/release/RELEASE_POLICY.md) and
 [ADR-0049](docs/adr/0049-a-version-has-one-source-and-a-release-is-frozen-evidence.md).
+
+A fourth sibling asks which machine the other gates were measured on, and like
+`governance` and `release` it **reaches nothing**:
+
+```bash
+python -m tools.quality runtime
+```
+
+It reads [`docs/engineering/runtime-contract.toml`](docs/engineering/runtime-contract.toml)
+and compares this host against it: the operating system and its kernel version,
+the interpreter's implementation, minor line, patch floor, architecture, width and
+build, the project environment's provenance and settings, and where `pip` would
+install from. It writes `.globin/runtime/runtime-manifest.json`, in which every
+path outside the repository is a fingerprint rather than a path.
+
+Run it through the environment's own interpreter or it measures the wrong one —
+`scripts/preflight.ps1` does that for you. Its `bootstrap` subcommand is the only
+thing here that creates anything, and it writes only inside the repository:
+
+```bash
+python -m tools.quality.runtime bootstrap --recreate
+```
+
+Nothing in it edits the registry, the PATH, the execution policy, or any
+interpreter outside `.venv`. Reasoning:
+[`docs/engineering/RUNTIME_BASELINE.md`](docs/engineering/RUNTIME_BASELINE.md) and
+[ADR-0050](docs/adr/0050-the-runtime-is-a-declared-contract-and-venv-is-its-only-environment.md).
 
 One gate sits outside `full`, because it takes minutes rather than seconds:
 
