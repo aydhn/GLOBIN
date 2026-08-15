@@ -47,6 +47,7 @@ python -m tools.quality full
 | `shards` | The suite partitioned N ways, each shard its own process | Proving no test depends on sharing a process with another |
 | `mutation` | Mutation testing of the declared targets, against the baseline | Proving the tests would notice a change |
 | `evidence` | The suite, coverage, lint and typing in one run, recorded as JUnit XML, coverage in four forms, each tool's findings, a digested manifest and checksums | Producing something a machine can read and a person can check later |
+| `aggregate` | This run's job results and its published evidence, reduced to one verdict | Deciding whether a whole CI run passed, and saying why |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
 
@@ -218,6 +219,90 @@ The interpreter matrix is **provisional**. Interpreter selection and pinning is
 Phase 018; dependency resolution and locking is Phase 020. Until those phases
 run, the versions pinned in the workflow are a reproducibility measure, not a
 supported-platform claim.
+
+### The aggregate gate, and which check to require
+
+The workflow presents several status checks. Exactly one of them is meant to be
+required on `master`:
+
+> **`Quality gate`**
+
+It is the `aggregate` job, and it succeeds only when every job in
+`[tool.globin.workflow] required_jobs` reported success **and** the evidence that
+run published says every gate passed. A contract test compares that list against
+the jobs actually declared in the workflow, in both directions, so a job added
+without being considered — or removed while still required — fails the suite
+rather than quietly changing what the check means.
+
+**Why not require the other checks instead.** Two of them are named
+`Quality (Python 3.12)` and `Quality (Python 3.14)`, because a matrix job's check
+name carries its matrix value. A rule naming those breaks the day an interpreter
+is added or removed, and Phase 018 will do exactly that. `Quality gate` carries
+no operating system, no version and no matrix value, so it survives.
+
+**Why the check view alone is not enough.** GitHub skips a job whose dependency
+failed, and a skipped required check is not reported to branch protection as a
+failing one. A rule that trusted the check view could therefore be satisfied by a
+run in which everything it depended on had failed. The aggregate closes that by
+running when something upstream did not — `if: ${{ !cancelled() }}` — and by
+requiring each job to have *reported* success rather than merely to have not
+reported failure. Anything it cannot determine exits `3`, which is not a pass.
+
+**Branch protection is not configured here.** It is a repository setting, in a
+different control plane from this repository's contents: no file in this tree can
+turn a check into a required one, and nothing in this phase attempts to. Making
+`Quality gate` required is a one-time action in the repository's settings, and
+until somebody takes it the check is informative rather than blocking. Saying so
+plainly is the point — a document claiming the rule exists would be describing a
+guarantee the code cannot give.
+
+### Evidence artifacts and their integrity
+
+| Artifact | Contents | Retention |
+|---|---|---|
+| `test-evidence-windows-py314` | The nine evidence files and the browsable coverage tree | 30 days |
+| `quality-gate-verdict` | `aggregate-quality.json` — the verdict and its reasons | 30 days |
+
+Thirty days is long enough to diagnose a failure somebody noticed late, short
+enough not to accumulate, and unchanged since Phase 010. GitHub permits 1 to 90,
+and a repository or organisation setting can cap it lower than the value declared
+here — `retention-days` is a request rather than a guarantee.
+
+**Two integrity layers, and neither contains the other.**
+
+`checksums.sha256` covers every file *inside* the evidence bundle and is written
+before the upload. The bundle's own SHA-256 is computed *by GitHub* as the upload
+completes, so nothing inside it can carry that value — an artifact holding its own
+digest would be a file containing its own hash. It is published as a job output
+instead, recorded in `aggregate-quality.json`, and shown in the step summary.
+[ADR-0042](../adr/0042-one-aggregate-check-decides-a-run-and-the-artifact-digest-lives-outside-the-artifact.md)
+records the split.
+
+The aggregate job re-verifies the bundle after downloading it, using the same
+`python -m tools.quality.evidence verify` the evidence job ran. The bytes are
+different — they have been through an upload and a download — so a bundle
+corrupted in transit is caught rather than trusted.
+
+### When the gate fails
+
+The step summary names the failing job or gate and carries the commands to
+reproduce it. In order of what they cost:
+
+| Question | Command |
+|---|---|
+| Does the tree pass at all? | `python -m tools.quality full` |
+| What did the last local run measure? | `python -m tools.quality evidence` |
+| Is the evidence intact? | `python -m tools.quality.evidence verify` |
+| What is the verdict, and why? | `python -m tools.quality aggregate` |
+
+Run locally, `aggregate` reads whatever evidence the last `evidence` run wrote,
+because there is no workflow context on a developer's machine. It is the same
+evaluator CI uses, so a verdict here and a verdict there mean the same thing.
+
+A gate reporting `not run` is not a milder version of a failure. It means the run
+could not establish the answer, which casts doubt on the gates that did report —
+so the aggregate treats it as outranking a plain failure, the rule
+`tools/quality/execution/plan.py` already applies to a shard.
 
 ---
 

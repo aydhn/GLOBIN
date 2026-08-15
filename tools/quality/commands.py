@@ -176,6 +176,24 @@ _SHARDS = Step(
     ("-m", "tools.quality.execution", "shards"),
 )
 
+# The aggregate verdict for a whole CI run. Reads the results of this run's jobs
+# and the evidence they published, and reduces the two to one answer.
+#
+# It measures nothing itself. Every number it reports was produced by a gate
+# above; what it adds is the question none of them can answer alone — did every
+# required job actually RUN. GitHub reports a job that never started as skipped,
+# and a skipped required check is not reported to branch protection as a failure,
+# so a workflow that did nothing can satisfy a rule that trusts the check view.
+#
+# In neither `fast` nor `full`, on the same reasoning as the mutation, shard and
+# evidence gates: it is about a CI run rather than about a tree, and locally it
+# reads whatever evidence the last `evidence` run left rather than producing any.
+#
+# No modules are declared. Unlike every other step here it starts no child at
+# all — it reads two files and some environment variables — so there is no tool
+# whose absence could turn a gate into an unmeasured one.
+_AGGREGATE = Step("aggregate", (), ("-m", "tools.quality.workflow"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -219,6 +237,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "evidence",
         "Machine-readable evidence for one run: JUnit XML, coverage, manifest, checksums.",
         (_EVIDENCE,),
+    ),
+    Command(
+        "aggregate",
+        "This run's job results and its published evidence, reduced to one verdict.",
+        (_AGGREGATE,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

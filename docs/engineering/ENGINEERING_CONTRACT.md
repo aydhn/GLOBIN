@@ -252,7 +252,16 @@ what a failure means is [`QUALITY_GATES.md`](QUALITY_GATES.md).
 Persisted data outlives the code that wrote it. Breaking a stored format requires
 a migration path and an explicit decision, not a silent schema change. In-repo
 interfaces may change freely while the phase that owns them is active, but not
-after a later phase depends on them. Serialization contracts are **Phase 012**.
+after a later phase depends on them.
+
+Every persisted document declares a schema name and an integer version, and a
+reader **refuses** a version it does not implement rather than reading the parts
+it recognises. A record older than the reader is migrated forward one version at
+a time. Serialization is exact or refused: an encoder that would have to narrow a
+value raises instead, because a stored value read back as something else breaks
+the comparison that made it worth keeping. The rules are in
+[`SERIALIZATION_POLICY.md`](../SERIALIZATION_POLICY.md) and the decision is
+[ADR-0041](../adr/0041-serialization-is-exact-or-refused-and-a-version-is-refused-when-unknown.md).
 
 ### 21. Documentation evolves with the architecture
 

@@ -372,3 +372,40 @@ tests = [
     "tests/property/test_precision_properties.py",
     "tests/contract/test_precision_contract.py",
 ]
+
+# ---------------------------------------------------------------------------
+# The aggregate CI gate (Phase 012, as tooling under ADR-0032; see ADR-0042).
+#
+# Declared here rather than inferred from the workflow, because a gate that
+# discovered which jobs matter by looking at which jobs reported would be
+# satisfied by a workflow with every job deleted. `tests/contract` compares this
+# table against `.github/workflows/quality.yml` in both directions, so a job
+# added there without being considered here, or removed from there while still
+# required here, fails the suite rather than quietly changing what the check
+# means.
+# ---------------------------------------------------------------------------
+[tool.globin.workflow]
+# Every job whose success the aggregate check depends on. Job KEYS, not display
+# names: the key is what appears in the `needs` context, and the display name is
+# what appears as a status check. Conflating them is how a rename silently drops
+# a requirement.
+required_jobs = ["quality", "mutation", "shards", "evidence", "hygiene"]
+
+# The single check name to mark as required on `master`. Stable by design: it
+# carries no operating system, no interpreter version and no matrix value, so the
+# branch protection rule survives a change to any of them. The matrix jobs cannot
+# serve this purpose — they are named `Quality (Python 3.12)` and
+# `Quality (Python 3.14)`, and adding an interpreter would leave the rule
+# pointing at a set that no longer describes the workflow.
+required_check = "Quality gate"
+
+# What the evidence bundle is uploaded as. One artifact from one job, so there is
+# no matrix value in the name and no chance of two jobs racing to write it.
+artifact = "test-evidence-windows-py314"
+
+# How long GitHub keeps that bundle. Thirty days is long enough to diagnose a
+# failure somebody noticed late and short enough not to accumulate; it is also
+# what the evidence job has used since Phase 010, kept rather than changed. The
+# permitted range is 1 to 90, and a repository or organisation setting can cap it
+# below whatever is written here — this is a request, not a guarantee.
+retention_days = 30

@@ -105,6 +105,8 @@ a future reader can judge whether the reason still holds.
 | [0038](0038-a-tick-size-and-a-step-size-are-one-undenominated-increment.md) | A tick size and a step size are one undenominated `Increment`, aligned by `divmod` | Accepted |
 | [0039](0039-identifiers-register-kinds-not-instances.md) | Identifiers register kinds, not instances, and the registry is a function | Accepted |
 | [0040](0040-evidence-records-every-gate-and-its-schema-version-is-a-contract.md) | Evidence records every gate, and its schema version is a compatibility contract | Accepted |
+| [0041](0041-serialization-is-exact-or-refused-and-a-version-is-refused-when-unknown.md) | Serialization is exact or refused, and an unknown version is refused rather than read | Accepted |
+| [0042](0042-one-aggregate-check-decides-a-run-and-the-artifact-digest-lives-outside-the-artifact.md) | One aggregate check decides a run, and the artifact digest lives outside the artifact | Accepted |
 
 ## Relationship to other documents
 

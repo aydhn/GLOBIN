@@ -169,6 +169,15 @@ jobs:
     needs: quality
     runs-on: windows-latest
 
+    outputs:
+      # The artifact's own SHA-256, which GitHub computes as the upload
+      # completes. It is published HERE, as a job output, and deliberately not
+      # written into the bundle: a file cannot contain its own hash, and an
+      # artifact carrying its own digest would be exactly that. The bundle
+      # carries `checksums.sha256`, computed before upload, covering each file
+      # inside it. Two layers, and neither contains the other — ADR-0042.
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
+
     steps:
       - name: Check out the repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
@@ -210,6 +219,7 @@ jobs:
         # that failed is exactly when somebody needs the JUnit report and the
         # timings. Uploading them does not make the job pass — the steps above
         # have already decided that.
+        id: upload
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -252,3 +262,103 @@ jobs:
         # The change is shown, never committed: the fix is the author's to make
         # and to look at.
         run: python -m pre_commit run --all-files --show-diff-on-failure
+
+  aggregate:
+    # THE check to mark as required on `master`. Its displayed name is stable by
+    # construction: no operating system, no interpreter version, no matrix value,
+    # so a branch protection rule survives a change to any of them. The matrix
+    # jobs cannot serve the purpose — they appear as `Quality (Python 3.12)` and
+    # `Quality (Python 3.14)`, and adding an interpreter would leave the rule
+    # naming a set that no longer describes the workflow.
+    #
+    # The name is declared in `[tool.globin.workflow]` too, and a contract test
+    # compares the two, so renaming this job without updating the documentation
+    # fails the suite rather than quietly detaching the rule from the check.
+    name: Quality gate
+    needs: [quality, mutation, shards, evidence, hygiene]
+
+    # `!cancelled()` rather than `always()`, and the difference is the point.
+    #
+    # Without any `if:`, GitHub SKIPS a job whose dependency failed — and a
+    # skipped required check is not reported to branch protection as a failing
+    # one. A rule requiring this check would then be satisfied by a run in which
+    # every job it depends on had failed. That is the hole this job exists to
+    # close, so it has to run precisely when something upstream did not.
+    #
+    # `always()` would also run it when the whole run was cancelled. With
+    # `cancel-in-progress: true` above, every push cancels the run before it, so
+    # `always()` would spend a runner and post a confusing failing check on every
+    # superseded run. `!cancelled()` skips those and still runs after a failure.
+    # A single job that was cancelled while the run was not still reaches the
+    # aggregate, which reads it as unmeasured.
+    if: ${{ !cancelled() }}
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.14'
+
+      # No `pip install`. This job starts no tool: it reads two files and some
+      # environment variables. Every number it reports was measured by a job
+      # above, and re-measuring here would be asking a second machine the same
+      # question and believing whichever answer arrived last.
+
+      - name: Download the evidence this run published
+        # `!cancelled()` so that a failed evidence job still has its bundle
+        # fetched — the upload step above runs on `always()`, so the artifact
+        # exists even when the suite failed.
+        #
+        # If there is genuinely nothing to download this step fails, the job
+        # fails, and the aggregate below still runs and records why. That is the
+        # intended shape: the missing artifact is itself the finding.
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: test-evidence-windows-py314
+          # Where the evidence gate writes and reads, so the verifier below needs
+          # no argument and no second notion of where evidence lives.
+          path: .globin/evidence
+
+      - name: Verify the evidence that was published
+        # The same verifier the evidence job already ran, against different
+        # bytes: these have been through upload and download. It re-checks the
+        # manifest's digest, every file's checksum, the count arithmetic and the
+        # redaction rules, so a bundle corrupted or truncated in transit is
+        # caught here rather than trusted because a job said it was fine.
+        if: ${{ !cancelled() }}
+        run: python -m tools.quality.evidence verify
+
+      - name: Decide whether this run passed
+        # The one place the verdict is made. It reads every job's result and the
+        # evidence just verified, writes `aggregate-quality.json`, appends the
+        # step summary, and exits non-zero unless every required job passed and
+        # the evidence agreed. Locally the same command reads the evidence the
+        # last local run wrote, so a developer and CI apply one evaluator.
+        if: ${{ !cancelled() }}
+        env:
+          # Passed through the environment rather than as arguments: this is a
+          # JSON document full of quotes and braces, and threading one through a
+          # `run:` line intact on a Windows runner is a quoting problem with no
+          # upside.
+          GLOBIN_WORKFLOW_NEEDS: ${{ toJSON(needs) }}
+          GLOBIN_WORKFLOW_ARTIFACT_DIGEST: ${{ needs.evidence.outputs.artifact-digest }}
+        run: python -m tools.quality aggregate
+
+      - name: Upload the aggregate verdict
+        # Small, and separate from the evidence bundle on purpose: this document
+        # records the digest of that bundle, so putting it inside would make the
+        # bundle's digest depend on a value derived from the bundle.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: quality-gate-verdict
+          path: .globin/workflow/
+          retention-days: 30
+          if-no-files-found: error

@@ -25,12 +25,14 @@ from typing import Final, TextIO
 from globin.adapters.architecture import AstModuleImportSource, TomlArchitectureContractSource
 from globin.adapters.clock import SystemClock, SystemMonotonicClock
 from globin.adapters.observability import StreamLogSink, ThresholdLogSink, new_correlation_id
+from globin.adapters.serialization import JsonCodec
 from globin.application.architecture_review import ArchitectureReview
 from globin.application.configuration import ConfigurationResolution
 from globin.application.observability import Logger
 from globin.domain.configuration import GlobinConfig, default_config
 from globin.ports.clock import Clock, MonotonicClock
 from globin.ports.configuration import ConfigurationSource
+from globin.ports.serialization import Codec
 
 CONTRACT_RELATIVE_PATH: Final[str] = "docs/architecture/dependency-rules.toml"
 """Where the declared contract lives, relative to the repository root."""
@@ -111,6 +113,24 @@ def build_monotonic_clock() -> MonotonicClock:
     on — not the first call site, which arrives with the code that needs it.
     """
     return SystemMonotonicClock()
+
+
+def build_codec() -> Codec:
+    """The representation GLOBIN persists records in, as the port.
+
+    Returns:
+        A :class:`~globin.adapters.serialization.JsonCodec`.
+
+    The return type is the **port**, so this function stays the only place in the
+    tree that names the concrete representation — the same property
+    :func:`build_clock` has, and for the same reason.
+
+    Nothing in GLOBIN persists a record yet. This exists because ``ROADMAP.md``
+    gives Phase 012 the serialization and persistence contracts, and the decision
+    worth fixing now is *which* representation a stored record is in — not the
+    first caller, which arrives with the phase that has somewhere to put one.
+    """
+    return JsonCodec()
 
 
 def build_logger(

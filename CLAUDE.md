@@ -41,6 +41,7 @@ phase before assuming any capability exists.
 | How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 | Which error do I raise? | [`src/globin/errors.py`](src/globin/errors.py), [ADR-0022](docs/adr/0022-error-taxonomy-rooted-in-one-type.md) |
 | How do I express a price or a quantity? | [`docs/VALUE_TYPES_POLICY.md`](docs/VALUE_TYPES_POLICY.md) |
+| How do I write a value down and read it back? | [`docs/SERIALIZATION_POLICY.md`](docs/SERIALIZATION_POLICY.md) |
 | Which checks must pass? | [`docs/engineering/QUALITY_GATES.md`](docs/engineering/QUALITY_GATES.md) |
 | Why these lint and type rules? | [`docs/engineering/STATIC_ANALYSIS.md`](docs/engineering/STATIC_ANALYSIS.md) |
 | How do I commit? | [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) |
@@ -133,6 +134,20 @@ python -m tools.quality typecheck
 
 Only `fix` and `reformat` modify the tree. Every other command reports and
 changes nothing.
+
+One command answers a different question from the rest — not "is this tree good"
+but "did this CI run establish that it is". It reads the results of a run's jobs
+and the evidence they published, and reduces the two to one verdict. Run locally
+it aggregates whatever `evidence` last wrote, using the same evaluator CI uses:
+
+```bash
+python -m tools.quality aggregate
+```
+
+Its job in CI is the check named `Quality gate`, which is the one to mark as
+required on `master`. Branch protection is a repository setting and no file here
+can change it — see
+[`docs/engineering/QUALITY_GATES.md`](docs/engineering/QUALITY_GATES.md).
 
 One gate sits outside `full`, because it takes minutes rather than seconds:
 

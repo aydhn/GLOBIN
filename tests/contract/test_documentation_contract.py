@@ -32,6 +32,7 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/TIME_POLICY.md",
     "docs/PRECISION_POLICY.md",
     "docs/IDENTIFIER_POLICY.md",
+    "docs/SERIALIZATION_POLICY.md",
     "docs/GIT_WORKFLOW.md",
     "docs/GLOSSARY.md",
     "docs/architecture/README.md",
@@ -57,6 +58,7 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/research/phase_009_sources.md",
     "docs/research/phase_010_sources.md",
     "docs/research/phase_011_sources.md",
+    "docs/research/phase_012_sources.md",
 )
 
 #: Minimum byte length for a document to count as substantive rather than a
