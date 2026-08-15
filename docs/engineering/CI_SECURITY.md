@@ -118,9 +118,30 @@ A job needing more would raise it at job level, for that job only, naming the
 scope and the reason. None does. `write-all` is never acceptable — it is not a
 convenience, it is every scope at once.
 
-`id-token: write` is refused alongside the write scopes despite granting nothing
-by itself: it mints an OIDC token for exchange with a cloud provider, and that is
-a capability this repository should acquire by decision rather than inherit.
+### The one exception, and what makes it safe
+
+Phase 014 added the `attest` job, which signs a provenance statement about the
+supply-chain evidence. Sigstore needs an OIDC token to do that, so the job holds
+`id-token: write` and `attestations: write` — the two scopes this document refused outright until now, on the grounds that minting a token is "a capability
+this repository should acquire by decision rather than inherit". This is that
+decision, recorded in [ADR-0044](../adr/0044-dependency-review-is-a-written-process-with-a-generated-inventory.md).
+
+**The rule was narrowed, not lifted.** Three things bound it:
+
+- The scopes are declared at **job** level, so nothing else in the file inherits
+  them.
+- The job carries
+  `if: github.event_name == 'push' && github.ref == 'refs/heads/master'`, so it
+  cannot run from a pull request at all — and since Phase 014 this repository is
+  public, a pull request can carry code anybody wrote (ADR-0046).
+- The contract module checks the **guard**, not only the scope. A workflow
+  granting these to a job a fork could trigger fails the suite, because a
+  permission is only as safe as the trigger that can reach it.
+
+The job publishes rather than judges. It is declared in `publishing_jobs` and
+deliberately absent from `required_jobs`: it signs a statement about provenance,
+not a verdict about quality, and conflating the two would let a signature be read
+as an approval.
 
 No secret is referenced, and there is none to reference. Secret storage and
 credential handling are Phase 015's subject.

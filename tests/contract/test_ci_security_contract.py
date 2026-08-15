@@ -141,17 +141,30 @@ FORBIDDEN_PERMISSIONS: Final[tuple[str, ...]] = (
     "write-all",
     "contents: write",
     "packages: write",
-    "id-token: write",
     "actions: write",
     "checks: write",
     "pull-requests: write",
 )
-"""Scopes a workflow that lints, types and tests has no use for.
+"""Scopes nothing in this repository has a use for, anywhere, ever."""
 
-``id-token: write`` is on the list despite granting nothing by itself: it mints
-an OIDC token for exchange with a cloud provider, which is a capability this
-repository should acquire by decision rather than by inheriting a template.
+ELEVATED_PERMISSIONS: Final[tuple[str, ...]] = ("id-token: write", "attestations: write")
+"""Scopes exactly one job may hold, and only behind a trusted-event guard.
+
+Until Phase 014 `id-token: write` was simply forbidden, on the grounds that
+minting an OIDC token "is a capability this repository should acquire by decision
+rather than by inheriting a template". Phase 014 is that decision: the `attest`
+job signs a provenance statement about the supply-chain evidence, and Sigstore
+needs the token to do it.
+
+The rule is therefore NARROWED rather than lifted. These scopes may appear in one
+job, that job must be guarded by a condition restricting it to a push to master,
+and the guard is what the test below actually checks — a permission is only as
+safe as the trigger that can reach it, and since Phase 014 this repository is
+public, so a pull request can carry code anybody wrote.
 """
+
+TRUSTED_GUARD: Final[str] = "github.event_name == 'push' && github.ref == 'refs/heads/master'"
+"""The condition that makes those scopes unreachable from a fork's pull request."""
 
 FAILURE_MASKS: Final[tuple[str, ...]] = (
     "continue-on-error: true",
@@ -438,6 +451,34 @@ def test_no_untrusted_value_reaches_a_shell(workflow: str) -> None:
     assert not injected_expressions(workflow)
 
 
+def test_an_elevated_scope_appears_only_behind_a_trusted_guard(workflow: str) -> None:
+    """A permission is only as safe as the trigger that can reach it.
+
+    Every job declaring one of the elevated scopes must also declare the guard
+    restricting it to a push to master. Checking the scope alone would pass a
+    workflow that granted it to a job a fork could trigger, which is the whole
+    hazard.
+    """
+    for job, block in job_blocks(workflow).items():
+        if any(scope in block for scope in ELEVATED_PERMISSIONS):
+            assert TRUSTED_GUARD in block, (
+                f"job {job!r} holds an elevated scope without the trusted-event guard"
+            )
+
+
+def test_only_the_publishing_job_holds_an_elevated_scope(
+    workflow: str, pyproject: dict[str, object]
+) -> None:
+    """And it is the job declared as publishing, not merely some job."""
+    permitted = set(read_configuration(pyproject).publishing_jobs)
+    holders = {
+        job
+        for job, block in job_blocks(workflow).items()
+        if any(scope in block for scope in ELEVATED_PERMISSIONS)
+    }
+    assert holders <= permitted, f"jobs holding an elevated scope undeclared: {holders - permitted}"
+
+
 def test_the_workflow_grants_no_scope_it_does_not_need(workflow: str) -> None:
     """Least privilege, stated rather than inherited."""
     assert not permission_violations(workflow)
@@ -476,7 +517,7 @@ def test_the_timeouts_cover_every_required_job_and_the_aggregate(
     hanging would be felt as the repository being stuck rather than as CI failing.
     """
     configuration = read_configuration(pyproject)
-    expected = {*configuration.required_jobs, AGGREGATE_JOB}
+    expected = {*configuration.required_jobs, *configuration.publishing_jobs, AGGREGATE_JOB}
     assert set(dict(configuration.timeouts)) == expected
 
 
@@ -665,7 +706,7 @@ def test_a_comment_that_misstates_the_version_is_visible() -> None:
 
 @pytest.mark.parametrize(
     "scope",
-    ["write-all", "contents: write", "packages: write", "id-token: write", "checks: write"],
+    ["write-all", "contents: write", "packages: write", "actions: write", "checks: write"],
 )
 def test_an_over_broad_permission_is_caught(scope: str) -> None:
     """Each forbidden scope, watched being found."""

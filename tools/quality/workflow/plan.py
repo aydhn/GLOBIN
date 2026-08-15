@@ -83,6 +83,11 @@ class Configuration:
 
     Args:
         required_jobs: Jobs whose success the aggregate check depends on.
+        publishing_jobs: Jobs that publish something about a run already judged,
+            rather than judging it. They are deliberately not required: `attest`
+            runs only on a push to master, so requiring it would fail every
+            pull-request run for the absence of a job pull requests must not run.
+            Declared so that a job in neither list is a job nobody decided about.
         required_check: The check name a repository administrator marks as
             required on ``master``.
         artifact: The name the evidence bundle is uploaded under.
@@ -92,6 +97,7 @@ class Configuration:
     """
 
     required_jobs: tuple[str, ...]
+    publishing_jobs: tuple[str, ...]
     required_check: str
     artifact: str
     retention_days: int
@@ -130,6 +136,7 @@ def read_configuration(document: Mapping[str, object]) -> Configuration:
         raise WorkflowError(msg)
     return Configuration(
         required_jobs=jobs,
+        publishing_jobs=_strings(table, "publishing_jobs"),
         required_check=_text(table, "required_check"),
         artifact=_text(table, "artifact"),
         retention_days=_integer(table, "retention_days"),

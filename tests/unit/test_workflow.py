@@ -47,6 +47,7 @@ def _settings(**overrides: object) -> dict[str, object]:
     """A well-formed ``[tool.globin.workflow]`` table, with overrides applied."""
     table: dict[str, object] = {
         "required_jobs": ["quality", "evidence"],
+        "publishing_jobs": ["attest"],
         "required_check": "Quality gate",
         "artifact": "test-evidence-windows-py314",
         "retention_days": 30,
@@ -161,6 +162,7 @@ def test_the_configuration_is_read() -> None:
     """The shape every other test in this module assumes."""
     assert read_configuration(_settings()) == Configuration(
         required_jobs=("quality", "evidence"),
+        publishing_jobs=("attest",),
         required_check="Quality gate",
         artifact="test-evidence-windows-py314",
         retention_days=30,

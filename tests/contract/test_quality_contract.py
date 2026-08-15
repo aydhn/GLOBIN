@@ -278,8 +278,13 @@ def test_the_workflow_declares_least_privilege(workflow: str) -> None:
     assert re.search(r"^\s*contents:\s*read\s*$", workflow, re.MULTILINE), (
         "the token should be able to read the repository and nothing else"
     )
-    for scope in ("write-all", "contents: write", "packages: write", "id-token: write"):
+    for scope in ("write-all", "contents: write", "packages: write"):
         assert scope not in workflow, f"the quality workflow must not request `{scope}`"
+    # `id-token: write` is no longer forbidden outright — Phase 014's `attest`
+    # job needs it to sign a provenance statement. What replaced the ban is a
+    # narrower rule in `test_ci_security_contract.py`: the scope may appear only
+    # in a job guarded by a condition restricting it to a push to master, so it
+    # is unreachable from a fork's pull request.
 
 
 def test_every_action_is_pinned_to_a_full_commit_sha(workflow: str) -> None:

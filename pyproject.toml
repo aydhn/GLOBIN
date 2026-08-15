@@ -437,6 +437,17 @@ required_jobs = ["quality", "mutation", "shards", "supply", "evidence", "hygiene
 # serve this purpose — they are named `Quality (Python 3.12)` and
 # `Quality (Python 3.14)`, and adding an interpreter would leave the rule
 # pointing at a set that no longer describes the workflow.
+# Jobs that are neither a check nor the aggregate: they PUBLISH something about
+# a run that has already been judged. `attest` signs a statement that this
+# workflow, at this commit, produced the supply-chain evidence — a claim about
+# provenance, not a verdict about quality.
+#
+# Kept out of `required_jobs` deliberately. It runs only on a push to master, so
+# requiring it would fail every pull-request run for the absence of a job that
+# pull requests must not run. Declared here rather than left unlisted, because a
+# job in neither list is a job nobody decided about.
+publishing_jobs = ["attest"]
+
 required_check = "Quality gate"
 
 # What the evidence bundle is uploaded as. One artifact from one job, so there is
@@ -489,4 +500,8 @@ shards = 15
 supply = 15
 evidence = 15
 hygiene = 10
+# Added in Phase 014. Downloads one small artifact and signs it; the budget is
+# for the network, not for the work. Like `supply`, it has no measured run
+# behind it yet.
+attest = 10
 aggregate = 10

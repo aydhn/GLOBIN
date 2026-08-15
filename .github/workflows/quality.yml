@@ -378,6 +378,51 @@ jobs:
         # and to look at.
         run: python -m pre_commit run --all-files --show-diff-on-failure
 
+  attest:
+    name: Provenance
+    # NOT a check, and deliberately not in `required_jobs`. It publishes a claim
+    # about an artifact that has already been judged; requiring it would make
+    # every pull-request run fail for the absence of a job that pull requests
+    # must not run.
+    needs: supply
+    # THE GUARD THAT MAKES THE PERMISSIONS BELOW SAFE. This job mints an OIDC
+    # token and writes an attestation, which is the largest privilege anything in
+    # this repository asks for. It runs only on a push to master — never on a
+    # pull request, and therefore never on code an outside contributor wrote.
+    # Since Phase 014 this repository is public, so that distinction stopped
+    # being hypothetical (ADR-0046).
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+      # Mints the OIDC token Sigstore exchanges for a signing certificate.
+      # `docs/engineering/CI_SECURITY.md` refused this scope outright until now,
+      # on the grounds that it "is a capability this repository should acquire by
+      # decision rather than inherit". This is that decision, and it is confined
+      # to one job behind the trigger guard above.
+      id-token: write
+      # Writes the attestation itself.
+      attestations: write
+
+    steps:
+      - name: Download the supply-chain evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: supply-chain-evidence
+          path: supply-evidence
+
+      - name: Attest the supply-chain evidence
+        # Signs a statement that THIS workflow, at THIS commit, produced these
+        # bytes. It says nothing about whether they are good — the `supply` job
+        # already decided that, and this job would run either way. Provenance and
+        # a verdict are different claims, and conflating them would let a signature
+        # be read as an approval.
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: 'supply-evidence/*.json'
+
   aggregate:
     # THE check to mark as required on `master`. Its displayed name is stable by
     # construction: no operating system, no interpreter version, no matrix value,

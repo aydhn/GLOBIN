@@ -100,3 +100,15 @@ repository = "github/codeql-action"
 sha = "ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd"
 version = "v4.37.7"
 verified = "2026-08-15"
+
+# Added in Phase 014 with the `attest` job. First-party, and the tag is
+# LIGHTWEIGHT rather than annotated — `git ls-remote` and the REST API returned
+# the same object, and `GET /git/ref/tags/v4.2.2` reports `"type": "commit"`, so
+# no dereference was needed. Recorded because "the two sources agreed" is only
+# worth writing down if the case where they did not is also recorded, and it is:
+# `github/codeql-action` above.
+[[action]]
+repository = "actions/attest-build-provenance"
+sha = "4d101475d8b20a2381f78447822ac1eab6504dd8"
+version = "v4.2.2"
+verified = "2026-08-15"

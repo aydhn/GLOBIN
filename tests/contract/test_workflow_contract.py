@@ -244,10 +244,13 @@ def test_every_workflow_job_is_either_required_or_the_aggregate_itself(
     fail, and would not affect the check anybody requires. Adding one is now a
     decision with a place to record it rather than an omission.
     """
-    declared = set(read_configuration(pyproject).required_jobs)
+    configuration = read_configuration(pyproject)
+    declared = {*configuration.required_jobs, *configuration.publishing_jobs}
     present = set(JOB_KEY_RE.findall(jobs_block))
     unaccounted = present - declared - {AGGREGATE_JOB}
-    assert not unaccounted, f"jobs neither required nor the aggregate: {sorted(unaccounted)}"
+    assert not unaccounted, (
+        f"jobs neither required, publishing, nor the aggregate: {sorted(unaccounted)}"
+    )
 
 
 def test_the_aggregate_does_not_require_itself(pyproject: dict[str, object]) -> None:
