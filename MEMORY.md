@@ -436,12 +436,24 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
   replacement characters. `LOGGING_POLICY.md` reached the same conclusion for log
   records from the other direction. `test_execution_contract.py` now walks the
   `print` arguments and `msg` assignments of that package and refuses non-ASCII.
-- **`gh` lives at `%LOCALAPPDATA%/Programs/gh/bin/gh.exe`**, extracted from the
-  official release zip rather than installed system-wide, and it is **not on
-  `PATH`** — invoke it by full path. The token is in the Windows keyring
-  (`aydhn`, scopes `gist`, `read:org`, `repo`, `workflow`), so it survives the
-  executable being absent; that is why Phase 008 could read a run and Phase 009
-  initially could not.
+- **`gh` is on `PATH`, and there are two copies of it.** Verified at Phase 015:
+  both Bash and Python resolve `gh` to a WinGet installation at
+  `%LOCALAPPDATA%/Microsoft/WinGet/Packages/GitHub.cli_Microsoft.Winget.Source_8wekyb3d8bbwe/bin/gh.exe`,
+  reporting version 2.97.0. The hand-extracted copy this note used to name,
+  `%LOCALAPPDATA%/Programs/gh/bin/gh.exe`, **still exists** at the same version
+  and the same size — which is the trap, because a reader checking that path
+  finds a file and concludes the old advice is current. It is not the copy that
+  runs. Invoke `gh` plainly; do not hard-code either path, because a full path
+  pins a copy WinGet does not update.
+
+  This matters beyond convenience. `tools/quality/supply/capability.py::available()`
+  decides whether to probe GitHub at all by asking `shutil.which("gh")`, so
+  "not on `PATH`" would mean every platform control recorded as `NOT_PROBED` —
+  honest, and uninformative. The probe runs unaided on this machine.
+
+  The token remains in the Windows keyring (`aydhn`, scopes `gist`, `read:org`,
+  `repo`, `workflow`), so it survives the executable being replaced; that is why
+  Phase 008 could read a run and Phase 009 initially could not.
 - **Never** commit credentials. **Never** report a check as passing without
   running it. **Never** implement a later phase early. **Never** delete working
   functionality to simplify a task.
