@@ -135,10 +135,13 @@ gh run list --limit 1
 gh run view --log-failed
 ```
 
-The repository is private, so an unauthenticated API request returns `404` rather
-than a result. If `gh` is absent or unauthenticated, **say the run was not read**
-rather than leaving it out — an omitted CI result is indistinguishable from a
-passing one, and Phase 004 was already reported once before its run existed.
+The repository is public as of Phase 014
+([ADR-0046](adr/0046-the-repository-is-public-and-that-changes-the-threat-model.md)),
+so a run can be read without a credential — but `gh` still needs to be present,
+and an unauthenticated request is rate-limited far more tightly. If `gh` is
+absent, or the request fails for any reason, **say the run was not read** rather
+than leaving it out — an omitted CI result is indistinguishable from a passing
+one, and Phase 004 was already reported once before its run existed.
 
 ## Definition of done
 

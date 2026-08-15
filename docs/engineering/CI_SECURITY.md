@@ -143,8 +143,13 @@ deliberately absent from `required_jobs`: it signs a statement about provenance,
 not a verdict about quality, and conflating the two would let a signature be read
 as an approval.
 
-No secret is referenced, and there is none to reference. Secret storage and
-credential handling are Phase 015's subject.
+No secret is referenced, and there is none to reference. **That is now a rule
+rather than a circumstance**: adding a repository secret would give every
+workflow run a credential to leak, on a public repository where a pull request
+can carry code anybody wrote, and a phase believing it needs one must record the
+decision as an ADR first. Where a secret may live, and what redaction guarantees,
+is [`../security/SECURITY_BASELINE.md`](../security/SECURITY_BASELINE.md) and
+[ADR-0048](../adr/0048-a-secret-lives-outside-the-tree-and-is-redacted-before-a-record-exists.md).
 
 ---
 
@@ -211,10 +216,12 @@ start triggering this workflow without anybody deciding so.
 
 ## Concurrency, and the one place cancelling is wrong
 
-The concurrency group is namespaced by `github.workflow`. Only one workflow
-exists today, which is exactly why it is worth stating: the second one will be
-added by somebody thinking about the second one, and two workflows sharing a group
-cancel each other's runs.
+The concurrency group is namespaced by `github.workflow`. When only `quality.yml`
+existed, that namespacing was a precaution; Phase 014 added `codeql.yml` and it
+became load-bearing, exactly as predicted — the second workflow was added by
+somebody thinking about the second workflow, and two workflows sharing a group
+cancel each other's runs. Both files declare the group the same way, and a third
+must too.
 
 Cancellation is conditional. A superseded pull request or merge-queue run is
 worthless and is cancelled. A master run is not cancelled, because it is the only

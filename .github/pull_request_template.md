@@ -62,6 +62,39 @@ Justification:
 - [ ] No persisted format, public interface or configuration key changed
 - [ ] Something changed — migration path described below
 
+## Security impact
+
+<!--
+These questions exist so that a security-relevant change is DECLARED rather than
+noticed. They do not replace a check: a tick records what the author believed,
+and the gates record what is true. Where the two disagree the gate is right.
+
+`docs/security/GOVERNANCE.md` explains why each path below is sensitive.
+Answering "no" to all of them is the ordinary case and needs no justification.
+-->
+
+- [ ] Nothing below applies — no security-sensitive path was touched
+- [ ] Something below applies, and is explained
+
+| Question | Yes / No |
+|---|---|
+| Did any GitHub Actions `permissions:` block change? | |
+| Was a third-party action, or a new `uses:` line, added? | |
+| Did an action's SHA pin change, and was `action-pins.toml` updated with it? | |
+| Was a dependency added, removed or re-pinned? | |
+| Did `.github/CODEOWNERS`, `SECURITY.md` or `docs/security/` change? | |
+| Did the secret surface widen — a new place a credential could be read or written? | |
+| Are the required checks, or the aggregate's `required_jobs`, affected? | |
+| Is the SBOM, the dependency inventory or the provenance attestation affected? | |
+| Could anything in this change reach a log, artifact or job summary that did not before? | |
+
+If any answer is yes:
+
+- [ ] `python -m tools.quality supply` was run, and its result is in **Verification** below
+- [ ] `python -m tools.quality governance` was run, and its result is in **Verification** below
+
+Explanation:
+
 ## Secrets and artefacts
 
 - [ ] The full diff was read, not just the file list

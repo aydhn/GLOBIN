@@ -33,10 +33,18 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-014 are complete. Phase 015 is next and has not started.**
-> Nothing beyond Phase 014 is implemented. GLOBIN does not trade, does not
+> **Phases 001-015 are complete. Phase 016 is next and has not started.**
+> Nothing beyond Phase 015 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
+>
+> **Phase 015 wrote the secret-handling rules; it built no secret store.** Where
+> a credential may live, how it is redacted and what an API key may do are
+> specified in
+> [`docs/security/SECURITY_BASELINE.md`](docs/security/SECURITY_BASELINE.md).
+> Phase 028 implements the store and Phase 029 the credential flow — the roadmap
+> separates specification from implementation deliberately, and this is the
+> boundary.
 >
 > **The repository is public as of Phase 014.** That was the decision that made
 > CodeQL, secret scanning, push protection, dependency review and rulesets
@@ -99,7 +107,7 @@ written down.
 | 012 | Serialization and Persistence Contracts | Establish schema evolution rules and forward and backward compatibility guarantees for persisted structures. | Complete |
 | 013 | Coding Standards and Documentation Conventions | Fix naming, structure, docstring and typing conventions, and tighten the existing lint and type configuration to match them, including the docstring rules Phase 004 deliberately left unselected. | Complete |
 | 014 | Dependency Review and Licence Audit Process | Define how a candidate dependency is reviewed for cost, licence, maintenance health and supply-chain risk. | Complete |
-| 015 | Security Baseline and Secret Handling Rules | Specify secret storage, redaction, least-privilege API key usage and the prohibition on committing credentials. | Planned |
+| 015 | Security Baseline and Secret Handling Rules | Specify secret storage, redaction, least-privilege API key usage and the prohibition on committing credentials. | Complete |
 | 016 | Foundation Consolidation and Phase Gate Review | Reconcile the foundation band, resolve inconsistencies and certify readiness for environment work. | Planned |
 
 ---

@@ -6,8 +6,10 @@ Pure: takes text, returns findings.
 this package produces, immediately before they are uploaded, and nothing else. It
 is **not** a repository secret scanner — `.pre-commit-config.yaml` already runs
 one of those over the tree — and it is not the secret-handling policy, which is
-**Phase 015**. A check that grew into either would be doing another phase's work
-badly.
+`docs/security/SECURITY_BASELINE.md`. A check that grew into either would be
+doing another document's work badly. What this *implements* is one clause of that
+policy: that a value which must not be published is removed before the record
+exists rather than before it is displayed.
 
 **Why it exists at all, given that.** Because the evidence pipeline is the one
 place in this repository that takes files off a build machine and publishes them.

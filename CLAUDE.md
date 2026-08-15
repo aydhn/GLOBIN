@@ -39,6 +39,9 @@ phase before assuming any capability exists.
 | Why was X decided? | [`docs/adr/README.md`](docs/adr/README.md) |
 | What sources may I trust? | [`docs/SOURCE_POLICY.md`](docs/SOURCE_POLICY.md) |
 | May I add this dependency? | [`docs/DEPENDENCY_POLICY.md`](docs/DEPENDENCY_POLICY.md), [`docs/engineering/dependency-reviews.toml`](docs/engineering/dependency-reviews.toml) |
+| Where may a secret live, and what is redacted? | [`docs/security/SECURITY_BASELINE.md`](docs/security/SECURITY_BASELINE.md) |
+| How do I report or respond to a vulnerability? | [`SECURITY.md`](SECURITY.md), [`docs/security/VULNERABILITY_RESPONSE.md`](docs/security/VULNERABILITY_RESPONSE.md) |
+| Who owns this path, and is a change to it security-sensitive? | [`docs/security/GOVERNANCE.md`](docs/security/GOVERNANCE.md), [`.github/CODEOWNERS`](.github/CODEOWNERS) |
 | How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 | Which error do I raise? | [`src/globin/errors.py`](src/globin/errors.py), [ADR-0022](docs/adr/0022-error-taxonomy-rooted-in-one-type.md) |
 | How do I express a price or a quantity? | [`docs/VALUE_TYPES_POLICY.md`](docs/VALUE_TYPES_POLICY.md) |
@@ -72,10 +75,12 @@ GLOBIN/
 │   ├── property/        Invariants over generated input (Hypothesis)
 │   └── integration/     Several components together, still local
 ├── tools/quality/       The canonical quality entrypoint; CI runs this too
-│   └── supply/          Dependency inventory, CycloneDX SBOM, audit, secrets
+│   ├── supply/          Dependency inventory, CycloneDX SBOM, audit, secrets
+│   └── governance/      Code ownership, security policy, sensitive-path coverage
 ├── docs/
 │   ├── architecture/    Layer contract, C4 system context and container views
 │   ├── engineering/     How work is done: contracts and standards
+│   ├── security/        Secret rules, vulnerability runbook, ownership model
 │   ├── adr/             Architecture Decision Records + TEMPLATE.md
 │   └── research/        Per-phase source ledgers
 ├── .github/             Templates, and the verification-only CI workflow
@@ -163,6 +168,24 @@ platform will and will not do. `--offline` skips both network calls and records
 them as unmeasured — which is never a pass, so an offline run cannot exit `0`.
 Adding a dependency is a written decision:
 [`docs/DEPENDENCY_POLICY.md`](docs/DEPENDENCY_POLICY.md).
+
+Its sibling asks the other half of the same question — not what this repository
+depends on, but what it is answerable for — and unlike `supply` it **reaches
+nothing**:
+
+```bash
+python -m tools.quality governance
+```
+
+It compares [`docs/engineering/governance.toml`](docs/engineering/governance.toml)
+against the tree in both directions: every governing file present, exactly one
+CODEOWNERS file, every security-sensitive path specifically owned, every owned
+pattern matching something real, the security policy still carrying the section
+that names its reporting channel, and no public issue template collecting
+vulnerability detail. The assertions that gate a commit are in
+`tests/contract/test_governance_contract.py`, which the ordinary suite runs; the
+command exists to write the manifest. Reasoning:
+[`docs/security/GOVERNANCE.md`](docs/security/GOVERNANCE.md).
 
 Its job in CI is the check named `Quality gate`, which is the one to mark as
 required on `master`. Branch protection is a repository setting and no file here

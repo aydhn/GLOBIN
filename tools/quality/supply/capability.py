@@ -157,8 +157,15 @@ CONTROLS: Final[tuple[Control, ...]] = (
     ),
     Control("code_scanning", "code-scanning/analyses", RECORDED),
     Control("rulesets", "rulesets", REQUIRED),
+    Control(
+        "private_vulnerability_reporting",
+        "private-vulnerability-reporting",
+        REQUIRED,
+        ("enabled",),
+    ),
+    Control("security_advisories", "security-advisories", RECORDED),
 )
-"""Every control this phase asks about.
+"""Every control these phases ask about.
 
 ``code_scanning`` asks for *analyses* rather than for the default-setup
 configuration, because the configuration endpoint answers a different question
@@ -172,6 +179,33 @@ commit that *adds* the CodeQL workflow is judged before that workflow has ever
 run, so requiring an analysis would fail the commit introducing the analysis.
 What CodeQL finds is judged separately, against the severity threshold in
 ``docs/DEPENDENCY_POLICY.md``.
+
+The last two are Phase 015's, and they are the pair that makes ``SECURITY.md``
+truthful rather than aspirational.
+
+``private_vulnerability_reporting`` is :data:`REQUIRED` because it is the channel
+the security policy names, and a policy directing people to a form that is
+switched off would route vulnerability reports into public issues — the one place
+they must never go. It was ``{"enabled": false}`` when Phase 015 began; the
+``PUT`` returned ``204`` and the read-back ``{"enabled": true}``, recorded in
+``docs/research/phase_015_sources.md``. Unlike the plan ceilings ADR-0045 was
+written for, this one is a switch the repository's owner controls, which is
+exactly what makes ``FAIL`` the right reading if it is ever turned off again.
+
+``security_advisories`` is :data:`RECORDED` rather than :data:`REQUIRED` because
+the endpoint answers *how many advisories exist*, not *whether drafting one is
+possible*. An empty list is the healthy state and the only state a repository
+that has never had a vulnerability can be in, so requiring a non-empty answer
+would demand a vulnerability. What it establishes is that the capability
+responds at all, which is what the runbook's disclosure step depends on.
+
+Neither the code-owner review requirement nor the required status check appears
+here, and their absence is a decision rather than an omission. Both are
+``NOT_APPLICABLE`` under ADR-0005 — a required check is evaluated on push and can
+only run after one, and a sole owner cannot approve their own pull request — so
+their state follows from a written decision rather than from a setting somebody
+could switch. They are recorded in the governance manifest with that reason,
+where a reader meets the argument instead of a bare state.
 """
 
 

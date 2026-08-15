@@ -1,0 +1,74 @@
+# ---------------------------------------------------------------------------
+# GLOBIN code owners.
+#
+# THIS IS THE ONLY CODEOWNERS FILE. GitHub also honours one at the repository
+# root and one under `docs/`, and it uses whichever it finds first rather than
+# merging them, so a second copy would silently override this one. A governance
+# check refuses a duplicate for that reason, not for tidiness.
+#
+# WHAT THIS FILE DOES HERE. The repository is public (ADR-0046), so a pull
+# request can now arrive from anybody. When one does, GitHub requests review
+# from the owner of each path it touches. That is a real mechanism and it is
+# why this file exists.
+#
+# WHAT IT DOES NOT DO. It does not enforce review. Enforcement would need a
+# ruleset rule requiring code-owner approval, and that is NOT_APPLICABLE here
+# rather than merely unset: GLOBIN develops on `master` with no pull request
+# (ADR-0005), and GitHub does not let anybody approve their own pull request, so
+# a sole maintainer requiring their own approval would be unable to merge
+# anything. The reasoning is recorded once, in
+# `docs/security/GOVERNANCE.md`, and the state is recorded in the governance
+# manifest rather than reported as a passing control.
+#
+# ONE OWNER, AND NO INVENTED ONES. `aydhn` owns this repository as a personal
+# account, not an organisation, so `@org/team` syntax cannot resolve here and
+# none is written. An owner GitHub cannot resolve is ignored silently, which
+# turns a governance file into decoration.
+#
+# ORDER MATTERS: the LAST matching pattern wins. The catch-all is therefore
+# first, and every security-sensitive path is listed after it. Those entries are
+# redundant for *assignment* — the catch-all already names the same owner — and
+# they are not redundant as a declaration. They are the list of paths a change
+# to which is security-sensitive, they are compared against
+# `docs/engineering/governance.toml` by the governance gate, and they will still
+# be right on the day this repository has a second maintainer and the catch-all
+# stops being the answer.
+#
+# Every pattern below matches something that exists. A pattern matching nothing
+# is not a harmless precaution: it reads as coverage while providing none, and
+# the governance gate fails on one.
+# ---------------------------------------------------------------------------
+
+# Everything, unless a later line is more specific.
+*                               @aydhn
+
+# --- Continuous integration: the only place this repository executes code it
+# --- did not write, and the only holder of a token.
+/.github/workflows/             @aydhn
+/.github/dependabot.yml         @aydhn
+/.pre-commit-config.yaml        @aydhn
+
+# --- Governance itself. A change here changes who must look at everything else.
+/.github/CODEOWNERS             @aydhn
+/SECURITY.md                    @aydhn
+/.github/ISSUE_TEMPLATE/        @aydhn
+/.github/pull_request_template.md  @aydhn
+
+# --- The security and supply-chain contracts.
+/docs/security/                 @aydhn
+/docs/DEPENDENCY_POLICY.md      @aydhn
+/docs/engineering/CI_SECURITY.md         @aydhn
+/docs/engineering/action-pins.toml       @aydhn
+/docs/engineering/dependency-reviews.toml @aydhn
+/docs/engineering/vulnerability-waivers.toml @aydhn
+/docs/engineering/governance.toml        @aydhn
+
+# --- The gates. Tooling that decides whether a commit is acceptable, plus the
+# --- one settings file that configures all of it.
+/tools/                         @aydhn
+/scripts/                       @aydhn
+/pyproject.toml                 @aydhn
+
+# --- Decisions and binding instructions.
+/docs/adr/                      @aydhn
+/AGENTS.md                      @aydhn

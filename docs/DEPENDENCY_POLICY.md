@@ -184,21 +184,22 @@ global exemption is prohibited.
 
 ### If a credential is ever committed
 
-In order, and the order matters:
+**Revoke it at the provider before anything else** — before cleaning history,
+before reporting, before reading further. A secret in a public repository should
+be assumed captured within minutes, and a revoked credential is harmless whatever
+the history says.
 
-1. **Revoke it at the provider first.** Not after cleaning history — first. A
-   secret in a public repository should be assumed captured within minutes, and
-   a rotated credential is harmless whatever the history says.
-2. Rotate whatever depended on it.
-3. Only then decide about history. Rewriting it does not un-publish anything
-   already cloned, forked or indexed, and treating a rewrite as the remedy is how
-   a live credential stays live.
-4. Record what happened and what the compensating control now is.
+The remaining steps, and the reasoning for their order, are the credential lane
+of [`security/VULNERABILITY_RESPONSE.md`](security/VULNERABILITY_RESPONSE.md).
+They were written here first, when there was no runbook to put them in; they now
+live with the rest of the response procedure so that one incident is worked from
+one document. This section keeps only the first step, because it is the one
+somebody needs before they have found the runbook.
 
-GLOBIN holds no credentials today and reaches no exchange. Secret *storage* —
-where a key lives once there is one — is Phase 015's subject and Phase 028's
-implementation. This section is the response procedure, which is needed the day
-before either exists.
+Where a key is permitted to live once there is one is
+[`security/SECURITY_BASELINE.md`](security/SECURITY_BASELINE.md), which Phase 015
+wrote and Phase 028 implements. This document owns the *scanners*; that one owns
+the *rules*.
 
 ---
 

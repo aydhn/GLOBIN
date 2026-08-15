@@ -61,6 +61,11 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/research/phase_011_sources.md",
     "docs/research/phase_012_sources.md",
     "docs/research/phase_013_sources.md",
+    # Phase 014's ledger existed and was never added here, so nothing required
+    # it. Added in Phase 015 alongside its own, which is the edit MEMORY.md
+    # names as the third a phase adding a ledger must make.
+    "docs/research/phase_014_sources.md",
+    "docs/research/phase_015_sources.md",
 )
 
 #: Minimum byte length for a document to count as substantive rather than a

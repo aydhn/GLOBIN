@@ -83,6 +83,7 @@ responsibilities and the test that enforces them.
 | `docs/architecture/` | System views and the machine-readable dependency contract | Decisions and their rationale, which belong in `docs/adr/` |
 | `docs/engineering/` | Process contracts: how work is done, and the measured evidence a gate compares against | Domain reasoning, decisions |
 | `docs/research/` | One source ledger per phase, `phase_NNN_sources.md` | Copied vendor documentation |
+| `docs/security/` | The secret-handling rules, the vulnerability response runbook and the ownership model | The reporter-facing policy, which GitHub requires at `SECURITY.md` in the root |
 | `scripts/` | Host-specific entry points that must not be importable — currently the PowerShell gate | Logic worth testing; that belongs in `tools/` |
 | `tools/` | Importable, typed, tested development tooling that acts on the repository | Anything the application imports, or that ships in a distribution |
 | `.github/` | Repository templates | Configuration that belongs in `pyproject.toml` |

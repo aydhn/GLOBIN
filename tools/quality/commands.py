@@ -213,6 +213,32 @@ _AGGREGATE = Step("aggregate", (), ("-m", "tools.quality.workflow"))
 # which is the exact conflation `tools/quality/supply/audit.py` exists to prevent.
 _SUPPLY = Step("supply", ("pip_audit",), ("-m", "tools.quality.supply"))
 
+# The governance gate. Compares the declared governance arrangement in
+# `docs/engineering/governance.toml` against the tree: that every governing file
+# exists, that exactly one CODEOWNERS file does, that every security-sensitive
+# path is specifically owned and every owned pattern matches something real, that
+# the security policy still carries the section naming its reporting channel, and
+# that no public issue template solicits vulnerability detail.
+#
+# UNLIKE `supply`, IT REACHES NOTHING. Every check reads the working tree, so this
+# runs on an aeroplane. Whether the platform's controls are actually switched on
+# is a different question, and it is asked by the capability probe inside
+# `supply` — which already holds the credential and the network for it. Two
+# probes would be two things to keep in step.
+#
+# In neither `fast` nor `full` all the same, and for the reason `evidence` gives
+# rather than the reason `supply` does: it WRITES an artefact, and `full` runs
+# before every commit and reports rather than produces. The assertions that must
+# gate a commit are in `tests/contract/test_governance_contract.py`, which the
+# coverage step already runs.
+#
+# No modules are declared. Like `aggregate`, it starts no child process for its
+# own judgement — it reads files — so there is no tool whose absence could turn a
+# gate into an unmeasured one. It does consult `git ls-files` to learn what the
+# tree contains, and a machine without Git records that as unmeasured rather than
+# as clean, which is a verdict rather than a missing tool.
+_GOVERNANCE = Step("governance", (), ("-m", "tools.quality.governance"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -266,6 +292,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "supply",
         "Dependency inventory, CycloneDX SBOM, vulnerability audit and secret hygiene.",
         (_SUPPLY,),
+    ),
+    Command(
+        "governance",
+        "Code ownership, security policy and sensitive-path coverage, against the tree.",
+        (_GOVERNANCE,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

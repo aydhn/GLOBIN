@@ -261,6 +261,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python -m tools.quality supply
 
+      - name: Run the governance gate
+        # In this job rather than in one of its own, and that is a decision.
+        # Governance and supply chain are the two halves of one question — what
+        # this repository is answerable for — and the capability probe that says
+        # whether private vulnerability reporting is switched on already runs in
+        # the step above. A second job would need a second checkout, a second
+        # interpreter, a `required_jobs` entry and a timeout budget, to run a
+        # gate that reads files for a few seconds.
+        #
+        # NO TOKEN, and no `env:` block at all. Unlike the step above this one
+        # reaches nothing: every check reads the working tree. That is what makes
+        # it safe on a pull request from a fork, where the code being checked is
+        # code anybody wrote.
+        #
+        # `always()`, so that a failing supply-chain gate does not hide a
+        # governance finding. Two independent questions should produce two
+        # answers, and the job fails if either does.
+        if: always()
+        run: python -m tools.quality governance
+
       - name: Upload the supply-chain evidence
         # `always()`, for the reason the evidence upload gives: a run that failed
         # is exactly when somebody needs the manifest, the SBOM and the
@@ -270,7 +290,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: supply-chain-evidence
-          path: .globin/supply/
+          # Both manifests, under one artifact name. They describe the same
+          # commit from two angles and are read together; splitting them would
+          # be a second upload and a second thing to find.
+          path: |
+            .globin/supply/
+            .globin/governance/
           retention-days: 30
           if-no-files-found: error
 

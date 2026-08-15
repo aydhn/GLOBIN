@@ -4,6 +4,16 @@ about: Report incorrect behaviour in GLOBIN
 ---
 
 <!--
+STOP IF THIS IS A SECURITY ISSUE. Do not describe a vulnerability, an exploit or
+a credential here. This issue is public the moment it is opened, and a public
+repository is indexed, cloned and forked continuously — nothing published here
+can be withdrawn by deleting it. Report it privately instead:
+
+  https://github.com/aydhn/GLOBIN/security/advisories/new
+
+`SECURITY.md` says what counts as a vulnerability, what to include, and what
+happens next.
+
 Redact every credential, API key, token, account identifier and balance before
 pasting logs. Anything pasted here is permanent.
 

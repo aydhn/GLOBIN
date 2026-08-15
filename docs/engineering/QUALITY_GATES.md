@@ -49,6 +49,7 @@ python -m tools.quality full
 | `evidence` | The suite, coverage, lint and typing in one run, recorded as JUnit XML, coverage in four forms, each tool's findings, a digested manifest and checksums | Producing something a machine can read and a person can check later |
 | `aggregate` | This run's job results and its published evidence, reduced to one verdict | Deciding whether a whole CI run passed, and saying why |
 | `supply` | Dependency inventory, a CycloneDX 1.7 SBOM, a `pip-audit` vulnerability audit, waiver expiry, action pinning, content secret hygiene, and what the platform will and will not do | Establishing what this repository depends on and what that costs |
+| `governance` | Code ownership, the security policy's required sections, sensitive-path coverage, the reporting channel, and that no public issue template collects vulnerability detail | Establishing that the governance arrangement still describes this repository |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
 
@@ -323,9 +324,14 @@ Recorded here so that their absence is a decision rather than an oversight.
 | Dependency resolution and lockfiles | 020 |
 | Interpreter selection and pinning | 018 |
 | Packaging build verification | 017-032 |
-| Docstring linting and naming conventions | 013 |
-| Secret storage and credential handling | 028-029 |
-| Concurrent workers, dynamic load balancing and worker-scoped fixtures — everything `pytest-xdist` would provide | 014, which owns dependency review |
+| Secret *storage* — the rules are Phase 015's and are now written; the store itself is not | 028, with credential collection in 029 |
+
+Two rows left this table when the phases owning them delivered. Docstring linting
+and naming conventions were Phase 013's and are now part of the `D` rules in
+`pyproject.toml`; the `pytest-xdist` question was Phase 014's and was answered by
+`shards`, which partitions the suite by a stable digest rather than by a plugin
+([ADR-0036](../adr/0036-test-execution-is-sharded-by-a-stable-digest-not-by-a-plugin.md)).
+A deferral that has been met is removed rather than left to read as outstanding.
 
 Phase 004 configures the quality tools it uses and pins the versions it runs
 against. It does not solve dependency management, and nothing here should be

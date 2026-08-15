@@ -36,9 +36,11 @@ rather than merely that something is.
 
 What this module deliberately does not decide: where configuration files live
 and what profiles exist (Phase 026), which sources are consulted and in what
-order (Phase 027), how secrets are stored (Phase 015), and what an environment
-is (Phase 035). It knows nothing about files, environment variables, or the
-machine it runs on.
+order (Phase 027), how secrets are stored (Phase 028, against the rules in
+``docs/security/SECURITY_BASELINE.md``), and what an environment is (Phase 035).
+It knows nothing about files, environment variables, or the machine it runs on —
+and the baseline is explicit that a secret never arrives through configuration
+at all, which is why this module needs no notion of one.
 """
 
 from collections.abc import Mapping, Sequence

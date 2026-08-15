@@ -111,6 +111,8 @@ a future reader can judge whether the reason still holds.
 | [0044](0044-dependency-review-is-a-written-process-with-a-generated-inventory.md) | Dependency review is a written process over a generated inventory, and the SBOM is generated here | Accepted |
 | [0045](0045-a-platform-capability-is-a-recorded-state-never-a-pass.md) | A platform capability is a recorded state, never a pass | Accepted |
 | [0046](0046-the-repository-is-public-and-that-changes-the-threat-model.md) | The repository is public, and that changes the threat model rather than only the settings | Accepted |
+| [0047](0047-repository-governance-is-declared-once-and-validated-offline.md) | Repository governance is declared once and validated offline | Accepted |
+| [0048](0048-a-secret-lives-outside-the-tree-and-is-redacted-before-a-record-exists.md) | A secret lives outside the tree, and is redacted before a record exists | Accepted |
 
 ## Relationship to other documents
 

@@ -88,10 +88,12 @@ an inconvenience; printing a live API secret is the failure
 ``ENGINEERING_CONTRACT.md`` invariant 24 exists to make impossible.
 
 This is a mechanism with a defensible starting list, not GLOBIN's secret
-inventory. Phase 015 establishes the security baseline and secret-handling
-rules; when it does, this list is where the field-name half of that policy
-lands. The same list is restated in ``docs/LOGGING_POLICY.md`` and the two are
-compared by a contract test.
+inventory. Phase 015 established the security baseline in
+``docs/security/SECURITY_BASELINE.md`` (ADR-0048), and this list is where the
+field-name half of that policy lands: the baseline requires redaction to happen
+while the record is constructed rather than at any sink, which is what this
+implements. The same list is restated in ``docs/LOGGING_POLICY.md`` and the two
+are compared by a contract test.
 """
 
 REDACTED: Final[str] = "[redacted]"

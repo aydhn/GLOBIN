@@ -144,9 +144,11 @@ example.
 
 ## Secrets stay outside the core
 
-No credential handling exists yet — Phase 015 designs it, and Phase 017 onwards
-builds the environment around it. The structural boundary is nonetheless fixed
-now, because it constrains what the intervening phases may build:
+No credential handling exists yet. Phase 015 wrote the rules — where a secret may
+live, how it is redacted, what an API key may do — in
+[`../security/SECURITY_BASELINE.md`](../security/SECURITY_BASELINE.md); Phase 028
+implements the store and Phase 029 the credential flow. The structural boundary
+is fixed now, because it constrains what the intervening phases may build:
 
 - `domain` and `application` hold no API key, secret or token, and have no type
   that represents one.

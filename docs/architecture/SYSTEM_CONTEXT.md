@@ -145,8 +145,10 @@ are the same boundary, described twice.
 Credentials belong entirely to the outer side. No secret reaches the inner
 layers in raw form, and none is read at import time
 ([ADR-0015](../adr/0015-single-composition-root-and-no-import-time-side-effects.md)).
-Secret storage and redaction are designed in Phase 015; the structural rule is
-fixed now so the intervening phases cannot build against a different assumption.
+Secret storage and redaction are specified in
+[`../security/SECURITY_BASELINE.md`](../security/SECURITY_BASELINE.md) and
+implemented from Phase 028; the structural rule is fixed now so the intervening
+phases cannot build against a different assumption.
 
 ---
 

@@ -233,7 +233,9 @@ filtered downstream.
 
 Stated separately from 10 because it is absolute. There is no severity level, no
 debug flag and no local-only exception that permits writing a live credential to
-an output stream. Secret handling policy is **Phase 015**.
+an output stream. The secret-handling policy this invariant serves is
+[`../security/SECURITY_BASELINE.md`](../security/SECURITY_BASELINE.md), decided
+by [ADR-0048](../adr/0048-a-secret-lives-outside-the-tree-and-is-redacted-before-a-record-exists.md).
 
 ### 11. Testability
 

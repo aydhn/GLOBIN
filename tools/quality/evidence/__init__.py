@@ -26,9 +26,10 @@ library: ``xml.etree`` to read, ``hashlib`` to digest, ``json`` to render.
 numbers are copied, never recomputed. It is not a second linter: a diagnostic is
 copied rather than assessed, and whether a tool passed is its exit code's
 business. It is not a repository secret scanner: `.pre-commit-config.yaml` runs
-one, Phase 015 owns the policy, and the check here looks only at the files this
-package produced. It is not signing or provenance — a checksum proves integrity,
-not origin, and key material needs a phase that has thought about key material.
+one, `docs/security/SECURITY_BASELINE.md` owns the policy, and the check here
+looks only at the files this package produced. It is not signing or provenance —
+a checksum proves integrity, not origin, and key material needs a phase that has
+thought about key material.
 
 **The rule worth knowing before reading the code.** Evidence is produced whatever
 the gates did, and producing it never softens what they did. A failing run writes

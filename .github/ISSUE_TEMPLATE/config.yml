@@ -1,0 +1,37 @@
+# ---------------------------------------------------------------------------
+# The issue chooser.
+#
+# This file is what actually separates a public bug report from a private
+# vulnerability report. Without it, GitHub offers a blank issue alongside the
+# templates and never mentions the security policy, so the only visible route
+# for a vulnerability is the one route it must not take.
+#
+# `blank_issues_enabled: false` is the load-bearing line. With blank issues on,
+# the chooser can be bypassed entirely and the contact link below is never
+# shown. Turning it off costs a reporter nothing — the two templates cover
+# defects and proposals between them — and it guarantees that anybody opening an
+# issue passes the security link on the way.
+#
+# THERE IS DELIBERATELY NO SECURITY ISSUE TEMPLATE. A template would collect
+# vulnerability detail into a public issue, which is the disclosure this whole
+# arrangement exists to prevent. A contact link is not a form: it navigates
+# away, to the private advisory. The governance gate asserts that no template
+# here solicits vulnerability detail, so the distinction cannot erode.
+# ---------------------------------------------------------------------------
+
+blank_issues_enabled: false
+
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/aydhn/GLOBIN/security/advisories/new
+    about: >-
+      Never report a vulnerability, an exploit or a credential in a public issue.
+      This opens a private advisory visible only to you and the maintainer. See
+      SECURITY.md for what to include and what happens next.
+
+  - name: Read the phase roadmap before proposing work
+    url: https://github.com/aydhn/GLOBIN/blob/master/ROADMAP.md
+    about: >-
+      GLOBIN follows a fixed 320-phase programme and is at Phase 015. Most
+      "missing" capabilities are scheduled rather than absent, and unimplemented
+      is not the same as broken.

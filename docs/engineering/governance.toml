@@ -1,0 +1,239 @@
+# ---------------------------------------------------------------------------
+# The declared governance arrangement: which files govern this repository, which
+# paths are security-sensitive, and what the platform is and is not expected to
+# enforce.
+#
+# NOT A SNAPSHOT. Nothing writes this file, for the reason `action-pins.toml`
+# gives about itself: a manifest generated from the tree could only ever agree
+# with the tree, which is a mirror rather than a check. This file is the
+# declaration a human made; `tools/quality/governance/` compares it against the
+# real tree in both directions, and `tests/contract/test_governance_contract.py`
+# asserts the same offline as part of the ordinary suite.
+#
+# Both directions matter, and the second is the one that decays quietly. A
+# sensitive path that no longer exists is an entry describing a repository that
+# has moved on. A workflow no CODEOWNERS pattern covers is a file nobody is
+# answerable for. Neither fails anything by itself, which is why they are
+# checked.
+#
+# WHAT IS NOT DECLARED HERE. The required check's name is not copied into this
+# file: it lives in `[tool.globin.workflow] required_check` and is read from
+# there, so renaming it cannot leave a stale copy behind. The seven capability
+# states and their meanings belong to ADR-0045 and are not restated. The reasons
+# a control is `NOT_APPLICABLE` are argued in `docs/security/GOVERNANCE.md`; what
+# appears below is the conclusion and a pointer, not a second copy of the
+# argument.
+#
+# ADDING AN ENTRY is a decision. A path listed here is a path a change to which
+# is security-sensitive, which is a claim about consequence rather than about
+# importance — most of this repository is important and only some of it is
+# sensitive. See `docs/security/GOVERNANCE.md`.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# Where the governing files live.
+#
+# `codeowners` is the ONE authoritative location. GitHub also reads a file at the
+# repository root and one under `docs/`, and it uses whichever it finds first
+# rather than merging them — so a second copy silently overrides this one. The
+# gate checks every location GitHub would read and fails on a duplicate.
+# ---------------------------------------------------------------------------
+
+[locations]
+codeowners = ".github/CODEOWNERS"
+security_policy = "SECURITY.md"
+governance_policy = "docs/security/GOVERNANCE.md"
+security_baseline = "docs/security/SECURITY_BASELINE.md"
+vulnerability_runbook = "docs/security/VULNERABILITY_RESPONSE.md"
+pull_request_template = ".github/pull_request_template.md"
+issue_template_config = ".github/ISSUE_TEMPLATE/config.yml"
+issue_templates = ".github/ISSUE_TEMPLATE/"
+
+# Every location GitHub would honour as a code-owners file. Exactly one of these
+# may exist, and it must be the one named above.
+codeowners_candidates = ["CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS"]
+
+# ---------------------------------------------------------------------------
+# What the security policy must actually say.
+#
+# Asserted as headings rather than as prose, so that editorial improvement is
+# free and deletion is not. A policy that lost its reporting channel while
+# keeping its title would otherwise pass every check in this repository.
+# ---------------------------------------------------------------------------
+
+[security_policy]
+required_sections = [
+    "## Supported versions",
+    "## What counts as a vulnerability here",
+    "## How to report",
+    "## What happens next",
+    "## Scope",
+]
+
+# The private advisory form. This is the channel the policy names, and the
+# capability probe confirms it is switched on — a policy pointing at a disabled
+# form would route vulnerability reports into public issues, which is the one
+# place they must never go.
+reporting_url = "https://github.com/aydhn/GLOBIN/security/advisories/new"
+
+# ---------------------------------------------------------------------------
+# What the pull request template must ask.
+#
+# The template records what an author believed; the gates record what is true.
+# These headings exist so that a security-relevant change is DECLARED rather than
+# noticed, and the gate asserts the questions are still being asked.
+# ---------------------------------------------------------------------------
+
+[pull_request_template]
+required_sections = ["## Security impact"]
+
+# ---------------------------------------------------------------------------
+# Security-sensitive paths.
+#
+# A change to one of these has a security consequence rather than a functional
+# one. Each must exist, and each must be covered by a CODEOWNERS pattern more
+# specific than the catch-all — the catch-all already names the same owner, so
+# matching only that would make the check vacuous.
+#
+# Directories end with `/`.
+# ---------------------------------------------------------------------------
+
+[[sensitive_path]]
+path = ".github/workflows/"
+category = "continuous-integration"
+reason = "The only place this repository executes code it did not write, and the only holder of a token."
+
+[[sensitive_path]]
+path = ".github/dependabot.yml"
+category = "continuous-integration"
+reason = "Decides which updates are proposed, and against which ecosystems."
+
+[[sensitive_path]]
+path = ".pre-commit-config.yaml"
+category = "continuous-integration"
+reason = "The hooks that run before a commit exists, including the secret checks."
+
+[[sensitive_path]]
+path = ".github/CODEOWNERS"
+category = "governance"
+reason = "A change here changes who is asked to look at everything else."
+
+[[sensitive_path]]
+path = "SECURITY.md"
+category = "governance"
+reason = "Names the reporting channel. A wrong channel sends reports somewhere public."
+
+[[sensitive_path]]
+path = ".github/ISSUE_TEMPLATE/"
+category = "governance"
+reason = "Separates public defect reports from private vulnerability reports."
+
+[[sensitive_path]]
+path = ".github/pull_request_template.md"
+category = "governance"
+reason = "Where a change's security impact is declared."
+
+[[sensitive_path]]
+path = "docs/security/"
+category = "security-policy"
+reason = "The secret-handling rules, the response runbook and this governance model."
+
+[[sensitive_path]]
+path = "docs/DEPENDENCY_POLICY.md"
+category = "security-policy"
+reason = "The review process, the severity threshold and the secret scanners' rules."
+
+[[sensitive_path]]
+path = "docs/engineering/CI_SECURITY.md"
+category = "security-policy"
+reason = "The trust model every workflow is judged against."
+
+[[sensitive_path]]
+path = "docs/engineering/action-pins.toml"
+category = "supply-chain"
+reason = "What each pinned commit was verified to be. A moved tag changes what runs with no diff."
+
+[[sensitive_path]]
+path = "docs/engineering/dependency-reviews.toml"
+category = "supply-chain"
+reason = "The written verdict on every declared dependency."
+
+[[sensitive_path]]
+path = "docs/engineering/vulnerability-waivers.toml"
+category = "supply-chain"
+reason = "Which advisories are accepted, and until when."
+
+[[sensitive_path]]
+path = "docs/engineering/governance.toml"
+category = "governance"
+reason = "This file. It declares what the governance gate checks."
+
+[[sensitive_path]]
+path = "tools/"
+category = "quality-gate"
+reason = "The gates that decide whether a commit is acceptable. A gate that cannot fail is decoration."
+
+[[sensitive_path]]
+path = "scripts/"
+category = "quality-gate"
+reason = "The single verification entrypoint every contributor is told to run."
+
+[[sensitive_path]]
+path = "pyproject.toml"
+category = "quality-gate"
+reason = "Configures every gate above, including the coverage floor and the required-check name."
+
+[[sensitive_path]]
+path = "docs/adr/"
+category = "governance"
+reason = "What makes a control's absence a decision rather than an oversight."
+
+[[sensitive_path]]
+path = "AGENTS.md"
+category = "governance"
+reason = "Binding instructions for automated contributors, including the hard prohibitions."
+
+# ---------------------------------------------------------------------------
+# Extension points.
+#
+# Paths that WILL be security-sensitive when the phases owning them arrive, and
+# that deliberately do not exist yet. Listed as patterns rather than created as
+# empty directories, because a directory created early settles a later phase's
+# design question by accident. The gate does not require these to exist; it
+# requires that if one appears, it is claimed rather than unnoticed.
+# ---------------------------------------------------------------------------
+
+[[extension_point]]
+pattern = "src/globin/**/credential*.py"
+phase = 28
+reason = "The local secret store. Specified by docs/security/SECURITY_BASELINE.md."
+
+[[extension_point]]
+pattern = "src/globin/**/signing*.py"
+phase = 49
+reason = "Request signing against the exchange. Handles key material by definition."
+
+# ---------------------------------------------------------------------------
+# Controls whose state follows from a written decision rather than from a
+# setting, and which are therefore NOT probed.
+#
+# `tools/quality/supply/capability.py` asks GitHub about the controls GitHub
+# owns. These two are different: no API answer would change them, because the
+# reason they are off is an argument recorded in an ADR. Recording them here
+# rather than omitting them is ADR-0045's rule — an absent key and a recorded
+# NOT_APPLICABLE read very differently six months later.
+# ---------------------------------------------------------------------------
+
+[[declared_capability]]
+name = "code_owner_review"
+state = "NOT_APPLICABLE"
+authority = "docs/adr/0005-master-only-git-workflow.md"
+reason = "GLOBIN develops on master with no pull request, and GitHub does not permit anybody to approve their own. A sole maintainer requiring their own approval could merge nothing."
+
+[[declared_capability]]
+name = "required_status_check"
+state = "NOT_APPLICABLE"
+authority = "docs/adr/0005-master-only-git-workflow.md"
+reason = "A required check is evaluated on push and can only run after one, so requiring it on a directly-written branch would reject the very commit that would produce the passing check."

@@ -15,8 +15,11 @@ a way that produces false confidence:
   on third-party sites is handled by the research ledger's access dates.
 * The credential check matches **filenames**, never file contents. A regular
   expression hunting for secrets inside files would miss anything unusual while
-  looking authoritative, and false authority is worse here than no check. Real
-  secret handling is Phase 015; this is a tripwire for the obvious accident.
+  looking authoritative, and false authority is worse here than no check. The
+  secret-handling rules are ``docs/security/SECURITY_BASELINE.md`` and the
+  content scanner is ``tools/quality/supply/secrets.py``; this is a tripwire for
+  the obvious accident, and it is the only one of the three that runs before a
+  file is even staged.
 """
 
 import fnmatch

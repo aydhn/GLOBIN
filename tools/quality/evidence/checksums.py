@@ -8,10 +8,12 @@ corrupted archive, an artifact somebody edited before quoting it. It is an
 **integrity check, not a signature**: anybody who can alter a file can also
 recompute its digest and rewrite this list. It carries no proof of origin.
 
-Signing, provenance and attestation are deliberately out of scope. They need key
-material, and key material needs the secret-handling policy that **Phase 015**
-owns. Saying so here is the point: a checksum file looks like security, and the
-difference is worth one paragraph rather than a later argument.
+Signing, provenance and attestation are deliberately out of scope here. They need
+key material, and key material is governed by
+``docs/security/SECURITY_BASELINE.md``. Saying so is the point: a checksum file
+looks like security, and the difference is worth one paragraph rather than a
+later argument. Provenance itself arrived in Phase 014 as the `attest` job, which
+signs through Sigstore precisely so that this repository holds no key of its own.
 
 **Determinism.** Entries are sorted by path, paths are written with forward
 slashes whatever produced them, and the manifest never lists itself. Two runs

@@ -36,6 +36,12 @@ NON_PROVIDER = next(
     for control in capability.CONTROLS
     if control.name == "secret_scanning_non_provider_patterns"
 )
+PRIVATE_REPORTING = next(
+    control for control in capability.CONTROLS if control.name == "private_vulnerability_reporting"
+)
+ADVISORIES = next(
+    control for control in capability.CONTROLS if control.name == "security_advisories"
+)
 
 
 @pytest.mark.parametrize(
@@ -98,6 +104,46 @@ def test_a_control_known_to_be_unenableable_is_not_reported_as_a_failure() -> No
     state, reason = capability.classify(NON_PROVIDER, status=200, body=body)
     assert state is State.UNAVAILABLE_BY_PLAN
     assert "Secret Protection" in reason
+
+
+def test_private_vulnerability_reporting_is_read_from_its_own_flag() -> None:
+    """The control that makes ``SECURITY.md`` truthful rather than aspirational.
+
+    Both bodies were observed against this repository on 2026-08-15, either side
+    of the ``PUT`` that switched it on — ``docs/research/phase_015_sources.md``.
+    Off is a plain ``FAIL`` rather than an unavailability: unlike the plan
+    ceilings ADR-0045 was written for, this is a switch the repository's owner
+    controls, so nobody is being sent to buy a subscription.
+    """
+    assert (
+        capability.classify(PRIVATE_REPORTING, status=200, body='{"enabled":true}')[0] is State.PASS
+    )
+
+    state, reason = capability.classify(PRIVATE_REPORTING, status=200, body='{"enabled":false}')
+    assert state is State.FAIL
+    assert "enabled" in reason, "the reason names the flag that decided it"
+
+
+def test_a_disabled_reporting_channel_fails_the_gate() -> None:
+    """A security policy naming a switched-off form routes reports into public issues.
+
+    That is the one place a vulnerability must never go, which is why this
+    control is ``REQUIRED`` rather than merely recorded.
+    """
+    assert PRIVATE_REPORTING.policy == capability.REQUIRED
+    assert capability.judge({"private_vulnerability_reporting": (State.FAIL, "enabled = False")})
+
+
+def test_an_empty_advisory_list_is_a_pass_rather_than_a_gap() -> None:
+    """``200 []`` is the healthy state and the only state a clean repository has.
+
+    Requiring a non-empty answer would demand a vulnerability, which is why this
+    control is ``RECORDED``: what it establishes is that the capability responds
+    at all, not that anything has gone wrong.
+    """
+    assert ADVISORIES.policy == capability.RECORDED
+    assert capability.classify(ADVISORIES, status=200, body="[]")[0] is State.PASS
+    assert not capability.judge({"security_advisories": (State.FAIL, "off")})
 
 
 def test_a_body_that_is_not_json_is_an_error_rather_than_a_verdict() -> None:
