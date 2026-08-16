@@ -33,10 +33,38 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-021 are complete. Phase 022 is next and has not started.**
-> Nothing beyond Phase 021 is implemented. GLOBIN does not trade, does not
+> **Phases 001-022 are complete. Phase 023 is next and has not started.**
+> Nothing beyond Phase 022 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
+>
+> **Phase 022 verified the scientific stack, and gave GLOBIN somewhere to live.**
+> `python -m tools.quality stack` recomputes what
+> [`docs/engineering/stack-contract.toml`](docs/engineering/stack-contract.toml)
+> declares against this environment — four registers of a version held against
+> each other, each artefact's own record of the wheel it came from, and **seven
+> behaviour probes** run against the real libraries, each defending a rule written
+> down elsewhere in this repository. `numpy` and `pandas` left the wheel survey in
+> the same commit: that file asks whether a wheel *exists*, and once a library is
+> installed the remaining question is whether it *computes*. **Nothing under
+> `src/globin` imports either, and a tripwire fails if anything starts** — Phases
+> 113-128 own the numeric type indicators use, and `PRECISION_POLICY.md` rule 1 is
+> a one-way door cheapest to hold now. See
+> [`docs/engineering/SCIENTIFIC_STACK.md`](docs/engineering/SCIENTIFIC_STACK.md).
+>
+> **Alongside it, and as the sixth scope amendment, the runtime filesystem and the
+> process lifecycle.** GLOBIN now keeps mutable state in a user-local tree —
+> `state`, `cache`, `run`, `tmp` — publishes every small document atomically,
+> guarantees one coordinator per machine with a real operating-system lock, and
+> shuts down in a fixed order that is reached whatever the application did.
+> **The presence of a lock file is never evidence that GLOBIN is running**: a
+> crashed process leaves one behind, so ownership is decided by an acquisition and
+> by nothing else. Four checks joined the bootstrap and three exit codes joined its
+> contract. This is the weakest amendment in the programme by ADR-0021's test —
+> one of four — and
+> [ADR-0057](docs/adr/0057-phase-022-widens-to-deliver-the-runtime-filesystem-and-lifecycle.md)
+> says so rather than arguing it. See
+> [`docs/engineering/RUNTIME_FILESYSTEM.md`](docs/engineering/RUNTIME_FILESYSTEM.md).
 >
 > **Phase 021 ended the zero-dependency era, and gave GLOBIN a way in.**
 > `project.dependencies` names `numpy` and `pandas`, each with a written
@@ -45,8 +73,8 @@ the contract:
 > toolchain, the runtime lock and GLOBIN itself, which is what creates the
 > `globin` command; `globin doctor` and `globin bootstrap check` answer whether
 > this host may start GLOBIN at all, and refuse fail-closed when it may not.
-> **Nothing imports either package yet** — Phase 022 installs and verifies the
-> scientific stack, and this phase declared, reviewed and locked it. See
+> **Nothing imports either package**, and Phase 022 has now verified them without
+> adopting them; this phase declared, reviewed and locked them. See
 > [`docs/engineering/BOOTSTRAP.md`](docs/engineering/BOOTSTRAP.md) and
 > [`docs/engineering/DEPENDENCY_LOCKING.md`](docs/engineering/DEPENDENCY_LOCKING.md).
 >
@@ -78,10 +106,10 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Five have been made. Each cost an ADR, and each is
+> **Scope amendments.** Six have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
-> unchanged by all three.
+> unchanged by all six.
 >
 > **First.** Phase 003 originally read *Coding Standards and Static Analysis
 > Baseline*, and Phase 013 read *Continuous Verification Script and Quality
@@ -139,6 +167,24 @@ the contract:
 > [ADR-0056](docs/adr/0056-phase-021-widens-to-deliver-the-application-bootstrap.md)
 > records that against ADR-0021's four criteria one by one, on the owner's
 > decision. A sixth amendment makes its own argument; it does not cite this one.
+>
+> **Sixth.** Phase 022 still delivers the scientific stack its title names, and
+> now also delivers the application's mutable runtime filesystem and its process
+> lifecycle: a user-local runtime tree, atomic state publication, a single-instance
+> coordinator lock, graceful shutdown and crash-safe lifecycle evidence.
+>
+> **It is the weakest amendment in the programme, and it makes its own argument
+> rather than citing the fifth.** Restating ADR-0021's test in full: nothing is
+> deferred and no other title changes, but work is displaced, eight planned phases
+> own parts of it by name — 026, 030, 257, 262, 266, 267, 268 and 270 — and the
+> two halves do **not** need each other. Either could have shipped alone, and no
+> gate refused until both existed, which is the one criterion the fifth amendment
+> could claim and this one cannot. **One of four**, where the fourth and fifth each
+> scored two.
+> [ADR-0057](docs/adr/0057-phase-022-widens-to-deliver-the-runtime-filesystem-and-lifecycle.md)
+> records that, and the three courses the conflict was surfaced with, on the
+> owner's decision. A seventh amendment cannot cite this one either, and cannot
+> cite the series.
 
 ---
 
@@ -181,7 +227,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 019 | Environment Drift Detection and Repair | Detect divergence from the runtime contract as it appears, and define repair short of recreating the environment. | Complete |
 | 020 | Dependency Resolution and Lockfile Strategy | Choose the locking mechanism and define reproducible resolution, upgrade and audit procedures. | Complete |
 | 021 | Core Runtime Dependency Introduction | Introduce the first runtime dependencies under the zero-budget policy with explicit justification per package. | Complete |
-| 022 | Scientific Stack Installation and Verification | Install and verify the numerical and dataframe stack, confirming correctness rather than assuming it. | Planned |
+| 022 | Scientific Stack Installation and Verification | Install and verify the numerical and dataframe stack, confirming correctness rather than assuming it; and, as the sixth scope amendment, deliver the application's mutable runtime filesystem, atomic state publication, single-instance coordinator lock and graceful shutdown. | Complete |
 | 023 | NVIDIA Driver and CUDA Capability Detection | Detect GPU presence, driver version, compute capability and CUDA availability without assuming any of them. | Planned |
 | 024 | GPU Runtime Verification Harness | Build a harness that proves which workloads actually benefit from GPU execution on this host. | Planned |
 | 025 | TA-Lib Native Library Provisioning | Provision the native TA-Lib dependency required by the Python wrapper on Windows, with a documented fallback. | Planned |

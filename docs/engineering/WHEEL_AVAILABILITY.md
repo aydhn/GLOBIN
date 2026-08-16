@@ -35,8 +35,9 @@ changes what the lock gate accepts.
 
 **It is not a measurement.** A published wheel is a claim that installation is
 possible, not that the library works on this host. Whether the numerical stack
-computes correctly is Phase 022; whether a GPU helps is Phases 023-024; whether
-TA-Lib's native library can be provisioned at all is Phase 025.
+computes correctly is Phase 022, delivered —
+[`SCIENTIFIC_STACK.md`](SCIENTIFIC_STACK.md); whether a GPU helps is Phases
+023-024; whether TA-Lib's native library can be provisioned at all is Phase 025.
 
 ---
 
@@ -176,8 +177,6 @@ why each is in it.
 
 | Distribution | Phase | Why it is scheduled | Wheel shape |
 |---|:---:|---|---|
-| `numpy` | 022 | The numerical half of the scientific stack | `cp314` and `cp314t` |
-| `pandas` | 022 | The dataframe half | `cp314` and `cp314t` |
 | `ta-lib` | 025 | The indicator wrapper Phases 025 and 114 name | `cp314` only |
 | `binance-common` | 045 | The shared runtime the SDK family requires | pure |
 | `binance-sdk-spot` | 066 | Spot | pure |
@@ -263,11 +262,29 @@ Silence must not read as a gap, so the omissions are stated.
 | `scipy`, `scikit-learn` and similar | They arrive transitively behind the entries that are surveyed. Nothing in the roadmap schedules them by name. |
 | CUDA builds of PyTorch | Served from a separate index, and which one performs on this host is a measurement Phases 023-024 make. |
 
-`numpy` and `pandas` are the one place the survey names packages the roadmap
-describes only as a capability — Phase 022's *numerical and dataframe stack*. That
-is a judgement, recorded in their entries, and it was made because four other
-surveyed libraries require them: a survey omitting them would be surveying a stack
-that cannot be installed.
+`numpy` and `pandas` **were** here, and are the one place the survey named packages
+the roadmap describes only as a capability — Phase 022's *numerical and dataframe
+stack*. That judgement was recorded in their entries and made because four other
+surveyed libraries require them.
+
+**They left in Phase 022, when that phase delivered.** ADR-0052 is explicit that a
+survey entry naming a phase which has already shipped is "an adoption wearing a
+survey's clothes", and `phase_problems` in the gate refuses one. `DELIVERED_PHASE`
+rose from `18` to `22` in the same commit — the first time since Phase 018 that the
+survey actually changed.
+
+**The question moved rather than closed.** This file asks whether a wheel exists.
+Once a library is installed, what remains is whether the thing inside it computes
+correctly, which no filename can settle.
+[`stack-contract.toml`](stack-contract.toml) now holds those two entries and
+`python -m tools.quality stack` recomputes them from measurement; the reasoning is
+in [`SCIENTIFIC_STACK.md`](SCIENTIFIC_STACK.md) and
+[ADR-0058](../adr/0058-the-scientific-stack-is-verified-by-measurement-and-stays-in-the-approximate-regime.md).
+
+Both remain required transitively by several surveyed entries. That is not a
+reason to re-list them: a transitive dependency is covered by the wheel of the
+library that pulls it in, and restating it here would make this file the source of
+a claim it has stopped being responsible for.
 
 ---
 

@@ -30,6 +30,10 @@ globin / python -m globin
   → read dependency readiness        declared, locked, installed
   → bind and validate configuration  the Phase 007 model
   → prepare the runtime tree         only the allowlisted roots are created
+  → resolve the mutable tree         user-local, and every area inside its root
+  → probe state persistence          a document written, replaced and removed
+  → read the previous run's record   a diagnostic, never a claim about this one
+  → probe the coordinator lock       acquired and released; ownership is later
   → check secret readiness           empty today, and true over an empty set
   → assemble the RuntimeContext      only if every check passed
   → write the evidence               .globin/bootstrap/bootstrap-manifest.json
@@ -120,6 +124,9 @@ reason without parsing English.
 | 16 | The project root or its runtime tree is unusable |
 | 17 | The bootstrap failed in a way it does not account for |
 | 18 | This GLOBIN could not state its own name and version |
+| 19 | The recorded runtime state could not be read |
+| 20 | Another GLOBIN coordinator is already running on this machine |
+| 21 | The runtime state could not be written |
 
 Unmeasured outranks failed: a check that could not run has not passed, and
 reporting it as a specific failure would claim knowledge nobody has.
@@ -308,9 +315,36 @@ refuses rather than falling back.
 
 ---
 
-## Handoff to Phase 022
+## What Phase 022 added
 
-The public surface this phase established, which later phases build on rather
+Four checks and three exit codes, and the registry took them without changing
+shape — which was the seam's first real test. They sit after `paths.runtime`, in
+dependency order: the mutable tree must resolve inside its own root before
+anything can be written, a document must publish before the previous run's can be
+read, and the lock is probed last because it is the only one whose answer can
+change between two runs a second apart.
+
+| Check | Asks |
+|---|---|
+| `paths.boundary` | Does the user-local runtime tree resolve, and does every area stay inside its root |
+| `state.persistence` | Can a document be written, replaced and removed here — probed by doing it |
+| `state.previous_run` | What did the last run record, **without** inferring that anything is running |
+| `instance.lock` | Could this process be the machine's one coordinator |
+
+`instance.lock` **probes and does not keep the lock.** This pipeline runs inside
+`doctor` as well as inside the gate, and a diagnostic that took the production
+lock would refuse to run beside a running GLOBIN — which is exactly when somebody
+wants to run it. The lock that is *held* is taken by
+`globin.application.lifecycle`, once, around the whole application.
+
+The full contract, including what happens on each kind of ending, is in
+[`RUNTIME_FILESYSTEM.md`](RUNTIME_FILESYSTEM.md).
+
+---
+
+## Handoff to Phase 023
+
+The public surface these phases established, which later phases build on rather
 than replace:
 
 | Contract | Where |
@@ -325,6 +359,10 @@ than replace:
 | Wiring | `globin.runtime.composition.build_bootstrap` |
 | The entry point | `globin.runtime.cli.main` |
 | The evidence schema | `globin.adapters.bootstrap` — `SCHEMA`, `SCHEMA_VERSION` |
+| The mutable tree | `globin.domain.runtime_state` — `RuntimeLayout`, `RuntimeArea` |
+| The lifecycle record | `LifecycleRecord`, `InstanceMetadata`, `read_lifecycle` |
+| The runtime ports | `globin.ports.runtime_state` — four protocols |
+| One run | `globin.application.lifecycle.Lifecycle`, `Session` |
 
 Open, and not blocking:
 
@@ -336,9 +374,15 @@ Open, and not blocking:
 - **`config.valid` binds the declared defaults and nothing else**, because no
   configuration source exists to consult. Phase 027 is where that becomes a real
   question.
-- **Nothing imports `numpy` or `pandas`.** Phase 022 installs and verifies them;
-  this phase declared, reviewed and locked them and makes no claim about whether
-  they compute correctly.
+- **Nothing imports `numpy` or `pandas`**, and Phase 022 verified them without
+  adopting them — a tripwire now fails if anything starts. Phases 113-128 own the
+  numeric type indicators and models use.
+- **The coordinator lock is narrow.** It guards one top-level process against
+  being started twice. Phases 257 onwards need something broader for workers and
+  child processes, and this cannot correctly become it.
+- **An unclean previous run is a diagnostic and nothing more.** Nothing is
+  resumed, repaired or replayed; that is Phase 267, and trading reconciliation is
+  Phase 095.
 
 ---
 

@@ -46,6 +46,12 @@ EXPECTED_CODES: dict[str, int] = {
     "PATHS_UNUSABLE": 16,
     "INTERNAL": 17,
     "PROJECT_UNIDENTIFIED": 18,
+    # Phase 022. Three failure classes the runtime filesystem introduced: a
+    # lifecycle record that cannot be read, a machine that already has a
+    # coordinator, and a tree that cannot be written to.
+    "RUNTIME_STATE_CORRUPT": 19,
+    "INSTANCE_ALREADY_ACTIVE": 20,
+    "RUNTIME_PERSISTENCE_FAILED": 21,
 }
 
 #: Which check answers for which failure class. A launcher that saw code 12 must
@@ -62,6 +68,10 @@ EXPECTED_MAPPING: dict[str, str] = {
     "dependency.lock": "DEPENDENCY_UNREADY",
     "config.valid": "CONFIGURATION_INVALID",
     "paths.runtime": "PATHS_UNUSABLE",
+    "paths.boundary": "PATHS_UNUSABLE",
+    "state.persistence": "RUNTIME_PERSISTENCE_FAILED",
+    "state.previous_run": "RUNTIME_STATE_CORRUPT",
+    "instance.lock": "INSTANCE_ALREADY_ACTIVE",
     "secrets.required": "SECRETS_UNREADY",
     "bootstrap.ready": "GATE_FAILED",
 }

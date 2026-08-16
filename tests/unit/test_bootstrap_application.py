@@ -7,6 +7,8 @@ downstream is reached in either case, without owning a wrong interpreter or
 deleting a project.
 """
 
+from collections.abc import Mapping
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, replace
 
 import pytest
@@ -30,6 +32,12 @@ from globin.domain.bootstrap import (
     recorded_outside,
 )
 from globin.domain.configuration import ConfigLayer, config_layer
+from globin.domain.identifiers import RunId
+from globin.domain.runtime_state import (
+    RuntimeArea,
+    RuntimeLayout,
+    RuntimePersistenceError,
+)
 from globin.errors import ConfigurationError
 
 # ---------------------------------------------------------------------------
@@ -147,6 +155,67 @@ class _Tree:
         return self.problems
 
 
+@dataclass(frozen=True, slots=True)
+class _RuntimeTree:
+    """Resolves the mutable tree, or reports why it could not."""
+
+    problems: tuple[str, ...] = ()
+
+    def prepare(self, layout: RuntimeLayout) -> tuple[str, ...]:
+        assert layout is not None
+        return self.problems
+
+    def describe(self) -> str:
+        return "a temporary runtime root"
+
+    def recorded_root(self) -> RecordedPath:
+        return recorded_outside("C:/somewhere/GLOBIN")
+
+    def claim_temporary(self, run_id: RunId) -> None:
+        assert run_id is not None
+
+    def release_temporary(self, run_id: RunId) -> None:
+        assert run_id is not None
+
+
+@dataclass(slots=True)
+class _State:
+    """Holds published documents in memory, or refuses to.
+
+    In memory rather than on disk because these tests are about the *pipeline's*
+    sequencing. Whether a real `os.replace` is atomic is
+    `tests/unit/test_runtime_state_adapters.py`'s question, and answering it twice
+    would make this file fail for reasons that are not about it.
+    """
+
+    documents: dict[tuple[str, str], Mapping[str, object]]
+    refuse: str = ""
+
+    def publish(self, area: RuntimeArea, name: str, document: Mapping[str, object]) -> None:
+        if self.refuse:
+            raise RuntimePersistenceError(self.refuse)
+        self.documents[(area.value, name)] = document
+
+    def read(self, area: RuntimeArea, name: str) -> Mapping[str, object] | None:
+        return self.documents.get((area.value, name))
+
+    def discard(self, area: RuntimeArea, name: str) -> None:
+        self.documents.pop((area.value, name), None)
+
+
+@dataclass(frozen=True, slots=True)
+class _Lock:
+    """Reports whether the coordinator lock could be taken."""
+
+    problem: str = ""
+
+    def hold(self) -> AbstractContextManager[None]:
+        return nullcontext()
+
+    def probe(self) -> str:
+        return self.problem
+
+
 class _Refusing:
     """A configuration source that refuses, as a malformed document would."""
 
@@ -171,6 +240,10 @@ def pipeline(**overrides: object) -> BootstrapPipeline:
         "dependencies": _Dependencies(),
         "secrets": _Secrets(),
         "tree": _Tree(),
+        "runtime_tree": _RuntimeTree(),
+        "state": _State(documents={}),
+        "lock": _Lock(),
+        "layout": RuntimeLayout(),
         "configuration_sources": (),
     }
     values.update(overrides)

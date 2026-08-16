@@ -1,0 +1,169 @@
+# ---------------------------------------------------------------------------
+# What must be true of the installed numerical and dataframe stack.
+#
+# NOT A SNAPSHOT, and not a fourth place to look up a version. `pyproject.toml`
+# declares the bound, `pylock.toml` pins the version, the installed `.dist-info`
+# records what actually landed, and this file declares what GLOBIN *assumes about
+# their behaviour*. `python -m tools.quality stack` reads all four and fails when
+# they disagree, which is the only reason a fourth register is worth having.
+#
+# WHY IT EXISTS. ADR-0052 established that a published wheel filename is a claim
+# about availability, not about behaviour, and `docs/research/phase_018_sources.md`
+# files "whether each wheel, once installed, actually works on this host" against
+# Phase 022 by name. The survey proved a wheel exists. This proves the thing
+# inside it computes the way GLOBIN's written assumptions require.
+#
+# A PROBE IS NOT A TEST OF THE LIBRARY. Each one exists because a specific GLOBIN
+# document depends on it, and the `because` field says which. A probe that cannot
+# name the assumption it defends is decoration, and upstream already tests its own
+# code far better than this file could — see ADR-0058 on why `numpy.test()` is
+# deliberately not run here.
+#
+# THIS IS VERIFICATION, NOT ADOPTION. Nothing under `src/globin` imports either
+# library, and `tests/architecture/test_stack_discipline.py` fails if anything
+# starts. `docs/PRECISION_POLICY.md` rule 1 is a one-way door: these libraries live
+# in the approximate regime, may never carry a Price or a Quantity, and may never
+# decide a refusal. The phase that has a legitimate use edits that tripwire in its
+# own diff.
+#
+# ADDING A LIBRARY is a claim that GLOBIN depends on its behaviour, so it must
+# already be in `project.dependencies` and in `pylock.toml`, and it must declare
+# at least one probe. Reasoning: `docs/engineering/SCIENTIFIC_STACK.md`.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# The environment these claims were established against.
+#
+# Compared against `runtime-contract.toml` on every run rather than trusted. A
+# stack verified on one interpreter says nothing about another, and this is what
+# makes that failure loud instead of silent.
+# ---------------------------------------------------------------------------
+
+[target]
+implementation = "CPython"
+minor_line = "3.14"
+architecture = "AMD64"
+
+# ---------------------------------------------------------------------------
+# The libraries.
+#
+# `version` must equal the pin in `pylock.toml`, satisfy the bound in
+# `pyproject.toml`, and match what is installed. `wheel_tag` is the PEP 425 tag
+# the installed artefact records in its own `.dist-info/WHEEL`, which is how a
+# wheel built for another ABI is caught as a wrong artefact rather than as a
+# mysterious failure later.
+# ---------------------------------------------------------------------------
+
+[[library]]
+name = "numpy"
+import_name = "numpy"
+version = "2.5.2"
+wheel_tag = "cp314-cp314-win_amd64"
+role = """The numerical half of the stack. Every later numeric entry depends on \
+it, so its floating-point behaviour is the foundation the approximate regime is \
+defined on top of."""
+probes = [
+    "numpy.float64_is_binary64",
+    "numpy.nan_and_infinity_propagate",
+    "numpy.integer_overflow_wraps_observably",
+]
+
+[[library]]
+name = "pandas"
+import_name = "pandas"
+version = "3.0.5"
+wheel_tag = "cp314-cp314-win_amd64"
+role = """The dataframe half of the stack. It is the boundary values cross most \
+often, and therefore the boundary at which a dtype, a missing value or a timezone \
+is most easily lost."""
+probes = [
+    "pandas.float64_round_trip_is_bit_exact",
+    "pandas.missing_value_survives_a_round_trip",
+    "pandas.utc_timestamp_round_trip_preserves_the_instant",
+    "pandas.copy_on_write_is_active",
+]
+
+# ---------------------------------------------------------------------------
+# The probes.
+#
+# Every identifier here must be implemented in `tools/quality/stack/plan.py`, and
+# every implemented probe must appear here. A contract test compares the two sets
+# in both directions: a declared probe nothing implements is a claim nobody
+# checks, and an implemented probe nobody declared is a check nobody asked for.
+#
+# `because` is required and is the point of the file. It names the GLOBIN
+# document whose rule would be violated if the probe failed.
+# ---------------------------------------------------------------------------
+
+[[probe]]
+id = "numpy.float64_is_binary64"
+because = """`docs/PRECISION_POLICY.md` defines the approximate regime in terms of \
+IEEE-754 binary64. If this build's float64 is not binary64, every statement that \
+policy makes about float behaviour is about a type this host does not have."""
+
+[[probe]]
+id = "numpy.nan_and_infinity_propagate"
+because = """A division that raised, or that substituted a finite value, would turn \
+a detectable non-result into a silently plausible number. `ENGINEERING_CONTRACT.md` \
+invariant 2 fails closed on ambiguity, and a propagated NaN is what makes that \
+possible downstream."""
+
+[[probe]]
+id = "numpy.integer_overflow_wraps_observably"
+because = """Fixed-width overflow is permitted to wrap; it is not permitted to be \
+silent. A wrap with no signal available is indistinguishable from a correct result, \
+and a later phase escalating overflow needs something to escalate."""
+
+[[probe]]
+id = "pandas.float64_round_trip_is_bit_exact"
+because = """A frame that altered a float in transit would make every measurement \
+taken through pandas differ from the same measurement taken without it, which is \
+the reproducibility `docs/TESTING_STRATEGY.md` rests on."""
+
+[[probe]]
+id = "pandas.missing_value_survives_a_round_trip"
+because = """A missing value silently becoming 0.0 is the most damaging quiet \
+corruption in this stack: it is a plausible number in the right dtype, and no \
+later check can distinguish it from a measured zero."""
+
+[[probe]]
+id = "pandas.utc_timestamp_round_trip_preserves_the_instant"
+because = """`docs/TIME_POLICY.md` makes internal time UTC and aware, and \
+`ENGINEERING_CONTRACT.md` invariant 25 forbids a naive datetime crossing a domain \
+boundary. A frame that dropped the timezone would manufacture exactly that."""
+
+[[probe]]
+id = "pandas.copy_on_write_is_active"
+because = """Without copy-on-write, a derived frame can write through to its \
+parent, so a function that takes a slice can mutate its caller's data. The probe \
+asserts the behaviour rather than reading `mode.copy_on_write`, which pandas 3.0 \
+deprecated and pandas 4.0 removes."""
+
+# ---------------------------------------------------------------------------
+# What this gate deliberately does not answer.
+#
+# Named so that silence does not read as a gap, and so that nobody cites a green
+# stack gate as evidence for a question it never asked.
+# ---------------------------------------------------------------------------
+
+[[deferral]]
+question = "The numeric type indicators and models use, and its tolerance"
+phase = 113
+
+[[deferral]]
+question = "Bit-identical reproducibility of a float computation across hosts"
+phase = 158
+
+[[deferral]]
+question = "Whether a GPU accelerates any of this, and whether one is present"
+phase = 23
+
+[[deferral]]
+question = "The native TA-Lib library the Python wrapper requires"
+phase = 25
+
+[[deferral]]
+question = "Which storage engine and columnar format persist these frames"
+phase = 97

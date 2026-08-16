@@ -17,8 +17,11 @@ that grew branching logic about *what* to construct would be the failure
 ADR-0015 names in its own risk section.
 """
 
+import os
+import signal
 import sys
-from collections.abc import Sequence
+import types
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TextIO
@@ -41,18 +44,31 @@ from globin.adapters.bootstrap import (
 )
 from globin.adapters.clock import SystemClock, SystemMonotonicClock
 from globin.adapters.observability import StreamLogSink, ThresholdLogSink, new_correlation_id
+from globin.adapters.runtime_state import (
+    AtomicStateStore,
+    FileOperations,
+    PlatformShutdownSignals,
+    WindowsInstanceLock,
+    register_last_resort,
+    resolve_root,
+    system_environment,
+)
+from globin.adapters.runtime_state import ProjectRuntimeTree as UserRuntimeTree
 from globin.adapters.serialization import JsonCodec
 from globin.application.architecture_review import ArchitectureReview
 from globin.application.bootstrap import BootstrapPipeline
 from globin.application.configuration import ConfigurationResolution
+from globin.application.lifecycle import Lifecycle
 from globin.application.observability import Logger
 from globin.domain.bootstrap import (
     BootstrapOutcome,
     ProjectIdentity,
     RecordedPath,
+    RuntimeContext,
     RuntimePaths,
 )
 from globin.domain.configuration import GlobinConfig, default_config
+from globin.domain.runtime_state import LOCK_FILE, RuntimeLayout
 from globin.errors import ConfigurationError
 from globin.ports.clock import Clock, MonotonicClock
 from globin.ports.configuration import ConfigurationSource
@@ -66,6 +82,15 @@ PACKAGE_RELATIVE_PATH: Final[str] = "src/globin"
 
 ROOT_PACKAGE: Final[str] = "globin"
 """The import namespace the review is scoped to."""
+
+DEFAULT_PROFILE: Final[str] = "default"
+"""The profile name recorded until Phase 026 defines any.
+
+A literal rather than a lookup, and named rather than left blank, because the
+instance record has a field for it and an empty one would read as "no profile"
+rather than as "profiles do not exist yet". Phase 026 decides what a profile is
+and Phase 027 decides how one is selected; this is what the field says until
+then."""
 
 
 def build_architecture_review(repo_root: Path) -> ArchitectureReview:
@@ -264,9 +289,131 @@ class Bootstrap:
         return write(outcome, root=self.root, paths=self.paths)
 
 
+@dataclass(frozen=True, slots=True)
+class RuntimeState:
+    """The mutable runtime tree, wired: where it is, and the three things that use it.
+
+    Args:
+        root: The resolved runtime root.
+        layout: The declared shape of the tree.
+        tree: Creates the four areas and refuses anything that escapes.
+        store: Publishes and reads small documents inside them.
+        lock: Decides whether this process may be the one coordinator.
+        signals: Notices a stop request.
+
+    Returned as one object rather than five because they are only correct
+    together: a store writing under one root and a lock taken under another would
+    be one process guarding a tree it does not use.
+    """
+
+    root: Path
+    layout: RuntimeLayout
+    tree: UserRuntimeTree
+    store: AtomicStateStore
+    lock: WindowsInstanceLock
+    signals: PlatformShutdownSignals
+
+
+def build_runtime_state(
+    environment: Mapping[str, str] | None = None,
+    layout: RuntimeLayout | None = None,
+) -> RuntimeState:
+    """Wire the mutable runtime tree against the platform's per-user data area.
+
+    Args:
+        environment: Where to look up the per-user data area. Defaults to this
+            process's own. Passed in rather than read below so that the Phase 027
+            seam already exists and so a test substitutes one without touching
+            global state.
+        layout: The declared tree. Defaults to GLOBIN's.
+
+    Returns:
+        The wired :class:`RuntimeState`.
+
+    Raises:
+        RuntimePersistenceError: If the platform does not say where per-user
+            application data goes. GLOBIN refuses rather than guessing a
+            substitute, because a machine-wide coordinator lock whose location
+            depended on how the process was started would guard nothing.
+
+    **This resolves a path and creates nothing.** Bringing the tree into existence
+    is `prepare`, which the bootstrap calls as a check so that a failure is a
+    named refusal rather than an exception from a constructor.
+    """
+    declared = RuntimeLayout() if layout is None else layout
+    root = resolve_root(system_environment() if environment is None else environment, declared)
+    return RuntimeState(
+        root=root,
+        layout=declared,
+        tree=UserRuntimeTree(root=root, layout=declared),
+        store=AtomicStateStore(root=root, layout=declared, operations=FileOperations()),
+        lock=WindowsInstanceLock(root=root, layout=declared, name=LOCK_FILE),
+        signals=PlatformShutdownSignals(registrar=_register_handler, installed=[]),
+    )
+
+
+def _register_handler(number: int, handler: Callable[[int, types.FrameType | None], None]) -> None:
+    """Install one signal handler, discarding the previous one.
+
+    Args:
+        number: The signal number.
+        handler: What to run when it arrives.
+
+    :func:`signal.signal` returns the handler it replaced, and GLOBIN has no use
+    for it: nothing here restores a previous disposition, because a process that
+    installed GLOBIN's shutdown path is not going to hand control back to whatever
+    was there before. Narrowing the return to ``None`` here rather than widening
+    the port keeps the port describing what GLOBIN actually needs.
+    """
+    signal.signal(number, handler)
+
+
+def build_lifecycle(
+    context: RuntimeContext,
+    state: RuntimeState,
+    clock: Clock | None = None,
+    register_fallback: Callable[[Callable[[], None]], None] | None = None,
+) -> Lifecycle:
+    """Wire one run's lifecycle against a prepared runtime tree.
+
+    Args:
+        context: The assembled runtime context. **Only obtainable from a bootstrap
+            run in which every check passed**, which is what makes "the lock is
+            taken only by a process that was told it may start" a property of the
+            types rather than of anybody's discipline.
+        state: The wired mutable tree.
+        clock: Stamps the records. Defaults to the host's. A test passes a manual
+            one and can then assert the exact timestamps written.
+        register_fallback: Registers the best-effort `atexit` net. Defaults to the
+            real one. A test passes its own, because registering a real callback
+            would run it after the test that made it.
+
+    Returns:
+        The wired :class:`~globin.application.lifecycle.Lifecycle`.
+
+    The process identifier is read **here** and passed down as a value.
+    :mod:`os` is I/O-capable and the application layer may import none, so this is
+    the layer that may ask — the same treatment the clock gets.
+    """
+    return Lifecycle(
+        tree=state.tree,
+        state=state.store,
+        lock=state.lock,
+        signals=state.signals,
+        clock=build_clock() if clock is None else clock,
+        layout=state.layout,
+        version=context.identity.version,
+        profile=DEFAULT_PROFILE,
+        pid=os.getpid(),
+        runtime_root=context.runtime_root,
+        register_fallback=register_last_resort if register_fallback is None else register_fallback,
+    )
+
+
 def build_bootstrap(
     start: Path,
     sources: Sequence[ConfigurationSource] | None = None,
+    runtime_state: RuntimeState | None = None,
 ) -> Bootstrap:
     """Wire the bootstrap against wherever the project turns out to be.
 
@@ -278,6 +425,10 @@ def build_bootstrap(
         sources: Configuration sources, weakest first. Until Phase 027 decides
             which of them exist, the honest answer is none, which resolves to the
             declared defaults.
+        runtime_state: The wired mutable tree. Defaults to
+            :func:`build_runtime_state`, which is where it comes from in
+            production; a test supplies one rooted in a temporary directory so
+            that running the suite never touches a real user profile.
 
     Returns:
         The wired :class:`Bootstrap`.
@@ -291,6 +442,7 @@ def build_bootstrap(
     the bootstrap is for.
     """
     root = find_project_root(start.resolve())
+    state = build_runtime_state() if runtime_state is None else runtime_state
     return Bootstrap(
         pipeline=BootstrapPipeline(
             baseline=TomlRuntimeBaselineSource(
@@ -309,6 +461,10 @@ def build_bootstrap(
             ),
             secrets=NoSecretsRequired(),
             tree=ProjectRuntimeTree(root=root or start),
+            runtime_tree=state.tree,
+            state=state.store,
+            lock=state.lock,
+            layout=state.layout,
             configuration_sources=() if sources is None else tuple(sources),
         ),
         root=root,

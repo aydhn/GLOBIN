@@ -186,6 +186,15 @@ def test_every_check_identifier_is_stable_and_machine_readable() -> None:
         "dependency.lock",
         "config.valid",
         "paths.runtime",
+        # Phase 022. The mutable runtime tree, in dependency order: it must resolve
+        # inside its own root before anything can be written, a document must
+        # publish before the previous run's can be read, and the lock is probed
+        # last because it is the only one whose answer can change between two runs
+        # a second apart.
+        "paths.boundary",
+        "state.persistence",
+        "state.previous_run",
+        "instance.lock",
         "secrets.required",
         "bootstrap.ready",
     )

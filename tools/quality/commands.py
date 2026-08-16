@@ -364,6 +364,32 @@ _DRIFT = Step("drift", (), ("-m", "tools.quality.drift"))
 # No modules are declared. `check` starts no child at all.
 _LOCK = Step("lock", (), ("-m", "tools.quality.lock"))
 
+# The scientific-stack gate. Reads `docs/engineering/stack-contract.toml` and
+# recomputes it against this environment: the declared target against
+# `runtime-contract.toml`, every declared version against `pyproject.toml`,
+# `pylock.toml` and what is actually installed, each artefact's own record of the
+# wheel it was built from, and the seven behaviour probes GLOBIN's written
+# assumptions depend on.
+#
+# It REACHES NOTHING, like `governance`, `release`, `runtime`, `wheels`, `drift`
+# and `lock check`. Unlike those it has no networked subcommand at all, because
+# the question — does the thing installed here compute correctly — is entirely
+# answerable from this machine.
+#
+# In neither `fast` nor `full`, for the reason `lock` gives: it WRITES an
+# artefact. It is also the slowest gate here by an order of magnitude, because it
+# imports `numpy` and `pandas` to measure them, and `full` runs before every
+# commit. The assertions that must gate a commit are in
+# `tests/contract/test_stack_contract.py`, which the coverage step already runs.
+#
+# It needs the PROJECT ENVIRONMENT: run through a bare interpreter, the libraries
+# are absent and the gate correctly reports them as not installed. That is a true
+# answer to the question asked, and the wrong question — which is why
+# `scripts/verify.ps1` addresses `.venv\Scripts\python.exe` directly.
+#
+# No modules are declared. It starts no child at all.
+_STACK = Step("stack", (), ("-m", "tools.quality.stack"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -447,6 +473,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "lock",
         "The committed lock against the runtime contract, the declared bounds and the pins.",
         (_LOCK,),
+    ),
+    Command(
+        "stack",
+        "The installed numerical and dataframe stack, against the behaviour GLOBIN assumes.",
+        (_STACK,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

@@ -91,6 +91,9 @@ Exit codes:
   16  the project root or its runtime tree is unusable
   17  the bootstrap failed in a way it does not account for
   18  this GLOBIN could not state its own name and version
+  19  the recorded runtime state could not be read
+  20  another GLOBIN coordinator is already running on this machine
+  21  the runtime state could not be written
 """
 
 

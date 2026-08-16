@@ -19,6 +19,65 @@ can be opened and read.
 
 ## [Unreleased]
 
+### The scientific stack, verified rather than assumed
+
+- **`python -m tools.quality stack`** recomputes what
+  `docs/engineering/stack-contract.toml` declares against this environment. Four
+  registers name a version — `pyproject.toml`, `pylock.toml`, the installed
+  `.dist-info` and the contract — and the gate's first job is to hold all four
+  against each other. Each artefact's own `WHEEL` record is read for the PEP 425
+  tag it was built from, which is what catches a wheel for another ABI.
+- **Seven behaviour probes**, each defending a rule written down elsewhere:
+  `float64` is IEEE-754 binary64; non-finite results propagate rather than being
+  substituted; a 64-bit overflow wraps **and says so**; a float column survives a
+  frame round trip bit-identically; a missing value does not become `0.0`; a
+  UTC-aware timestamp keeps its instant and its awareness; and copy-on-write is
+  active. Each was run on the target host before it was written down.
+- **Nothing under `src/globin` imports `numpy` or `pandas`**, and
+  `tests/architecture/test_stack_discipline.py` fails if anything starts.
+  Verifying is not adopting: `docs/PRECISION_POLICY.md` rule 1 is a one-way door,
+  and Phases 113-128 own the numeric type indicators and models use.
+- **`numpy` and `pandas` left `wheel-survey.toml`**, and `DELIVERED_PHASE` rose
+  from `18` to `22`. ADR-0052 refuses a survey entry naming a phase that has
+  shipped; the question moved rather than closed, because once a library is
+  installed the answerable question is whether it computes.
+- ADR-0058 records the decisions, including why upstream's own test suites are
+  deliberately not run.
+
+### A runtime filesystem, and a process lifecycle
+
+- **GLOBIN keeps mutable state in a user-local tree** under the Windows Known
+  Folder Microsoft documents as `%LOCALAPPDATA%`, in a `GLOBIN` namespace, with
+  four areas whose difference is a promise about deletion: `state`, `cache`,
+  `run`, `tmp`. `.globin/` inside the checkout stays what it was — evidence about
+  *this repository*, read by CI. **No secret, no credential and no bulk data ever
+  goes in the runtime tree.**
+- **Every small document is published atomically**: a temporary file in the
+  destination's own directory, `flush`, `os.fsync`, close, `os.replace`. A reader
+  never observes a truncated document, and a failed write leaves the previous one
+  intact — asserted by breaking each stage alone. `NaN` and `Infinity` are refused
+  rather than written, because they are not JSON.
+- **One coordinator per machine**, decided by a non-blocking `msvcrt.locking`
+  acquisition and by nothing else. **The presence of `instance.lock` is never
+  evidence that GLOBIN is running**: a crashed process leaves one behind, so a
+  stale file must not block a start-up and is never deleted on a guess. Proved
+  across real Windows processes, including one that leaves through `os._exit`.
+- **Shutdown is `try`/`finally` in a fixed order**, and every step is reached even
+  if the one before it failed. Signals are registered only where the platform has
+  them, a handler sets a flag and returns, and `atexit` is a best-effort net that
+  nothing rests on — Python's own documentation says it does not run on a hard
+  kill, which is the case crash safety is about. What makes a crash survivable is
+  atomic publication.
+- **Four checks and three exit codes joined the bootstrap** — `paths.boundary`,
+  `state.persistence`, `state.previous_run`, `instance.lock`, and codes `19`, `20`
+  and `21`. `globin doctor` probes the lock and does not keep it, so a read-only
+  diagnostic still runs beside a running GLOBIN.
+- **An unclean previous run is a warning, not a refusal.** Whether an instance is
+  running is the lock's question and only the lock's.
+- ADR-0059 records the decisions; **ADR-0057 records that delivering this in Phase
+  022 was the programme's sixth scope amendment, that it scored one of ADR-0021's
+  four criteria, and that it is the weakest amendment in the programme.**
+
 ### Runtime dependencies and the installed application
 
 - **`project.dependencies` is no longer empty.** `numpy` and `pandas` are

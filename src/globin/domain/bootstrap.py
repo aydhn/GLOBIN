@@ -112,6 +112,9 @@ class ExitCode(IntEnum):
     PATHS_UNUSABLE = 16
     INTERNAL = 17
     PROJECT_UNIDENTIFIED = 18
+    RUNTIME_STATE_CORRUPT = 19
+    INSTANCE_ALREADY_ACTIVE = 20
+    RUNTIME_PERSISTENCE_FAILED = 21
 
 
 class PathLocation(StrEnum):
@@ -444,6 +447,10 @@ def checks() -> tuple[CheckSpec, ...]:
         CheckSpec("dependency.lock", "dependency", ExitCode.DEPENDENCY_UNREADY),
         CheckSpec("config.valid", "config", ExitCode.CONFIGURATION_INVALID),
         CheckSpec("paths.runtime", "paths", ExitCode.PATHS_UNUSABLE),
+        CheckSpec("paths.boundary", "paths", ExitCode.PATHS_UNUSABLE),
+        CheckSpec("state.persistence", "state", ExitCode.RUNTIME_PERSISTENCE_FAILED),
+        CheckSpec("state.previous_run", "state", ExitCode.RUNTIME_STATE_CORRUPT),
+        CheckSpec("instance.lock", "instance", ExitCode.INSTANCE_ALREADY_ACTIVE),
         CheckSpec("secrets.required", "secrets", ExitCode.SECRETS_UNREADY),
         CheckSpec("bootstrap.ready", "bootstrap", ExitCode.GATE_FAILED),
     )
@@ -713,10 +720,15 @@ class RuntimeContext:
         host: The machine it is running on.
         interpreter: The Python running it.
         config: The validated configuration.
-        paths: The declared runtime tree.
+        paths: The declared runtime tree inside the project.
         root: Where the project was found, recorded.
         dependencies: What is known about declared dependencies.
         secrets: What is known about required secret references.
+        runtime_root: Where the *mutable* runtime tree is, recorded. Phase 022
+            separated the two: ``paths`` names evidence written about this
+            repository, and this names the user-local tree a running GLOBIN keeps
+            state in. Always a fingerprint rather than a spelling, because the
+            tree lives under a user profile and a user profile names its owner.
         fingerprint: A digest over everything above that a rerun on an unchanged
             host reproduces exactly.
 
@@ -740,6 +752,7 @@ class RuntimeContext:
     root: RecordedPath
     dependencies: DependencyReadiness
     secrets: SecretReadiness
+    runtime_root: RecordedPath
     fingerprint: str
 
     def __repr__(self) -> str:

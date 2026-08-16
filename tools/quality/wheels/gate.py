@@ -89,8 +89,14 @@ RUNTIME_CONTRACT: Final[str] = "docs/engineering/runtime-contract.toml"
 ROADMAP_TOTAL_PHASES: Final[int] = 320
 """How many phases the programme has."""
 
-DELIVERED_PHASE: Final[int] = 18
+DELIVERED_PHASE: Final[int] = 22
 """A floor on what has shipped: no survey entry may name this phase or an earlier one.
+
+Raised from 18 to 22 by Phase 022, which is the first phase since 018 for which
+the survey actually changed: `numpy` and `pandas` were adopted and verified, so
+their entries left this file for `docs/engineering/stack-contract.toml`. That is
+the revisiting the paragraph below describes, and it happened for the reason it
+predicted rather than to keep a suite green.
 
 Deliberately a constant rather than a read of ``ROADMAP.md``. This bound exists to
 catch a survey entry pointing at work that has already happened — which is an

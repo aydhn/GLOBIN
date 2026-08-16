@@ -298,6 +298,23 @@ jobs:
         if: always()
         run: .venv\Scripts\python.exe -m tools.quality.lock installed
 
+      - name: Measure the scientific stack this environment installed
+        # THE SECOND CLAIM AN OFFLINE GATE CANNOT MAKE, and it runs here for the
+        # same reason the step above does: `numpy` and `pandas` arrive with the
+        # runtime lock, which only this job installs. The `quality` job installs
+        # the toolchain with plain `pip` and has neither, so the probes there
+        # would correctly report two libraries that are not installed — a true
+        # answer to the wrong question.
+        #
+        # This is what turns ADR-0052's distinction into a check: the wheel survey
+        # proved a wheel EXISTS, and this proves the thing inside it computes what
+        # `docs/PRECISION_POLICY.md` and `docs/TIME_POLICY.md` assume. A runner
+        # that installed a wheel built for another ABI fails here and nowhere else.
+        #
+        # Through the environment's own interpreter, or it measures the wrong one.
+        if: always()
+        run: .venv\Scripts\python.exe -m tools.quality.stack
+
       - name: Ask GLOBIN whether it may start
         # Phase 021's own subject, and it runs HERE for the reason the step above
         # does: this is the only job that builds `.venv` and installs the project,

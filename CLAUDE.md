@@ -51,6 +51,8 @@ that certifies — and the one criterion it could not — is in
 | Is this machine still the one the gates were measured on? | [`docs/engineering/ENVIRONMENT_DRIFT.md`](docs/engineering/ENVIRONMENT_DRIFT.md), [`docs/engineering/drift-policy.toml`](docs/engineering/drift-policy.toml) |
 | What version of a dependency will actually be installed? | [`docs/engineering/DEPENDENCY_LOCKING.md`](docs/engineering/DEPENDENCY_LOCKING.md), [`docs/engineering/lock-policy.toml`](docs/engineering/lock-policy.toml) |
 | How does a GLOBIN process decide it may start? | [`docs/engineering/BOOTSTRAP.md`](docs/engineering/BOOTSTRAP.md), [ADR-0056](docs/adr/0056-phase-021-widens-to-deliver-the-application-bootstrap.md) |
+| Does the installed numerical stack actually compute correctly? | [`docs/engineering/SCIENTIFIC_STACK.md`](docs/engineering/SCIENTIFIC_STACK.md), [`docs/engineering/stack-contract.toml`](docs/engineering/stack-contract.toml) |
+| Where does a running GLOBIN keep state, and how does it stop? | [`docs/engineering/RUNTIME_FILESYSTEM.md`](docs/engineering/RUNTIME_FILESYSTEM.md), [ADR-0059](docs/adr/0059-the-mutable-runtime-tree-is-user-local-and-one-coordinator-is-proved-by-a-lock.md) |
 | What must a secret store satisfy, and what does Windows actually offer? | [`docs/security/SECRET_STORE_CONTRACT.md`](docs/security/SECRET_STORE_CONTRACT.md) |
 | How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 | Which error do I raise? | [`src/globin/errors.py`](src/globin/errors.py), [ADR-0022](docs/adr/0022-error-taxonomy-rooted-in-one-type.md) |
@@ -88,6 +90,8 @@ GLOBIN/
 │   ├── property/        Invariants over generated input (Hypothesis)
 │   └── integration/     Several components together, still local
 ├── pylock.dev.toml      The development toolchain, resolved and hash-pinned
+│                        NOTE: a running GLOBIN's mutable state is NOT in this
+│                        tree. It is user-local; see RUNTIME_FILESYSTEM.md.
 ├── tools/quality/       The canonical quality entrypoint; CI runs this too
 │   ├── supply/          Dependency inventory, CycloneDX SBOM, audit, secrets
 │   └── governance/      Code ownership, security policy, sensitive-path coverage
@@ -393,6 +397,31 @@ documented hand-crank. Reasoning:
 [`docs/engineering/DEPENDENCY_LOCKING.md`](docs/engineering/DEPENDENCY_LOCKING.md)
 and [ADR-0054](docs/adr/0054-the-toolchain-is-locked-with-pep-751-and-the-verdict-is-recomputed.md).
 
+An eighth sibling asks whether the libraries this programme *adopted* actually
+compute what GLOBIN assumes, and like the five above it **reaches nothing**:
+
+```bash
+.venv\Scripts\python.exe -m tools.quality stack
+```
+
+It reads [`docs/engineering/stack-contract.toml`](docs/engineering/stack-contract.toml)
+and recomputes it against this environment: the declared target against the
+runtime contract, every declared version against `pyproject.toml`, `pylock.toml`
+and what is installed, each artefact's own record of the wheel it was built from,
+and seven behaviour probes run against the real libraries. It writes
+`.globin/stack/stack-manifest.json`.
+
+**Run it through `.venv`** — `numpy` and `pandas` arrive with the runtime lock,
+and through a bare interpreter the gate correctly reports two libraries that are
+not installed, which is a true answer to the wrong question. It has no networked
+subcommand at all, because what it asks is entirely answerable from this machine.
+
+**Verifying is not adopting.** Nothing under `src/globin` imports either library
+and `tests/architecture/test_stack_discipline.py` fails if anything starts; the
+phase that has a legitimate use edits the stack contract in its own diff.
+Reasoning: [`docs/engineering/SCIENTIFIC_STACK.md`](docs/engineering/SCIENTIFIC_STACK.md)
+and [ADR-0058](docs/adr/0058-the-scientific-stack-is-verified-by-measurement-and-stays-in-the-approximate-regime.md).
+
 Since Phase 021 there is also an **application** command, which is not a gate and
 does not live in that table. It exists once GLOBIN is installed, which
 `scripts/bootstrap.ps1` now does:
@@ -410,9 +439,22 @@ at the first problem, and `bootstrap evidence` writes
 `.globin/bootstrap/bootstrap-manifest.json`. Under `--json` standard output
 carries JSON and nothing else. **It reaches no network**, and the exit code names
 the failure class — `12` is the wrong environment, `13` a missing dependency, `14`
-an invalid configuration. The full table, the remediation for each, and what is
-deliberately *not* checked yet are in
+an invalid configuration, and since Phase 022 `20` means another GLOBIN
+coordinator is already running. The full table, the remediation for each, and what
+is deliberately *not* checked yet are in
 [`docs/engineering/BOOTSTRAP.md`](docs/engineering/BOOTSTRAP.md).
+
+Phase 022 gave that process somewhere to keep state. A running GLOBIN writes to a
+**user-local** tree under `%LOCALAPPDATA%\GLOBIN\` — `state`, `cache`, `run`,
+`tmp` — which is deliberately *not* `.globin/`: that tree is evidence about this
+repository, read by CI, and this one is state about this machine. **No secret, no
+credential and no bulk data goes in either.** Every small document is published
+atomically, and one coordinator per machine is guaranteed by an operating-system
+lock whose *acquisition* decides ownership — **the lock file's existence proves
+only that GLOBIN once ran**, so a stale one never blocks a start-up and is never
+deleted on a guess. `doctor` probes that lock and does not keep it. What is
+guaranteed on each kind of ending, and what is not, is in
+[`docs/engineering/RUNTIME_FILESYSTEM.md`](docs/engineering/RUNTIME_FILESYSTEM.md).
 
 One gate sits outside `full`, because it takes minutes rather than seconds:
 

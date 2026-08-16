@@ -355,6 +355,27 @@ enable_error_code = [
 show_error_codes = true
 pretty = true
 
+# The one untyped import in the tree, and it is narrow on purpose.
+#
+# `pandas` ships no type information and mypy's advice is `pandas-stubs`. That is
+# a THIRD-PARTY package maintained separately from pandas itself, and adding it
+# would need a written review under `docs/DEPENDENCY_POLICY.md` to type six lines
+# in one module — `tools/quality/stack/probes.py`, which imports pandas to
+# measure its behaviour and does nothing else with it.
+#
+# `numpy` is deliberately absent from this list: it ships its own types, and they
+# are checked. If a later phase adopts pandas into `src/globin` rather than merely
+# verifying it, this exemption is the wrong tool and `pandas-stubs` becomes worth
+# reviewing properly. Recorded here rather than as a `# type: ignore` so that the
+# exemption is one visible line instead of one per import site.
+#
+# `pandas` alone, without a `pandas.*` wildcard: `warn_unused_configs` reports an
+# override nothing matches, so the pattern is kept exactly as wide as the imports
+# that exist. A submodule import would fail here and be added deliberately.
+[[tool.mypy.overrides]]
+module = ["pandas"]
+ignore_missing_imports = true
+
 # ---------------------------------------------------------------------------
 # coverage
 # ---------------------------------------------------------------------------

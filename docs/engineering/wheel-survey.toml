@@ -62,42 +62,27 @@ index = "https://pypi.org/pypi/"
 surveyed = 2026-08-16
 
 # ---------------------------------------------------------------------------
-# Phase 022 — Scientific Stack Installation and Verification.
+# Phase 022 — Scientific Stack Installation and Verification. DELIVERED.
 #
-# The roadmap schedules "the numerical and dataframe stack" without naming the
-# packages. Naming them is this file's judgement, recorded rather than assumed:
-# both are required transitively by four other entries below, so a survey that
-# omitted them would be surveying a stack that cannot be installed.
+# `numpy` and `pandas` were surveyed here and are no longer. Phase 021 adopted
+# them and Phase 022 verified them, and ADR-0052 is explicit that an entry naming
+# a phase that has shipped is "an adoption wearing a survey's clothes" — the
+# condition `phase_problems` exists to catch. Leaving them would have passed on a
+# technicality, because `DELIVERED_PHASE` is documented as a floor rather than a
+# mirror; passing on a technicality is not the same as being true.
+#
+# THE QUESTION MOVED RATHER THAN CLOSED. This file asks whether a wheel EXISTS for
+# the pinned interpreter. Once a library is installed, the answerable question
+# becomes whether the thing inside that wheel COMPUTES correctly, which no
+# filename can settle. `docs/engineering/stack-contract.toml` now holds those two
+# entries and `python -m tools.quality stack` recomputes them from measurement.
+# Reasoning: ADR-0058.
+#
+# Both remain required transitively by several entries below. That is not a reason
+# to survey them: a transitive dependency of a surveyed library is covered by that
+# library's own wheel, and re-listing it here would restate a claim this file has
+# stopped being the source of.
 # ---------------------------------------------------------------------------
-
-[[library]]
-name = "numpy"
-phase = 22
-version = "2.5.2"
-requires_python = ">=3.12"
-wheels = [
-    "numpy-2.5.2-cp314-cp314-win_amd64.whl",
-    "numpy-2.5.2-cp314-cp314t-win_amd64.whl",
-]
-verdict = "available"
-source = "https://pypi.org/pypi/numpy/json"
-reason = """The numerical half of the Phase 022 stack, and the one dependency \
-every other numeric entry here shares. Publishes for both the default and the \
-free-threaded build of the pinned line."""
-
-[[library]]
-name = "pandas"
-phase = 22
-version = "3.0.5"
-requires_python = ">=3.11"
-wheels = [
-    "pandas-3.0.5-cp314-cp314-win_amd64.whl",
-    "pandas-3.0.5-cp314-cp314t-win_amd64.whl",
-]
-verdict = "available"
-source = "https://pypi.org/pypi/pandas/json"
-reason = """The dataframe half of the Phase 022 stack. Publishes for both the \
-default and the free-threaded build of the pinned line."""
 
 # ---------------------------------------------------------------------------
 # Phase 025 — TA-Lib Native Library Provisioning.

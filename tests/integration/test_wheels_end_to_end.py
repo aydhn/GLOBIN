@@ -74,7 +74,12 @@ reason = "Pure Python; the study infrastructure Phase 211 establishes."
 
 [[library]]
 name = "numpy"
-phase = 22
+# Phase 023 rather than 022, and the number is not arbitrary: Phase 022 delivered,
+# so `DELIVERED_PHASE` rose to 22 and an entry naming it is refused as an adoption
+# wearing a survey's clothes. What this fixture needs is an extension publishing
+# for both builds of the pinned line, which is a fact about the wheels below and
+# not about the phase that schedules them.
+phase = 23
 version = "2.5.2"
 requires_python = ">=3.12"
 wheels = [

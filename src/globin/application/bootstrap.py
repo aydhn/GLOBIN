@@ -25,6 +25,7 @@ does not exist until every check has passed.
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Final
 
 from globin.application.configuration import ConfigurationResolution
 from globin.domain.bootstrap import (
@@ -57,6 +58,17 @@ from globin.domain.bootstrap import (
     version_outcome,
 )
 from globin.domain.configuration import GlobinConfig
+from globin.domain.runtime_state import (
+    LIFECYCLE_FILE,
+    LifecycleRecord,
+    RuntimeArea,
+    RuntimeLayout,
+    boundary_outcome,
+    lock_outcome,
+    persistence_outcome,
+    previous_run_outcome,
+    read_lifecycle,
+)
 from globin.errors import ConfigurationError, GlobinError
 from globin.ports.bootstrap import (
     DependencyProbe,
@@ -67,7 +79,17 @@ from globin.ports.bootstrap import (
     SecretProbe,
 )
 from globin.ports.configuration import ConfigurationSource
+from globin.ports.runtime_state import InstanceLock, RuntimeTreeSource, StateStore
 from globin.project_contract import PACKAGE_NAME
+
+PROBE_DOCUMENT: Final[str] = "persistence-probe.json"
+"""What the persistence check writes, and then removes.
+
+A real publication rather than an inspection of permissions. A directory that
+reports itself writable and then refuses :func:`os.replace` is exactly the case an
+inspection misses, and it is the case that matters — the whole state mechanism is
+a replace.
+"""
 
 UNMEASURED_REMEDIATION: dict[str, str] = {
     "runtime.host": "Fix the declaration this check reads, then run again.",
@@ -79,6 +101,10 @@ UNMEASURED_REMEDIATION: dict[str, str] = {
     "dependency.lock": "Find the project root first; the lock is read from underneath it.",
     "config.valid": "Find the project root first; configuration is read from underneath it.",
     "paths.runtime": "Find the project root first; the runtime tree hangs off it.",
+    "paths.boundary": "Resolve the runtime root first; there is nothing to bound without one.",
+    "state.persistence": "Make the runtime tree usable first; nothing can be written until it is.",
+    "state.previous_run": "Make the runtime tree usable first; the record is read from inside it.",
+    "instance.lock": "Make the runtime tree usable first; the lock file lives inside it.",
     "secrets.required": "Resolve the earlier refusal first.",
 }
 """What to tell an operator when a check could not run at all.
@@ -100,7 +126,14 @@ class BootstrapPipeline:
         project: Locates the project and reads its identity.
         dependencies: Reports what is declared, locked and installed.
         secrets: Reports whether required references resolve.
-        tree: Prepares the runtime tree.
+        tree: Prepares the declared tree inside the project.
+        runtime_tree: Resolves and prepares the user-local mutable tree. Separate
+            from ``tree`` because the two answer different questions: one is
+            evidence written *about* this repository, the other is state a running
+            GLOBIN keeps. Phase 022 separated them.
+        state: Publishes and reads the small documents in that tree.
+        lock: Decides whether this process may be the machine's one coordinator.
+        layout: The declared shape of the mutable tree.
         configuration_sources: Weakest first, strongest last. Empty resolves to
             the declared defaults, which is what GLOBIN uses when an operator has
             said nothing — and, until Phase 027, all there is.
@@ -117,6 +150,10 @@ class BootstrapPipeline:
     dependencies: DependencyProbe
     secrets: SecretProbe
     tree: RuntimeTree
+    runtime_tree: RuntimeTreeSource
+    state: StateStore
+    lock: InstanceLock
+    layout: RuntimeLayout
     configuration_sources: tuple[ConfigurationSource, ...] = ()
 
     def run(self, *, stop_at_first_refusal: bool = True) -> BootstrapOutcome:
@@ -142,6 +179,7 @@ class BootstrapPipeline:
             paths=RuntimePaths(),
             dependency_readiness=DependencyReadiness(),
             secret_readiness=SecretReadiness(),
+            runtime_root=RecordedPath(location=PathLocation.ABSENT),
         )
         outcomes: list[CheckOutcome] = []
 
@@ -187,6 +225,7 @@ class BootstrapPipeline:
             root=state.root,
             dependencies=state.dependency_readiness,
             secrets=state.secret_readiness,
+            runtime_root=state.runtime_root,
             fingerprint=context_fingerprint(
                 identity=state.identity,
                 host=state.host_facts,
@@ -214,6 +253,7 @@ class _RunState:
     paths: RuntimePaths
     dependency_readiness: DependencyReadiness
     secret_readiness: SecretReadiness
+    runtime_root: RecordedPath
     refused: bool = False
     baseline: RuntimeBaseline | None = None
     baseline_problem: str = ""
@@ -222,6 +262,8 @@ class _RunState:
     identity: ProjectIdentity | None = None
     config: GlobinConfig | None = None
     config_problem: str = ""
+    runtime_ready: bool = False
+    previous_run: LifecycleRecord | None = None
 
     def observed(self) -> dict[str, object]:
         """The facts this run measured, in the shape the evidence carries.
@@ -247,6 +289,13 @@ class _RunState:
             "paths": self.paths.declared(),
             "dependencies": self.dependency_readiness.as_record(),
             "secrets": self.secret_readiness.as_record(),
+            "runtime": {
+                "root": self.runtime_root.as_record(),
+                "usable": self.runtime_ready,
+                "previous_run": (
+                    None if self.previous_run is None else self.previous_run.as_record()
+                ),
+            },
         }
 
 
@@ -525,6 +574,116 @@ def _paths_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
     return paths_outcome(problems, state.paths)
 
 
+def _boundary_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
+    """Resolve the user-local runtime tree and check it stays inside its root.
+
+    Args:
+        pipeline: The pipeline, for its runtime tree.
+        state: The run state, which records whether the tree became usable.
+
+    Returns:
+        The outcome of ``paths.boundary``.
+
+    Every check after this one writes into that tree, so this is the one that
+    decides whether they can run at all. A refusal here makes the next three
+    unmeasured rather than failed, which is the honest distinction: nothing about
+    persistence or locking was established, because there was nowhere to establish
+    it.
+    """
+    try:
+        problems = pipeline.runtime_tree.prepare(pipeline.layout)
+    except GlobinError as fault:
+        return CheckOutcome(
+            identifier="paths.boundary",
+            status=CheckStatus.FAIL,
+            summary=str(fault),
+            remediation=(
+                "GLOBIN keeps its mutable state under the platform's per-user application "
+                "data area. docs/engineering/RUNTIME_FILESYSTEM.md explains how it is found."
+            ),
+        )
+    state.runtime_ready = not problems
+    if state.runtime_ready:
+        state.runtime_root = pipeline.runtime_tree.recorded_root()
+    return boundary_outcome(problems, pipeline.layout)
+
+
+def _persistence_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
+    """Publish a document and remove it, proving the state mechanism works here.
+
+    Args:
+        pipeline: The pipeline, for its state store.
+        state: The run state.
+
+    Returns:
+        The outcome of ``state.persistence``.
+
+    A real write, a real replace and a real removal. Inspecting permissions would
+    be cheaper and would miss the case that matters: a directory that reports
+    itself writable and then refuses the replace every published document depends
+    on.
+    """
+    if not state.runtime_ready:
+        return _unmeasured("state.persistence", "the runtime tree is not usable")
+    try:
+        pipeline.state.publish(RuntimeArea.STATE, PROBE_DOCUMENT, {"probe": True})
+        pipeline.state.discard(RuntimeArea.STATE, PROBE_DOCUMENT)
+    except (GlobinError, OSError) as fault:
+        return persistence_outcome(str(fault))
+    return persistence_outcome("")
+
+
+def _previous_run_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
+    """Read what the last run recorded, without inferring anything about this one.
+
+    Args:
+        pipeline: The pipeline, for its state store.
+        state: The run state, which remembers the record.
+
+    Returns:
+        The outcome of ``state.previous_run``.
+
+    **An open record is a warning, never a refusal.** Whether an instance is
+    running is the lock's question and only the lock's; the process that wrote an
+    open record may have died a week ago.
+    """
+    if not state.runtime_ready:
+        return _unmeasured("state.previous_run", "the runtime tree is not usable")
+    try:
+        document = pipeline.state.read(RuntimeArea.STATE, LIFECYCLE_FILE)
+    except (GlobinError, OSError) as fault:
+        return previous_run_outcome(None, str(fault))
+    if document is None:
+        return previous_run_outcome(None)
+    try:
+        state.previous_run = read_lifecycle(dict(document))
+    except GlobinError as fault:
+        return previous_run_outcome(None, str(fault))
+    return previous_run_outcome(state.previous_run)
+
+
+def _lock_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
+    """Ask whether this process could be the machine's one coordinator.
+
+    Args:
+        pipeline: The pipeline, for its lock.
+        state: The run state.
+
+    Returns:
+        The outcome of ``instance.lock``.
+
+    **This probes; it does not keep the lock.** The pipeline runs inside `doctor`
+    as well as inside the gate, and a diagnostic that took the production lock
+    would refuse to run beside a running GLOBIN — which is exactly when somebody
+    wants to run it. The lock that is *held* is taken by
+    :mod:`globin.application.lifecycle`, once, around the whole application.
+    """
+    if not state.runtime_ready:
+        return _unmeasured("instance.lock", "the runtime tree is not usable")
+    problem = pipeline.lock.probe()
+    return lock_outcome(acquired=not problem, problem=problem)
+
+
 def _secrets_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
     """Read whether required secret references resolve.
 
@@ -566,5 +725,9 @@ def steps() -> tuple[Callable[[BootstrapPipeline, _RunState], CheckOutcome], ...
         _dependency_step,
         _configuration_step,
         _paths_step,
+        _boundary_step,
+        _persistence_step,
+        _previous_run_step,
+        _lock_step,
         _secrets_step,
     )

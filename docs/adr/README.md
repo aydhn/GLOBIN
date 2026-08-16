@@ -121,6 +121,9 @@ a future reader can judge whether the reason still holds.
 | [0054](0054-the-toolchain-is-locked-with-pep-751-and-the-verdict-is-recomputed.md) | The toolchain is locked with PEP 751, the runtime lock is Phase 021's, and the lock's verdict is recomputed | Accepted |
 | [0055](0055-the-first-runtime-dependencies-are-introduced-and-globin-becomes-installed.md) | The first runtime dependencies are introduced, and GLOBIN becomes an installed application | Accepted |
 | [0056](0056-phase-021-widens-to-deliver-the-application-bootstrap.md) | Phase 021 widens to deliver the application bootstrap, and this is the fifth amendment | Accepted |
+| [0057](0057-phase-022-widens-to-deliver-the-runtime-filesystem-and-lifecycle.md) | Phase 022 widens to deliver the runtime filesystem and lifecycle, and this is the sixth amendment, and the weakest | Accepted |
+| [0058](0058-the-scientific-stack-is-verified-by-measurement-and-stays-in-the-approximate-regime.md) | The scientific stack's verdict is recomputed from measurement, and the stack stays in the approximate regime | Accepted |
+| [0059](0059-the-mutable-runtime-tree-is-user-local-and-one-coordinator-is-proved-by-a-lock.md) | The mutable runtime tree is user-local, its state is published atomically, and one coordinator is proved by a lock rather than by a file | Accepted |
 
 ## Relationship to other documents
 

@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 021 of 320 complete — foundation only
+## Current status: Phase 022 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -28,7 +28,7 @@ capability cannot be claimed here without pointing at something real.
 |---|---|
 | Repository, branch policy, engineering contract — [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) | Implemented |
 | 320-phase roadmap, every phase named — [`ROADMAP.md`](ROADMAP.md) | Implemented |
-| Architecture decision records (56) — [`docs/adr/`](docs/adr/README.md) | Implemented |
+| Architecture decision records (59) — [`docs/adr/`](docs/adr/README.md) | Implemented |
 | Research source ledgers with primary sources — [`docs/research/`](docs/research/phase_001_sources.md) | Implemented |
 | UTC-only internal time: an injected clock, aware instants, milliseconds as a floored projection — [`TIME_POLICY.md`](docs/TIME_POLICY.md) | Implemented |
 | Exact decimal arithmetic, four rounding modes, tick and step alignment — [`PRECISION_POLICY.md`](docs/PRECISION_POLICY.md) | Implemented |
@@ -50,6 +50,8 @@ capability cannot be claimed here without pointing at something real.
 | Single-source versioning, release policy and a deterministic release gate — [`RELEASE_POLICY.md`](docs/release/RELEASE_POLICY.md) | Implemented |
 | Phase 001-016 foundation acceptance, in prose and machine-readable form — [`FOUNDATION_ACCEPTANCE.md`](docs/release/FOUNDATION_ACCEPTANCE.md) | Implemented |
 | A hash-pinned dependency lock the environment is built from, with every claim in it recomputed — [`DEPENDENCY_LOCKING.md`](docs/engineering/DEPENDENCY_LOCKING.md) | Implemented |
+| The numerical and dataframe stack verified by measurement rather than by importing it, and deliberately not adopted — [`SCIENTIFIC_STACK.md`](docs/engineering/SCIENTIFIC_STACK.md) | Implemented |
+| A user-local runtime tree, atomically published state, one coordinator per machine and an ordered shutdown — [`RUNTIME_FILESYSTEM.md`](docs/engineering/RUNTIME_FILESYSTEM.md) | Implemented |
 | Everything else | Not started |
 
 ### What does not exist
