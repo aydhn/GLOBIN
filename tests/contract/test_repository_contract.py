@@ -388,11 +388,18 @@ def test_no_committed_configuration_names_a_secret(
 @pytest.mark.parametrize(
     ("line", "fires", "why"),
     [
-        ('api_key = "changeme-please-now"', True, "a TOML key naming a credential"),
-        ('"password": "correct-horse-battery"', True, "the same in JSON"),
-        ("secret: supersecretvalue", True, "and in YAML"),
-        ("persist-credentials: false", False, "a CI idiom whose value is five characters"),
-        ('token = ""', False, "an empty value is not a secret"),
+        pytest.param(
+            'api_key = "changeme-please-now"', True, "a TOML key naming a credential", id="toml"
+        ),
+        pytest.param('"password": "correct-horse-battery"', True, "the same in JSON", id="json"),
+        pytest.param("secret: supersecretvalue", True, "and in YAML", id="yaml"),
+        pytest.param(
+            "persist-credentials: false",
+            False,
+            "a CI idiom whose value is five characters",
+            id="ci-idiom",
+        ),
+        pytest.param('token = ""', False, "an empty value is not a secret", id="empty-value"),
     ],
 )
 def test_the_secret_name_detector_fires_and_stays_quiet_where_it_should(
@@ -404,5 +411,15 @@ def test_the_secret_name_detector_fires_and_stays_quiet_where_it_should(
     matches nothing is worth nothing. These cases pin both directions — including
     `persist-credentials: false`, which appears in every workflow job here and
     must never fire, because a tripwire that cries wolf is one somebody deletes.
+
+    **Every case carries an explicit `id`, and that is not cosmetic.** pytest
+    derives a test's identifier from its parameters, and
+    `tools/quality/evidence/` publishes the JUnit XML in which those identifiers
+    appear — so a secret-shaped literal here becomes a secret-shaped string in an
+    uploaded artefact. The first version of this test named its cases by their
+    values, and the evidence gate refused the run: `junit-full-Windows-py314.xml`
+    carried "a value assigned to 'secret'". The gate was right, and the literals
+    stay because the test needs them; what changed is that they no longer reach
+    the identifier.
     """
     assert bool(list(ASSIGNMENT_RE.finditer(line))) is fires, why
