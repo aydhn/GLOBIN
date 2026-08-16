@@ -120,6 +120,15 @@ ENVIRONMENT_INTERPRETER: Final[str] = "python.exe"
 ACTIVATE_SCRIPT: Final[str] = "activate.bat"
 PYVENV_CONFIG: Final[str] = "pyvenv.cfg"
 
+DEVELOPMENT_LOCK: Final[str] = "pylock.dev.toml"
+"""What `bootstrap` installs from, since Phase 020.
+
+Spelled here as well as in `docs/engineering/lock-policy.toml`, and that
+duplication is a tripwire rather than a second source:
+`tests/contract/test_lock_contract.py` compares the two and fails when they
+diverge, in the manner `verify.ps1` and the contract already spell `.venv` twice.
+"""
+
 LONG_PATH_KEY: Final[str] = r"SYSTEM\CurrentControlSet\Control\FileSystem"
 LONG_PATH_VALUE: Final[str] = "LongPathsEnabled"
 
@@ -592,6 +601,7 @@ def run_runtime(
     bootstrap: bool = False,
     recreate: bool = False,
     install_python: bool = False,
+    from_pins: bool = False,
     runner: Runner | None = None,
 ) -> int:
     """Check the host against the runtime contract, and optionally build the environment.
@@ -606,6 +616,10 @@ def run_runtime(
         install_python: Whether a missing runtime may be installed through the
             Python install manager. Only meaningful with ``bootstrap``, and opt-in
             because installing a runtime changes the host.
+        from_pins: Install the workflow register's exact pins rather than the
+            committed lock. Only meaningful with ``bootstrap``. The documented
+            recovery path for a lock that cannot be installed from, never the
+            default -- see ADR-0054.
         runner: How to start children. Defaults to :func:`subprocess.run`.
 
     Returns:
@@ -661,6 +675,7 @@ def run_runtime(
             reasons,
             recreate=recreate,
             install_python=install_python,
+            from_pins=from_pins,
             runner=runner,
         )
 
@@ -779,9 +794,10 @@ def _bootstrap(
     *,
     recreate: bool,
     install_python: bool,
+    from_pins: bool,
     runner: Runner | None,
 ) -> None:
-    """Create the environment and install the pinned toolchain into it.
+    """Create the environment and install the toolchain into it.
 
     Args:
         root: The repository root.
@@ -790,6 +806,8 @@ def _bootstrap(
         reasons: The reason codes so far, added to in place.
         recreate: Whether an existing environment may be removed first.
         install_python: Whether a missing runtime may be installed.
+        from_pins: Install the workflow register's exact pins rather than the
+            committed lock. The documented recovery path, never the default.
         runner: How to start children.
 
     The order is deliberate: remove only if asked and only if safe, create only if
@@ -827,7 +845,7 @@ def _bootstrap(
     else:
         findings["environment_creation"] = _finding(())
 
-    problems = _install_toolchain(root, location, runner)
+    problems = _install_toolchain(root, location, runner, from_pins=from_pins)
     findings["toolchain"] = _finding(problems)
     if problems:
         reasons.append(REASON_TOOLCHAIN_UNAVAILABLE)
@@ -899,40 +917,65 @@ def _create(location: Path, runner: Runner | None) -> tuple[str, ...]:
     return ()
 
 
-def _install_toolchain(root: Path, location: Path, runner: Runner | None) -> tuple[str, ...]:
-    """Install the pinned development toolchain into an environment.
+def _install_toolchain(
+    root: Path, location: Path, runner: Runner | None, *, from_pins: bool = False
+) -> tuple[str, ...]:
+    """Install the development toolchain into an environment.
 
     Args:
         root: The repository root.
         location: The environment.
         runner: How to start the child.
+        from_pins: Install the workflow's exact pins instead of the lock. The
+            documented recovery path, never the default.
 
     Returns:
         One sentence per problem, empty on success.
 
-    **The versions come from the workflow register, not from here.**
-    ``.github/workflows/`` already pins them exactly, and
-    :func:`tools.quality.supply.inventory.from_workflows` already parses them, so
-    an environment built by this function contains exactly what continuous
-    integration measured. Declaring them again would be a fourth register for
-    ``tools/quality/supply`` to find disagreeing with the other three.
+    **The lock, since Phase 020.** ``pylock.dev.toml`` records all forty-nine
+    distributions the toolchain resolves to, each with a digest, where the workflow
+    register pins the seven direct tools and says nothing about the other
+    forty-two. Installing from the lock is what makes ``python -m tools.quality.lock
+    installed`` a question worth asking: an environment built from the pins would
+    contain a resolution pip performed on the day it ran, so the comparison would
+    be red on a clean tree.
+
+    pip derives its hash checking from the lock per requirement, so the install is
+    hash-checked without ``--require-hashes`` being passed.
+
+    **An unreadable lock is a refusal, not a fall back to the pins.** A fallback is
+    used on exactly the day the lock is wrong, which is the day somebody most needs
+    to be told. ``--from-pins`` restores the previous behaviour as a deliberate act,
+    for the reason ADR-0054 gives: ``pip install -r pylock.toml`` is labelled
+    experimental upstream, and the one command a person runs before they have a
+    working tree must have a hand-crank.
     """
-    try:
-        declared = from_workflows(root)
-    except (SupplyChainError, OSError) as fault:
-        return (f"the workflow register could not be read: {fault}",)
-
-    pinned = tuple(
-        (entry.name, entry.version)
-        for entry in declared
-        if entry.ecosystem == PYPI and entry.scope == CONTINUOUS_INTEGRATION
-    )
-    problems = toolchain_problems(pinned)
-    if problems:
-        return problems
-
     interpreter = location / SCRIPTS_DIRECTORY / ENVIRONMENT_INTERPRETER
-    requirements = [f"{name}=={version}" for name, version in sorted(set(pinned))]
+
+    if from_pins:
+        try:
+            declared = from_workflows(root)
+        except (SupplyChainError, OSError) as fault:
+            return (f"the workflow register could not be read: {fault}",)
+        pinned = tuple(
+            (entry.name, entry.version)
+            for entry in declared
+            if entry.ecosystem == PYPI and entry.scope == CONTINUOUS_INTEGRATION
+        )
+        problems = toolchain_problems(pinned)
+        if problems:
+            return problems
+        target = [f"{name}=={version}" for name, version in sorted(set(pinned))]
+    else:
+        lock = root / DEVELOPMENT_LOCK
+        if not lock.is_file():
+            return (
+                f"{DEVELOPMENT_LOCK} is missing, so there is nothing to install from. "
+                f"Regenerate it with `python -m tools.quality.lock relock`, or pass "
+                f"--from-pins to install the workflow register's exact pins instead",
+            )
+        target = ["--requirement", str(lock)]
+
     try:
         completed = (runner or subprocess.run)(
             [
@@ -941,7 +984,7 @@ def _install_toolchain(root: Path, location: Path, runner: Runner | None) -> tup
                 "pip",
                 "install",
                 "--disable-pip-version-check",
-                *requirements,
+                *target,
             ],
             capture_output=True,
             text=True,

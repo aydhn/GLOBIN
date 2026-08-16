@@ -54,6 +54,7 @@ python -m tools.quality full
 | `runtime` | The Windows host and its kernel version, the interpreter's implementation, minor line, patch floor, architecture, width and build, the project environment's provenance and settings, and where `pip` would install from. `runtime bootstrap` adds building the environment | Establishing which machine and which interpreter the other gates were measured on |
 | `wheels` | The wheel survey in [`wheel-survey.toml`](wheel-survey.toml) against the runtime contract, with every recorded verdict recomputed from the wheel filenames recorded beside it. `wheels probe` adds asking the index whether the record is still true | Establishing that the libraries the roadmap schedules can be installed on the pinned interpreter |
 | `drift` | This host against the baseline accepted in `.globin/drift/`, classified by [`drift-policy.toml`](drift-policy.toml), with every recorded repair verdict recomputed from the action declared beside it. `drift accept` records a baseline; `drift repair` performs the repairs marked in-place | Establishing that the machine is still the machine the other gates were measured on, and what to do when it is not |
+| `lock` | `pylock.dev.toml` against [`lock-policy.toml`](lock-policy.toml) and [`runtime-contract.toml`](runtime-contract.toml), with every hash, artefact host, wheel tag and cross-register version recomputed from the lock's own evidence. `lock installed` adds this environment; `lock relock` and `lock upgrade` regenerate the lock and reach the index | Establishing that what the repository declares, what CI pins and what is installed are one resolution rather than three |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
 
@@ -231,10 +232,11 @@ The interpreter matrix is **still provisional, for one remaining reason.** Phase
 017 pinned the interpreter — [`runtime-contract.toml`](runtime-contract.toml)
 names CPython 3.14 exactly — and Phase 018 verified that the libraries the roadmap
 schedules publish wheels for it ([`WHEEL_AVAILABILITY.md`](WHEEL_AVAILABILITY.md)).
-What has not happened is dependency resolution and locking, which is Phase 020.
-Until it does, the versions pinned in the workflow are a reproducibility measure,
-not a supported-platform claim, and the second matrix entry is a compatibility
-check rather than a second supported runtime.
+Phase 020 then locked the toolchain ([`DEPENDENCY_LOCKING.md`](DEPENDENCY_LOCKING.md)),
+and a pip-produced lock is valid for one interpreter and one platform. So the
+second matrix entry remains a compatibility check rather than a second supported
+runtime: it cannot install from the lock, and the versions the workflow pins for
+it are still a reproducibility measure rather than a supported-platform claim.
 
 ### The aggregate gate, and which check to require
 
@@ -253,8 +255,8 @@ rather than quietly changing what the check means.
 **Why not require the other checks instead.** Two of them are named
 `Quality (Python 3.12)` and `Quality (Python 3.14)`, because a matrix job's check
 name carries its matrix value. A rule naming those breaks the day an interpreter
-is added or removed, and Phase 020 may still do exactly that when it decides what
-a lock file is resolved for. `Quality gate` carries no operating system, no
+is added or removed. Phase 020 did not do that -- the lock serves the pinned line
+only, and the matrix kept both entries. `Quality gate` carries no operating system, no
 version and no matrix value, so it survives.
 
 **Why the check view alone is not enough.** GitHub skips a job whose dependency
@@ -338,7 +340,7 @@ Recorded here so that their absence is a decision rather than an oversight.
 
 | Deferred | Owning phase |
 |---|---|
-| Dependency resolution and lockfiles | 020 |
+| Runtime dependencies, and the `pylock.toml` that must accompany the first one | 021 |
 | Packaging build verification | 017-032 |
 | Secret *storage* — the rules are Phase 015's and are now written; the store itself is not | 028, with credential collection in 029 |
 

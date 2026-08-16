@@ -61,7 +61,10 @@ delivery date.
 **4. Does it run at runtime, or only in development?** ADR-0003's zero-budget
 rule binds the runtime absolutely; development tooling is explicitly exempt.
 `project.dependencies` is empty and a contract test keeps it that way, so
-anything adopted today is a development dependency by construction.
+anything adopted today is a development dependency by construction. Phase 021
+introduces the first runtime dependency; when it does, the lock gate refuses to
+pass until `pylock.toml` accompanies it, and the severity threshold below needs
+the argument it says it needs.
 
 **5. Could this be written instead?** Not always, and not usually. But
 ADR-0033's mutation harness, ADR-0036's shard planner and Phase 014's own SBOM
@@ -271,13 +274,25 @@ workflow, which is a decision for a later phase.
 
 ---
 
-## Deferred to Phase 020
+## Resolution and locking, delivered in Phase 020
 
-Dependency **resolution and locking**. The inventory reads what is declared and
-says so; it runs no resolver and claims no transitive tree. `pip-audit` resolves
-the requirements file it is given, which is where the transitive coverage comes
-from, but nothing here writes a lockfile and nothing should until the phase that
-owns the decision makes it.
+This document owns whether a dependency may be adopted.
+[`engineering/DEPENDENCY_LOCKING.md`](engineering/DEPENDENCY_LOCKING.md) owns what
+happens to one that has been: how the version that will actually be installed is
+fixed, and how anybody checks that the fixing worked.
+
+The division holds inside the tooling too. The inventory still reads what is
+*declared* — it runs no resolver and claims no transitive tree, and its own
+docstring says so. The lock is *resolved*, which is why it is not a fourth entry
+in `inventory.drift()`; the comparison between them lives in the lock gate, which
+imports the inventory rather than the other way round.
+
+One thing this changes here rather than there. The vulnerability audit used to run
+against a requirements file synthesised from the inventory's exact pins, which
+`pip-audit` then resolved against a live index **at audit time** — so the report
+described a resolution nobody had installed, and two runs on one commit could
+disagree. It now runs `--locked`, which resolves nothing. The audited set is the
+locked set, which is the set `scripts/bootstrap.ps1` installs.
 
 ---
 

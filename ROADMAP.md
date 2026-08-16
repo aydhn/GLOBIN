@@ -33,18 +33,29 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-019 are complete. Phase 020 is next and has not started.**
-> Nothing beyond Phase 019 is implemented. GLOBIN does not trade, does not
+> **Phases 001-020 are complete. Phase 021 is next and has not started.**
+> Nothing beyond Phase 020 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
 >
-> **Phase 018 surveyed the planned stack and found no gap.** Every library the
-> roadmap schedules publishes a wheel for the pinned interpreter on the pinned
-> platform, so `runtime-contract.toml` is unchanged — and the two refusals
-> [ADR-0050](docs/adr/0050-the-runtime-is-a-declared-contract-and-venv-is-its-only-environment.md)
-> left provisional on that survey now have an answer each. What it did *not* do is
-> resolve or lock anything; that is Phase 020, and
-> [`docs/DEPENDENCY_POLICY.md`](docs/DEPENDENCY_POLICY.md) still says so.
+> **Phase 020 locked the toolchain, and did not lock the runtime.**
+> `pylock.dev.toml` records all forty-nine distributions the seven declared tools
+> resolve to, each with a digest; `scripts/bootstrap.ps1` installs from it and
+> `pip-audit --locked` audits it, so the declared, the installed and the audited
+> set are now one. There is deliberately **no `pylock.toml`**: `project.dependencies`
+> is empty, and a lock of an empty set is refused outright by `pip-audit`. Phase 021
+> introduces the first runtime dependency and the lock that must accompany it, and
+> the gate fails until it does. See
+> [`docs/engineering/DEPENDENCY_LOCKING.md`](docs/engineering/DEPENDENCY_LOCKING.md).
+>
+> **It also closed a question Phase 015 left open rather than unanswered.**
+> [ADR-0048](docs/adr/0048-a-secret-lives-outside-the-tree-and-is-redacted-before-a-record-exists.md)
+> chose the secret store's properties as capabilities "so that Phase 028 can
+> satisfy them with whatever Windows actually offers", and nobody had established
+> what Windows offers.
+> [`docs/security/SECRET_STORE_CONTRACT.md`](docs/security/SECRET_STORE_CONTRACT.md)
+> records the measured limits. **No store is implemented and no mechanism is
+> chosen** — that remains Phases 026 to 029.
 >
 > **Phase 016 closed the first band and cut `v0.1.0`.** What that certifies, and
 > the one criterion it could not, are in
@@ -150,7 +161,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 017 | Windows Host and CPython Runtime Baseline | Declare the supported host and interpreter, check both against the machine, and build the project virtual environment deterministically. | Complete |
 | 018 | Wheel Availability Survey for the Planned Stack | Verify every library the roadmap schedules has a Windows wheel for the pinned interpreter, and record each gap rather than assuming one. | Complete |
 | 019 | Environment Drift Detection and Repair | Detect divergence from the runtime contract as it appears, and define repair short of recreating the environment. | Complete |
-| 020 | Dependency Resolution and Lockfile Strategy | Choose the locking mechanism and define reproducible resolution, upgrade and audit procedures. | Planned |
+| 020 | Dependency Resolution and Lockfile Strategy | Choose the locking mechanism and define reproducible resolution, upgrade and audit procedures. | Complete |
 | 021 | Core Runtime Dependency Introduction | Introduce the first runtime dependencies under the zero-budget policy with explicit justification per package. | Planned |
 | 022 | Scientific Stack Installation and Verification | Install and verify the numerical and dataframe stack, confirming correctness rather than assuming it. | Planned |
 | 023 | NVIDIA Driver and CUDA Capability Detection | Detect GPU presence, driver version, compute capability and CUDA availability without assuming any of them. | Planned |

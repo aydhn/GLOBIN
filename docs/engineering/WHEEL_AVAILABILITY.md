@@ -27,9 +27,11 @@ the six-question review in [`../DEPENDENCY_POLICY.md`](../DEPENDENCY_POLICY.md).
 library appears because the programme schedules it, not because it has been
 chosen. Adoption begins at Phase 021, one written record at a time.
 
-**It is not a resolution.** No resolver runs, no transitive tree is claimed, and
-no lock file is written. That is Phase 020, and
-[`../DEPENDENCY_POLICY.md`](../DEPENDENCY_POLICY.md) says so in its own words.
+**It is not a resolution.** No resolver runs here, no transitive tree is claimed,
+and no lock file is written. Phase 020 does that, in
+[`DEPENDENCY_LOCKING.md`](DEPENDENCY_LOCKING.md) -- and it *calls this module's tag
+matcher* rather than growing a second one, which is why a change to the rules here
+changes what the lock gate accepts.
 
 **It is not a measurement.** A published wheel is a claim that installation is
 possible, not that the library works on this host. Whether the numerical stack

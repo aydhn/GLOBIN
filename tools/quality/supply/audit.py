@@ -26,7 +26,6 @@ import json
 import shutil
 import subprocess
 import sys
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -285,100 +284,80 @@ def classify_failure(exit_code: int, stderr: str) -> tuple[Outcome, str]:
     )
 
 
-def requirements(pinned: tuple[tuple[str, str], ...]) -> str:
-    """The requirements file the audit is run against.
-
-    Args:
-        pinned: Each distribution name and the exact version pinned for it,
-            already deduplicated.
-
-    Returns:
-        One ``name==version`` per line, sorted, with a trailing newline.
-
-    Sorted so the file is byte-identical between runs, which matters because
-    ``pip-audit`` caches by content.
-    """
-    return "".join(f"{name}=={version}\n" for name, version in sorted(set(pinned)))
-
-
 def run(
-    pinned: tuple[tuple[str, str], ...],
+    project: Path,
     waivers: tuple[Waiver, ...],
     *,
     timeout: int = DEFAULT_TIMEOUT,
     runner: Runner | None = None,
 ) -> Report:
-    """Audit the toolchain this repository declares.
+    """Audit the dependency set this repository has locked.
 
     Args:
-        pinned: Each exactly-pinned PyPI distribution from the inventory.
+        project: The repository root, which is where ``pip-audit`` looks for
+            ``pylock.toml`` and ``pylock.*.toml``.
         waivers: The loaded waiver register.
         timeout: Seconds allowed.
-        runner: How to start the child. Injected so the gate can be composed
-            and tested without a network; the default is :func:`subprocess.run`.
+        runner: How to start the child. Injected so the gate can be composed and
+            tested without a network; the default is :func:`subprocess.run`.
 
     Returns:
         The report. Never raises for an audit failure — the failure is the
         report's :attr:`Report.outcome`, so that the gate records what happened
         rather than losing it to a traceback.
 
-    **A requirements file, not the ambient environment.** Auditing what happens to
-    be installed sounds equivalent and is not: on a developer's machine the
-    user-level site-packages contains whatever else that person works on, and
-    ``--strict`` correctly refuses to audit a package that is not on any index.
-    The gate would then fail for a reason having nothing to do with GLOBIN. What
-    is audited here is exactly the set the inventory declares and the SBOM
-    describes, so the audit, the SBOM and the manifest are all about one thing.
+    **The lock, not the ambient environment and no longer a synthesised
+    requirements file.** Auditing what happens to be installed sounds equivalent
+    and is not: on a developer's machine the user-level site-packages contains
+    whatever else that person works on, and ``--strict`` correctly refuses to audit
+    a package that is not on any index.
 
-    Transitive coverage is not lost by this. ``pip-audit`` resolves the file
-    before auditing it, so a six-line requirements list is audited as the
-    twenty-six distributions it actually pulls in.
+    Until Phase 020 this audited a requirements file written from the inventory's
+    exact pins, and let ``pip-audit`` resolve it. That was the best available then
+    and it had a real defect: the resolution happened *at audit time*, against a
+    live index, so the report described a set nobody had installed and which could
+    differ between two runs on the same commit. ``--locked`` resolves nothing. It
+    reads names and versions straight out of ``pylock.dev.toml``, which is the file
+    ``scripts/bootstrap.ps1`` installs from — so the audited set and the installed
+    set are now the same set, byte for byte.
 
-    **Not called by the test suite.** It starts a process and reaches the
-    network; ADR-0024 makes the suite offline. :func:`parse`,
-    :func:`classify_failure` and :func:`requirements` carry all the judgement and
-    are tested from literals.
+    Every lock in the directory is picked up, so the runtime lock Phase 021 adds is
+    audited with no change here.
+
+    **Not called by the test suite.** It starts a process and reaches the network;
+    ADR-0024 makes the suite offline. :func:`parse` and :func:`classify_failure`
+    carry all the judgement and are tested from literals.
     """
     if runner is None and not available():
         return Report(
             outcome=Outcome.TOOL_MISSING,
             detail=f"{TOOL} is not installed, so no audit was performed",
         )
-    if not pinned:
-        return Report(
-            outcome=Outcome.COLLECTION_FAILED,
-            detail="the inventory declared no pinned PyPI distribution to audit",
-        )
 
-    with tempfile.TemporaryDirectory() as workspace:
-        listing = Path(workspace) / "requirements.txt"
-        listing.write_text(requirements(pinned), encoding="utf-8", newline="\n")
-        try:
-            completed = (runner or subprocess.run)(
-                [
-                    sys.executable,
-                    "-m",
-                    "pip_audit",
-                    "--requirement",
-                    str(listing),
-                    "--format=json",
-                    "--strict",
-                    "--progress-spinner=off",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return Report(
-                outcome=Outcome.SERVICE_UNREACHABLE,
-                detail=f"{TOOL} did not finish within {timeout}s. This is NOT a clean audit",
-            )
-        except OSError as fault:
-            return Report(
-                outcome=Outcome.TOOL_MISSING, detail=f"{TOOL} could not be started: {fault}"
-            )
+    try:
+        completed = (runner or subprocess.run)(
+            [
+                sys.executable,
+                "-m",
+                "pip_audit",
+                "--locked",
+                str(project),
+                "--format=json",
+                "--strict",
+                "--progress-spinner=off",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return Report(
+            outcome=Outcome.SERVICE_UNREACHABLE,
+            detail=f"{TOOL} did not finish within {timeout}s. This is NOT a clean audit",
+        )
+    except OSError as fault:
+        return Report(outcome=Outcome.TOOL_MISSING, detail=f"{TOOL} could not be started: {fault}")
 
     if completed.returncode not in {NO_VULNERABILITIES, VULNERABILITIES_FOUND}:
         outcome, detail = classify_failure(completed.returncode, completed.stderr)

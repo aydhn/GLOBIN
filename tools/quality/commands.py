@@ -337,6 +337,33 @@ _WHEELS = Step("wheels", (), ("-m", "tools.quality.wheels"))
 # No modules are declared. It starts no child at all, Python or otherwise.
 _DRIFT = Step("drift", (), ("-m", "tools.quality.drift"))
 
+# The dependency-lock gate. Reads `pylock.dev.toml` and the declaration in
+# `docs/engineering/lock-policy.toml`, and recomputes every claim the lock makes
+# from the evidence recorded inside it: that each of the forty-nine packages
+# carries a hash in a permitted algorithm, that each artefact is served over HTTPS
+# from the declared host, that at least one recorded wheel's PEP 425 tags serve the
+# interpreter `runtime-contract.toml` pins, and that the lock and the three
+# declaration registers agree about one version each.
+#
+# It REACHES NOTHING, like `governance`, `release`, `runtime`, `wheels` and
+# `drift`. The lock's evidence is in the file, so deciding it needs no index. Its
+# `relock` and `upgrade` subcommands DO reach one, and that is exactly why they are
+# subcommands rather than this step — the same split `runtime` makes for
+# `bootstrap` and `wheels` makes for `probe`.
+#
+# In neither `fast` nor `full`, for the reason `governance` gives rather than the
+# reason `supply` does: it WRITES an artefact, and `full` runs before every commit
+# and reports rather than produces. The assertions that must gate a commit are in
+# `tests/contract/test_lock_contract.py`, which the coverage step already runs.
+#
+# `installed` is a subcommand rather than a second step here for a different
+# reason: it answers a question about the machine rather than about the tree, so
+# two runs of it on one commit can legitimately disagree. CI runs it in the job
+# that builds the environment, which is the only place its answer means anything.
+#
+# No modules are declared. `check` starts no child at all.
+_LOCK = Step("lock", (), ("-m", "tools.quality.lock"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -415,6 +442,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "drift",
         "This host against the baseline that was accepted, and what would repair the difference.",
         (_DRIFT,),
+    ),
+    Command(
+        "lock",
+        "The committed lock against the runtime contract, the declared bounds and the pins.",
+        (_LOCK,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

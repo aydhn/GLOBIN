@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    Create the project virtual environment and install the pinned toolchain.
+    Create the project virtual environment and install the locked toolchain.
 
 .DESCRIPTION
     Builds `.venv` at the repository root from a verified interpreter, installs
-    the development toolchain the workflows already pin, and then re-runs the
+    the development toolchain recorded in `pylock.dev.toml`, and then re-runs the
     read-only check through the new environment so that the manifest it leaves
     behind describes the environment rather than the interpreter that built it.
 
@@ -38,6 +38,12 @@
     because installing a runtime changes the host, and a no-op where no manager is
     present — this host has the legacy launcher, which cannot install.
 
+.PARAMETER FromPins
+    Install the exact versions `.github/workflows/` pins instead of `pylock.dev.toml`.
+    The documented recovery path for a lock that cannot be installed from: `pip`
+    labels `install -r pylock.toml` experimental, and this is the one command a
+    person runs before they have a working tree. See ADR-0054.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1
 
@@ -56,7 +62,8 @@
 param(
     [string]$Interpreter = 'python',
     [switch]$Recreate,
-    [switch]$InstallPython
+    [switch]$InstallPython,
+    [switch]$FromPins
 )
 
 Set-StrictMode -Version Latest
@@ -75,6 +82,7 @@ $VenvPython = Join-Path (Join-Path (Join-Path $RepoRoot $EnvironmentDirectory) '
 $arguments = @('-m', 'tools.quality.runtime', 'bootstrap')
 if ($Recreate) { $arguments += '--recreate' }
 if ($InstallPython) { $arguments += '--install-python' }
+if ($FromPins)      { $arguments += '--from-pins' }
 
 Write-Host ''
 Write-Host '=== GLOBIN environment bootstrap ===' -ForegroundColor White

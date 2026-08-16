@@ -34,8 +34,6 @@ from typing import Final
 from tools.quality.execution.plan import Verdict, combine
 from tools.quality.supply import audit, capability, secrets, waivers
 from tools.quality.supply.inventory import (
-    PINNED,
-    PYPI,
     SupplyChainError,
     collect,
     drift,
@@ -335,15 +333,13 @@ def run_supply(
         reasons.append(REASON_WAIVER_EXPIRED)
 
     # --- the vulnerability audit -------------------------------------------
-    # Against the inventory's own pinned distributions, so that the audit, the
-    # SBOM and the manifest all describe one set rather than three.
-    pinned = tuple(
-        (entry.name, entry.version)
-        for entry in dependencies
-        if entry.ecosystem == PYPI and entry.resolution == PINNED
-    )
+    # Against the committed lock, which is the set `scripts/bootstrap.ps1`
+    # installs. Until Phase 020 this audited a requirements file synthesised from
+    # the inventory's exact pins, which `pip-audit` then resolved against a live
+    # index — so the report described a resolution nobody had installed. `--locked`
+    # resolves nothing, so the audited set and the installed set are now one.
     report = (
-        audit.run(pinned, register, runner=runner)
+        audit.run(REPO_ROOT, register, runner=runner)
         if online
         else audit.Report(
             outcome=audit.Outcome.TOOL_MISSING,

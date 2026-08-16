@@ -22,13 +22,21 @@ the machinery.
 import json
 import subprocess
 from collections.abc import Sequence
+from pathlib import Path
 
 import pytest
 
 from tools.quality.supply import audit, capability
 from tools.quality.supply.capability import State
 
-PINNED = (("ruff", "0.15.14"),)
+PROJECT = Path()
+"""Where `pip-audit --locked` is pointed.
+
+Since Phase 020 the audit reads the locks in a project directory rather than a
+requirements file synthesised from the inventory's pins. Every runner below is
+injected, so nothing is actually read from here -- what is under test is how the
+gate classifies what came back.
+"""
 
 CLEAN_PAYLOAD = json.dumps({"dependencies": [{"name": "ruff", "version": "0.15.14", "vulns": []}]})
 
@@ -76,7 +84,7 @@ def _runner(
 
 def test_a_clean_child_produces_a_clean_report() -> None:
     """Exit 0 with a parseable payload and no advisories."""
-    report = audit.run(PINNED, (), runner=_runner(stdout=CLEAN_PAYLOAD))
+    report = audit.run(PROJECT, (), runner=_runner(stdout=CLEAN_PAYLOAD))
     assert report.outcome is audit.Outcome.CLEAN
     assert report.measured
     assert report.audited == 1
@@ -85,7 +93,7 @@ def test_a_clean_child_produces_a_clean_report() -> None:
 
 def test_a_finding_produces_a_vulnerable_report() -> None:
     """Exit 1 with a payload naming an advisory."""
-    report = audit.run(PINNED, (), runner=_runner(returncode=1, stdout=VULNERABLE_PAYLOAD))
+    report = audit.run(PROJECT, (), runner=_runner(returncode=1, stdout=VULNERABLE_PAYLOAD))
     assert report.outcome is audit.Outcome.VULNERABLE
     assert report.measured
     assert report.open_count == 1
@@ -101,7 +109,7 @@ def test_exit_one_with_no_payload_is_a_collection_failure_not_a_finding() -> Non
     against a local package on no index.
     """
     report = audit.run(
-        PINNED,
+        PROJECT,
         (),
         runner=_runner(returncode=1, stdout="", stderr="binokx: Dependency not found on PyPI"),
     )
@@ -112,7 +120,7 @@ def test_exit_one_with_no_payload_is_a_collection_failure_not_a_finding() -> Non
 
 def test_an_unexpected_exit_code_is_classified_rather_than_believed() -> None:
     """Only 0 and 1 are documented; anything else is a fault, not a verdict."""
-    report = audit.run(PINNED, (), runner=_runner(returncode=2, stderr="Connection refused"))
+    report = audit.run(PROJECT, (), runner=_runner(returncode=2, stderr="Connection refused"))
     assert report.outcome is audit.Outcome.SERVICE_UNREACHABLE
     assert not report.measured
 
@@ -120,7 +128,7 @@ def test_an_unexpected_exit_code_is_classified_rather_than_believed() -> None:
 def test_a_child_that_never_returns_is_not_a_clean_audit() -> None:
     """A timeout is the failure the bound exists for, and it is not silence."""
     report = audit.run(
-        PINNED,
+        PROJECT,
         (),
         runner=_runner(raises=subprocess.TimeoutExpired(cmd="pip-audit", timeout=1)),
     )
@@ -130,7 +138,7 @@ def test_a_child_that_never_returns_is_not_a_clean_audit() -> None:
 
 def test_a_child_that_cannot_be_started_is_not_a_clean_audit() -> None:
     """A missing interpreter or a permission error, reported as itself."""
-    report = audit.run(PINNED, (), runner=_runner(raises=OSError("no such file")))
+    report = audit.run(PROJECT, (), runner=_runner(raises=OSError("no such file")))
     assert report.outcome is audit.Outcome.TOOL_MISSING
     assert not report.measured
 
@@ -144,7 +152,7 @@ def test_a_child_that_cannot_be_started_is_not_a_clean_audit() -> None:
 )
 def test_output_that_cannot_be_read_is_not_a_clean_audit(payload: str) -> None:
     """Guessing between "clean" and "vulnerable" with no evidence is not an option."""
-    report = audit.run(PINNED, (), runner=_runner(stdout=payload, stderr="something went wrong"))
+    report = audit.run(PROJECT, (), runner=_runner(stdout=payload, stderr="something went wrong"))
     assert report.outcome is not audit.Outcome.CLEAN
     assert not report.measured
 

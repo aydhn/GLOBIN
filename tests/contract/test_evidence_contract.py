@@ -332,9 +332,22 @@ def test_the_artifact_carries_no_cache_or_environment(workflow: str) -> None:
 
     A cache is still forbidden, and for a reason the tree does not share: a cache
     is this machine's state rather than this run's result.
+
+    **Read from the upload paths rather than from the whole file, since Phase
+    020.** It was a whole-file substring search, which was an exact proxy only for
+    as long as nothing in the workflow legitimately named an environment. The
+    runtime job now runs one step through the project environment's own
+    interpreter, because a
+    gate comparing this environment against the lock has to be the environment's
+    own interpreter or it measures the wrong one. Narrowing this to `path:` makes
+    the check match the sentence at the top of this docstring; the control below
+    is what stops it passing because it looked nowhere.
     """
+    uploaded = re.findall(r"^\s*path:\s*(?P<value>.+)$", workflow, re.MULTILINE)
+    assert uploaded, "no upload path was found, so this check looked at nothing"
     for forbidden in (".venv", "node_modules", ".mypy_cache", ".pytest_cache", ".ruff_cache"):
-        assert forbidden not in workflow, f"{forbidden} must not be uploaded"
+        offenders = [value for value in uploaded if forbidden in value]
+        assert not offenders, f"{forbidden} must not be uploaded: {offenders}"
 
 
 def test_the_evidence_job_installs_every_tool_the_gate_starts(workflow: str) -> None:

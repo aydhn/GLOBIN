@@ -385,11 +385,14 @@ install that follows. A prefix, for the reason `interpreter.base_prefix.*` gives
 # A prefix class, because the members are named by `pyproject.toml` rather than by
 # this file, and restating them here would be a second register to keep in step.
 #
-# THIS IS NOT PHASE 020'S WORK, and the line is worth stating because it is close.
-# Phase 020 owns resolution and locking: running a resolver, writing a lockfile,
-# claiming a transitive tree. Nothing here does any of that. This compares the
-# version of a tool that is installed against the version the workflows already
-# pin, both of which exist and are already parsed elsewhere in this repository.
+# THIS IS NOT THE LOCK GATE'S WORK, and the line is worth stating because it is
+# close. Phase 020 owns resolution and locking: running a resolver, writing a
+# lockfile, claiming a transitive tree, and comparing this environment against it.
+# Nothing here does any of that. This compares the version of a tool that is
+# installed against the version the workflows already pin, both of which exist and
+# are already parsed elsewhere in this repository -- and it does so against a
+# baseline somebody accepted, where the lock gate compares against a committed
+# declaration. `docs/engineering/DEPENDENCY_LOCKING.md` states why they stay apart.
 # Comparison is not resolution.
 # ---------------------------------------------------------------------------
 

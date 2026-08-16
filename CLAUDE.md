@@ -49,6 +49,8 @@ that certifies — and the one criterion it could not — is in
 | Which Windows, which Python, and how do I build `.venv`? | [`docs/engineering/RUNTIME_BASELINE.md`](docs/engineering/RUNTIME_BASELINE.md), [`docs/engineering/runtime-contract.toml`](docs/engineering/runtime-contract.toml) |
 | Does the library I need have a wheel for that Python? | [`docs/engineering/WHEEL_AVAILABILITY.md`](docs/engineering/WHEEL_AVAILABILITY.md), [`docs/engineering/wheel-survey.toml`](docs/engineering/wheel-survey.toml) |
 | Is this machine still the one the gates were measured on? | [`docs/engineering/ENVIRONMENT_DRIFT.md`](docs/engineering/ENVIRONMENT_DRIFT.md), [`docs/engineering/drift-policy.toml`](docs/engineering/drift-policy.toml) |
+| What version of a dependency will actually be installed? | [`docs/engineering/DEPENDENCY_LOCKING.md`](docs/engineering/DEPENDENCY_LOCKING.md), [`docs/engineering/lock-policy.toml`](docs/engineering/lock-policy.toml) |
+| What must a secret store satisfy, and what does Windows actually offer? | [`docs/security/SECRET_STORE_CONTRACT.md`](docs/security/SECRET_STORE_CONTRACT.md) |
 | How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 | Which error do I raise? | [`src/globin/errors.py`](src/globin/errors.py), [ADR-0022](docs/adr/0022-error-taxonomy-rooted-in-one-type.md) |
 | How do I express a price or a quantity? | [`docs/VALUE_TYPES_POLICY.md`](docs/VALUE_TYPES_POLICY.md) |
@@ -84,6 +86,7 @@ GLOBIN/
 │   ├── unit/            One unit, dependencies substituted
 │   ├── property/        Invariants over generated input (Hypothesis)
 │   └── integration/     Several components together, still local
+├── pylock.dev.toml      The development toolchain, resolved and hash-pinned
 ├── tools/quality/       The canonical quality entrypoint; CI runs this too
 │   ├── supply/          Dependency inventory, CycloneDX SBOM, audit, secrets
 │   └── governance/      Code ownership, security policy, sensitive-path coverage
@@ -341,6 +344,53 @@ need it. Everything else names what *you* should run, or names something outside
 the repository that ADR-0050 forbids this tooling from touching. Reasoning:
 [`docs/engineering/ENVIRONMENT_DRIFT.md`](docs/engineering/ENVIRONMENT_DRIFT.md)
 and [ADR-0053](docs/adr/0053-drift-is-measured-against-an-accepted-baseline-and-repair-is-a-classification.md).
+
+A seventh sibling asks what will actually be installed, and like the four above
+it **reaches nothing**:
+
+```bash
+python -m tools.quality lock
+```
+
+It reads `pylock.dev.toml` and
+[`docs/engineering/lock-policy.toml`](docs/engineering/lock-policy.toml), and
+recomputes every claim the lock makes from the evidence inside it: that each of the
+forty-nine packages carries a digest in a permitted algorithm, that every artefact
+is served over HTTPS from the declared host, that a recorded wheel's PEP 425 tags
+serve the pinned interpreter, and that the lock and the three declaration registers
+agree about one version each. It writes `.globin/lock/lock-manifest.json`.
+
+**It does not trust `pip`.** pip wrote the lock, and pip labels both `lock` and
+`install -r pylock.toml` experimental; validating one with the other would
+establish only that pip agrees with itself.
+
+Its `installed` subcommand adds this environment, and is the one claim an offline
+gate cannot make. It reports `unmeasured` unless run through the environment's own
+interpreter:
+
+```bash
+.venv\Scripts\python.exe -m tools.quality.lock installed
+```
+
+Its other two subcommands **reach PyPI**, which is why they are subcommands. A
+relock holds every workflow pin and the producer, so it records the transitive set
+rather than upgrading the tools somebody chose; moving one is a separate, named act:
+
+```bash
+python -m tools.quality.lock relock
+```
+
+```bash
+python -m tools.quality.lock upgrade ruff
+```
+
+A regenerated lock is checked before it is kept: one that is wrong *about itself*
+is left in `.globin/lock/` with the committed file untouched, while one that merely
+disagrees with the pins is kept and the exact edits are printed. `bootstrap`
+installs from the lock and refuses rather than falling back; `-FromPins` is the
+documented hand-crank. Reasoning:
+[`docs/engineering/DEPENDENCY_LOCKING.md`](docs/engineering/DEPENDENCY_LOCKING.md)
+and [ADR-0054](docs/adr/0054-the-toolchain-is-locked-with-pep-751-and-the-verdict-is-recomputed.md).
 
 One gate sits outside `full`, because it takes minutes rather than seconds:
 

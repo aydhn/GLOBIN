@@ -462,10 +462,10 @@ def _satisfies(version: str, specifier: str) -> bool:
     if not specifier.startswith(">="):
         return True
     bound = specifier.removeprefix(">=").strip()
-    return _release(version) >= _release(bound)
+    return release(version) >= release(bound)
 
 
-def _release(version: str) -> tuple[int, ...]:
+def release(version: str) -> tuple[int, ...]:
     """The leading numeric release segment of a version, for comparison.
 
     Args:
@@ -474,6 +474,12 @@ def _release(version: str) -> tuple[int, ...]:
     Returns:
         Its dotted numeric prefix. ``0.15.14`` becomes ``(0, 15, 14)``; a segment
         that is not a number ends the tuple, so ``1.0rc1`` becomes ``(1, 0)``.
+
+    Public since Phase 020, because ``tools/quality/lock`` needs the same
+    comparison and a second copy of it would be a second thing to be wrong about
+    what ``1.0rc1`` means. The *bound* logic beside it is deliberately not shared:
+    :func:`_satisfies` reads an unknown specifier as satisfied, which is right for
+    a register comparison and wrong for a lock.
     """
     parts: list[int] = []
     for segment in version.split("."):

@@ -510,8 +510,12 @@ attest = 10
 # Added in Phase 017. Like `supply` and `attest` when they arrived, it has no
 # measured run behind it yet, and like `supply` it waits on something outside
 # GitHub: `bootstrap.ps1` installs the pinned toolchain from a package index, so
-# a slow index lengthens it in a way no local change explains. Ten is the budget
-# the comparable jobs carry, and it is a number to revisit against measurement
-# rather than to trust — see `docs/research/phase_017_sources.md`.
-runtime = 10
+# a slow index lengthens it in a way no local change explains.
+#
+# Raised from 10 to 15 in Phase 020, when `bootstrap.ps1` began installing from
+# `pylock.dev.toml`: forty-nine wheels rather than the seven the workflow register
+# pins. That is a judgement from the change in count, NOT a measurement on a
+# runner, and it is one of the numbers in this table to revisit against one rather
+# than to trust — see `docs/research/phase_017_sources.md`.
+runtime = 15
 aggregate = 10

@@ -214,7 +214,7 @@ jobs:
     # the tree does not lint or type-check.
     needs: quality
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Check out the repository
@@ -283,6 +283,20 @@ jobs:
         # — a set rendered in iteration order, a path resolved two ways — fails
         # exactly here and nowhere else.
         run: python -m tools.quality.drift accept
+
+      - name: Compare this environment against the lock
+        # THE ONE CLAIM A PURELY OFFLINE GATE CANNOT MAKE. `python -m tools.quality
+        # lock` in the supply job decides whether the lock is coherent; this decides
+        # whether the environment `bootstrap.ps1` just built from it actually matches
+        # it, which is what makes the lock load-bearing rather than decorative.
+        #
+        # It runs HERE and only here because it is the only job that builds an
+        # environment. Run anywhere else it would report `unmeasured`, correctly and
+        # uselessly, since the answer would be about some other interpreter.
+        #
+        # Through the environment's own interpreter, or it measures the wrong one.
+        if: always()
+        run: .venv\Scripts\python.exe -m tools.quality.lock installed
 
       - name: Run the environment-drift gate
         # `always()`, so that a failure in the steps above cannot hide a finding
@@ -427,6 +441,20 @@ jobs:
         # not look" and "found nothing" look alike from a distance.
         if: always()
         run: python -m tools.quality.wheels probe
+
+      - name: Run the dependency-lock gate
+        # RECOMPUTES `pylock.dev.toml` FROM ITS OWN EVIDENCE, offline: every hash,
+        # every artefact host, every wheel tag against the pinned interpreter, and
+        # every version the four registers carry. It reaches nothing, so it needs
+        # neither a token nor an `env:` block.
+        #
+        # It rides in this job for the reason `wheels` does rather than taking one
+        # of its own: a gate that reads files for a few seconds does not earn a
+        # second checkout, a `required_jobs` entry and a timeout budget.
+        #
+        # `always()`, so a failing audit above cannot hide a lock finding.
+        if: always()
+        run: python -m tools.quality lock
 
       - name: Upload the supply-chain evidence
         # `always()`, for the reason the evidence upload gives: a run that failed

@@ -203,6 +203,8 @@ against primary documentation when the phase arrives, per
 - [`../../SECURITY.md`](../../SECURITY.md) — how to report a vulnerability
 - [`VULNERABILITY_RESPONSE.md`](VULNERABILITY_RESPONSE.md) — the response runbook, including the
   credential-exposure lane
+- [`SECRET_STORE_CONTRACT.md`](SECRET_STORE_CONTRACT.md) — the interface a stored secret is reached
+  through, and the measured Windows limits the phases implementing it must work inside
 - [`GOVERNANCE.md`](GOVERNANCE.md) — ownership and security-sensitive paths
 - [`../LOGGING_POLICY.md`](../LOGGING_POLICY.md) — log redaction, which this document does not
   restate

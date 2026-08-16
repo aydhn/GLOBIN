@@ -386,9 +386,66 @@ def test_a_venv_that_cannot_be_started_is_reported(tmp_path: Path) -> None:
     assert any("could not be created" in problem for problem in problems)
 
 
+def lock_at(root: Path, text: str = 'lock-version = "1.0"\ncreated-by = "pip"\n') -> Path:
+    """Write a development lock into a synthetic tree.
+
+    Args:
+        root: The tree.
+        text: What to write. The default is enough for `_install_toolchain`,
+            which checks that the file exists and hands it to pip rather than
+            reading it — parsing a lock is `tools/quality/lock`'s job.
+
+    Returns:
+        The path written.
+    """
+    path = root / gate.DEVELOPMENT_LOCK
+    path.write_text(text, encoding="utf-8", newline="\n")
+    return path
+
+
+def test_the_toolchain_is_installed_from_the_lock_by_default(tmp_path: Path) -> None:
+    """Since Phase 020 the lock is what bootstrap installs, not the workflow pins.
+
+    The pins cover the seven direct tools; the lock covers all forty-nine, each
+    with a digest. Asserted through the argv rather than through the outcome,
+    because the outcome of a faked `pip install` is whatever the fake returns.
+    """
+    lock_at(tmp_path)
+    workflow_at(tmp_path, 'jobs:\n  a:\n    steps:\n      - run: pip install "ruff==0.15.14"\n')
+    seen: list[list[str]] = []
+
+    def record(argv: list[str], **_kwargs: object) -> "subprocess.CompletedProcess[str]":
+        seen.append(argv)
+        return completed()
+
+    assert _install_toolchain(tmp_path, tmp_path / ".venv", record) == ()
+    assert seen, "pip was never started"
+    assert "--requirement" in seen[0]
+    assert any(argument.endswith(gate.DEVELOPMENT_LOCK) for argument in seen[0])
+    assert not any("ruff==" in argument for argument in seen[0])
+
+
+def test_a_missing_lock_is_refused_rather_than_falling_back_to_the_pins(tmp_path: Path) -> None:
+    """The fallback would be taken on exactly the day the lock is wrong.
+
+    The workflow register is present and perfectly usable here, and is still not
+    used: a silent substitution is what ADR-0054 refuses, and the message names
+    the deliberate alternative instead of quietly being it.
+    """
+    workflow_at(tmp_path, 'jobs:\n  a:\n    steps:\n      - run: pip install "ruff==0.15.14"\n')
+
+    def refuse(*_args: object, **_kwargs: object) -> "subprocess.CompletedProcess[str]":
+        message = "pip must not be started when the lock is missing"
+        raise AssertionError(message)
+
+    problems = _install_toolchain(tmp_path, tmp_path / ".venv", refuse)
+    assert any(gate.DEVELOPMENT_LOCK in problem for problem in problems)
+    assert any("--from-pins" in problem for problem in problems)
+
+
 def test_a_toolchain_install_that_cannot_be_started_is_reported(tmp_path: Path) -> None:
     """The environment's own interpreter may not exist yet."""
-    workflow_at(tmp_path, 'jobs:\n  a:\n    steps:\n      - run: pip install "ruff==0.15.14"\n')
+    lock_at(tmp_path)
 
     def refuse(*_args: object, **_kwargs: object) -> "subprocess.CompletedProcess[str]":
         msg = "no interpreter"
@@ -399,24 +456,26 @@ def test_a_toolchain_install_that_cannot_be_started_is_reported(tmp_path: Path) 
 
 
 def test_a_toolchain_install_that_exits_non_zero_is_reported(tmp_path: Path) -> None:
-    """A package that cannot be resolved is the common case here."""
-    workflow_at(tmp_path, 'jobs:\n  a:\n    steps:\n      - run: pip install "ruff==0.15.14"\n')
+    """A recorded digest that does not match what was served is the case here now."""
+    lock_at(tmp_path)
 
     problems = _install_toolchain(
         tmp_path,
         tmp_path / ".venv",
-        lambda *_a, **_k: completed(returncode=1, stderr="No matching distribution"),
+        lambda *_a, **_k: completed(returncode=1, stderr="THESE PACKAGES DO NOT MATCH"),
     )
     assert any("pip install exited 1" in problem for problem in problems)
 
 
-def test_a_tree_with_no_workflow_register_cannot_install_a_toolchain(tmp_path: Path) -> None:
-    """The versions come from the workflow register.
+def test_a_tree_with_no_workflow_register_cannot_install_from_pins(tmp_path: Path) -> None:
+    """Under `--from-pins` the versions still come from the workflow register.
 
     A tree without one therefore has no toolchain to install, rather than a
     default one this function would have had to invent.
     """
-    problems = _install_toolchain(tmp_path, tmp_path / ".venv", lambda *_a, **_k: completed())
+    problems = _install_toolchain(
+        tmp_path, tmp_path / ".venv", lambda *_a, **_k: completed(), from_pins=True
+    )
     assert any("no pinned toolchain" in problem for problem in problems)
 
 
@@ -429,7 +488,9 @@ def test_a_workflow_register_that_contradicts_itself_is_reported(tmp_path: Path)
         '  b:\n    steps:\n      - run: pip install "ruff==0.16.0"\n',
     )
 
-    problems = _install_toolchain(tmp_path, tmp_path / ".venv", lambda *_a, **_k: completed())
+    problems = _install_toolchain(
+        tmp_path, tmp_path / ".venv", lambda *_a, **_k: completed(), from_pins=True
+    )
     assert problems
     assert any("ruff" in problem for problem in problems)
 

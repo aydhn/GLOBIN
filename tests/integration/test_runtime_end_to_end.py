@@ -170,13 +170,26 @@ def write_environment(
     (scripts / "python.exe").write_bytes(b"")
 
 
-def build_tree(root: Path, *, declaration: str | None = None, environment: bool = True) -> None:
+def build_tree(
+    root: Path,
+    *,
+    declaration: str | None = None,
+    environment: bool = True,
+    lock: bool = True,
+) -> None:
     """Write a tree the gate can judge.
 
     Args:
         root: Where to write it.
         declaration: The contract, or ``None`` to omit it entirely.
         environment: Whether to write a well-formed ``.venv``.
+        lock: Whether to write the development lock ``bootstrap`` installs from.
+            ``False`` is how the refusal path is reached — since Phase 020 a
+            bootstrap without a lock does not fall back to the workflow pins.
+
+    The lock's contents do not matter here. ``_install_toolchain`` checks that the
+    file exists and hands it to ``pip``; deciding whether a lock is any good is
+    ``tools/quality/lock``'s job, tested there.
     """
     if declaration is not None:
         target = root / "docs" / "engineering" / "runtime-contract.toml"
@@ -186,6 +199,11 @@ def build_tree(root: Path, *, declaration: str | None = None, environment: bool 
     workflow = root / ".github" / "workflows" / "quality.yml"
     workflow.parent.mkdir(parents=True, exist_ok=True)
     workflow.write_text(WORKFLOW, encoding="utf-8", newline="\n")
+
+    if lock:
+        (root / gate.DEVELOPMENT_LOCK).write_text(
+            'lock-version = "1.0"\ncreated-by = "pip"\n', encoding="utf-8", newline="\n"
+        )
 
     if environment:
         write_environment(root / ".venv")
@@ -376,17 +394,55 @@ def test_a_contract_from_another_schema_version_is_refused(tmp_path: Path) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_bootstrap_creates_the_environment_and_installs_the_pinned_toolchain(
+def test_bootstrap_creates_the_environment_and_installs_the_locked_toolchain(
     tmp_path: Path,
 ) -> None:
+    """Since Phase 020 the lock is installed, and the workflow pins are not.
+
+    The workflow register is present in this tree and its pins are deliberately
+    absent from the install: they cover seven direct tools, and the lock covers
+    all forty-nine with a digest each.
+    """
     build_tree(tmp_path, declaration=contract(), environment=False)
     launcher = _Launcher()
     assert run(tmp_path, bootstrap=True, runner=launcher) == gate.EXIT_OK
 
     assert launcher.created == 1
     install = next(call for call in launcher.calls if "install" in call)
+    assert "--requirement" in install
+    assert any(argument.endswith(gate.DEVELOPMENT_LOCK) for argument in install)
+    assert not any("ruff==" in argument for argument in install)
+
+
+def test_bootstrap_from_pins_installs_the_workflow_register_instead(tmp_path: Path) -> None:
+    """The documented recovery path, and it is opt-in.
+
+    `pip install -r pylock.toml` is labelled experimental upstream, and bootstrap
+    is what somebody runs before they have a working tree, so it keeps a
+    hand-crank. A flag is not a silent fallback -- the tree here has a perfectly
+    good lock and the pins are used anyway, because they were asked for.
+    """
+    build_tree(tmp_path, declaration=contract(), environment=False)
+    launcher = _Launcher()
+    assert run(tmp_path, bootstrap=True, from_pins=True, runner=launcher) == gate.EXIT_OK
+
+    install = next(call for call in launcher.calls if "install" in call)
     assert "ruff==0.15.14" in install, "the pins come from the workflow register"
     assert "mypy==2.1.0" in install
+    assert not any(argument.endswith(gate.DEVELOPMENT_LOCK) for argument in install)
+
+
+def test_a_tree_with_no_lock_cannot_be_bootstrapped(tmp_path: Path) -> None:
+    """A missing lock is a refusal rather than a fall back to the pins.
+
+    The workflow register is present and usable, and is still not used. A
+    fallback would be taken on exactly the day the lock is wrong, which is the
+    day somebody most needs to be told -- see ADR-0054.
+    """
+    build_tree(tmp_path, declaration=contract(), environment=False, lock=False)
+
+    assert run(tmp_path, bootstrap=True) == gate.EXIT_GATE_FAILED
+    assert REASON_TOOLCHAIN_UNAVAILABLE in reasons_of(read_manifest(tmp_path))
 
 
 def test_bootstrap_records_that_it_was_a_bootstrap_run(tmp_path: Path) -> None:
@@ -525,15 +581,15 @@ def test_requesting_a_runtime_install_records_what_this_launcher_can_do(
     assert "no runtime was installed" in str(installation["problems"])
 
 
-def test_a_tree_with_no_pinned_toolchain_cannot_be_bootstrapped(tmp_path: Path) -> None:
-    """The versions come from the workflow register.
+def test_a_tree_with_no_pinned_toolchain_cannot_be_bootstrapped_from_pins(tmp_path: Path) -> None:
+    """Under `--from-pins` the versions still come from the workflow register.
 
     That is why a tree without one has no toolchain to install rather than a default one.
     """
     build_tree(tmp_path, declaration=contract(), environment=False)
     (tmp_path / ".github" / "workflows" / "quality.yml").unlink()
 
-    assert run(tmp_path, bootstrap=True) == gate.EXIT_GATE_FAILED
+    assert run(tmp_path, bootstrap=True, from_pins=True) == gate.EXIT_GATE_FAILED
     assert REASON_TOOLCHAIN_UNAVAILABLE in reasons_of(read_manifest(tmp_path))
 
 

@@ -118,6 +118,7 @@ a future reader can judge whether the reason still holds.
 | [0051](0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md) | Phase 017 absorbs interpreter pinning and the environment lifecycle, and this is not covered by precedent | Accepted |
 | [0052](0052-wheel-availability-is-a-recorded-survey-whose-verdict-is-recomputed.md) | Wheel availability is a recorded survey whose verdict is recomputed, and a gap is owned rather than fixed | Accepted |
 | [0053](0053-drift-is-measured-against-an-accepted-baseline-and-repair-is-a-classification.md) | Drift is measured against an accepted baseline, and repair is a declared classification rather than an inferred one | Accepted |
+| [0054](0054-the-toolchain-is-locked-with-pep-751-and-the-verdict-is-recomputed.md) | The toolchain is locked with PEP 751, the runtime lock is Phase 021's, and the lock's verdict is recomputed | Accepted |
 
 ## Relationship to other documents
 

@@ -237,6 +237,14 @@ def run_evidence(*, reports: Path | None = None, run_process: ProcessRunner = sp
     _write_coverage_summary(directory, environment=environment, run_process=run_process)
     _write_coverage_html(directory, environment=environment, run_process=run_process)
     _strip_repository_path(directory / "coverage.xml")
+    # And the JUnit report, which carries one by a different route. `pytest`
+    # annotates a `skipped` element with the absolute path of the file the skip
+    # was raised in, and `junit_logging = "no"` does not suppress that — it
+    # governs captured output, not the skip reason. It goes unnoticed on a runner
+    # whose workspace is `D:\a\...` and appears immediately on a development host
+    # whose checkout is under a home directory, which is exactly the machine whose
+    # paths carry a person's name.
+    _strip_repository_path(junit_path)
     # The raw coverage database is not evidence: every number in it is already in
     # `coverage.json`, and being a binary store of absolute paths it is the one
     # file here that cannot be normalised. It is removed once the reports that
@@ -430,8 +438,9 @@ def _strip_repository_path(path: Path) -> None:
         path: The generated report. A file that was never written is skipped.
 
     ``coverage xml`` writes the absolute repository root into a ``<source>``
-    element, and on this host every absolute path contains the account holder's
-    full name — so the file names a person and the artifact is published.
+    element, and ``pytest`` writes one into the message of any ``skipped``
+    element. On this host every absolute path contains the account holder's full
+    name — so the file names a person and the artifact is published.
 
     Rewriting afterwards rather than configuring ``relative_files`` in
     ``pyproject.toml`` is deliberate: ADR-0036 decision 6 refuses that key

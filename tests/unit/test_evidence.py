@@ -11,6 +11,7 @@ ADR-0032 is `tests/contract/test_evidence_contract.py`.
 """
 
 import json
+from pathlib import Path
 from typing import Final
 
 import pytest
@@ -19,6 +20,7 @@ from tools.quality.evidence import (
     checksums,
     coverage_report,
     diagnostics,
+    gate,
     junit,
     manifest,
     redaction,
@@ -793,3 +795,45 @@ def test_an_unusable_command_line_exits_two_and_says_why(
     printed = capsys.readouterr().out
     assert "unknown command" in printed
     assert USAGE in printed
+
+
+# ---------------------------------------------------------------------------
+# Absolute paths, which the artifact must never carry
+# ---------------------------------------------------------------------------
+
+
+def test_the_repository_path_is_stripped_from_a_report(tmp_path: Path) -> None:
+    """Both separators, because a tool may report either.
+
+    `coverage xml` writes the root into a `<source>` element; `pytest` writes it
+    into the message of a `skipped` element, which `junit_logging = "no"` does not
+    suppress because that setting governs captured output rather than the skip
+    reason. On this host every absolute path carries the account holder's full
+    name, and the artifact is uploaded from a public repository.
+
+    The JUnit half went unnoticed until Phase 020 for a reason worth recording:
+    the pattern that catches it requires a home directory immediately after the
+    drive letter, so a runner working in a build directory never trips it while a
+    development machine with a checkout under a home directory trips it on the
+    first skipped test.
+    """
+    root = str(gate.REPO_ROOT)
+    posix = root.replace(chr(92), "/")
+    report = tmp_path / "report.xml"
+    report.write_text(
+        f'<x><source>{root}</source><skipped message="{posix}/t.py:1: why"/></x>',
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    gate._strip_repository_path(report)  # noqa: SLF001 -- the normalisation is under test
+
+    stripped = report.read_text(encoding="utf-8")
+    assert root not in stripped
+    assert posix not in stripped
+
+
+def test_stripping_a_report_that_was_never_written_does_nothing(tmp_path: Path) -> None:
+    """A gate that failed before producing one still reaches this call."""
+    gate._strip_repository_path(tmp_path / "absent.xml")  # noqa: SLF001 -- as above
+    assert not (tmp_path / "absent.xml").exists()

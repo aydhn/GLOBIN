@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from tests.support import REPO_ROOT, markdown_prose, markdown_section, parse_roadmap
+from tools.quality.commands import command_names
 
 #: Documents carrying a "what this does not cover" table of the form
 #: ``| Question | Phase |``. Found by their header rather than listed by hand
@@ -23,6 +24,12 @@ DEFERRAL_TABLES: tuple[str, ...] = (
     "docs/IDENTIFIER_POLICY.md",
     "docs/PRECISION_POLICY.md",
     "docs/VALUE_TYPES_POLICY.md",
+    # Added in Phase 020. This one is not merely tidy: the secret store contract
+    # constrains five phases that have not started, and almost nothing in it can
+    # be checked by a gate until they do. The deferral table is what makes time
+    # do the enforcing -- the day any of those phases ships, this fails and the
+    # document has to be reconciled in the same commit.
+    "docs/security/SECRET_STORE_CONTRACT.md",
 )
 
 #: A row of one of those tables: a question, then the phase or phases owning it.
@@ -96,6 +103,11 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/research/phase_017_sources.md",
     "docs/research/phase_018_sources.md",
     "docs/research/phase_019_sources.md",
+    "docs/research/phase_020_sources.md",
+    # Added in Phase 020 with the locking it describes and the store contract it
+    # establishes the limits for.
+    "docs/engineering/DEPENDENCY_LOCKING.md",
+    "docs/security/SECRET_STORE_CONTRACT.md",
     # Added in Phase 016 with the release governance they carry. The changelog is
     # deliberately not here: it is required by the release gate, which checks the
     # version it announces rather than only that it exists.
@@ -115,6 +127,30 @@ REQUIRED_CONCEPTS: dict[str, tuple[str, ...]] = {
     "CLAUDE.md": ("AGENTS.md", "master", "phase"),
     "MEMORY.md": ("GLOBIN", "master", "320", "Binance", "zero-budget"),
     "CONTRIBUTING.md": ("master", "pytest", "ruff", "mypy"),
+    "docs/engineering/DEPENDENCY_LOCKING.md": (
+        "pylock",
+        "pep 751",
+        "hash",
+        "relock",
+        "upgrade",
+        "--locked",
+        "transitive",
+    ),
+    # Chosen so that dropping a *section* fails, rather than pinning prose. The
+    # constant name rather than the number: 2560 is arithmetic somebody could
+    # restate, and a number in prose would need a source to compare against that
+    # this repository does not hold.
+    "docs/security/SECRET_STORE_CONTRACT.md": (
+        "reference",
+        "builder",
+        "fails closed",
+        "rotation",
+        "logon session",
+        "cred_max_credential_blob_size",
+        "echo",
+        "canary",
+        "zeroisation",
+    ),
     "docs/PROJECT_CHARTER.md": ("Binance", "zero-budget", "non-goal", "320"),
     "docs/ARCHITECTURE_PRINCIPLES.md": (
         "capability",
@@ -806,6 +842,53 @@ def test_nothing_absent_from_the_readme_has_quietly_acquired_a_module(repo_root:
     ]
     assert not started, (
         f"README says these do not exist, but the package has modules for them: {started}"
+    )
+
+
+#: Verbs `docs/security/SECRET_STORE_CONTRACT.md` section 5 forbids: each would
+#: return a secret to a terminal, a file or a log. Matched against module stems
+#: and against the command table, which are the two places such a thing would
+#: first appear.
+FORBIDDEN_REVEAL_VERBS: tuple[str, ...] = ("reveal", "dump", "export")
+
+
+def test_no_command_or_module_offers_to_reveal_a_secret(repo_root: Path) -> None:
+    """A negative surface, guarded the only way a negative surface can be.
+
+    This passes vacuously today, and saying so is honest rather than damning: it
+    is a tripwire on the frontier, in the same way `test_drift_contract.py` pins
+    a phase number that is correct now and will be wrong the moment somebody
+    moves past it without looking.
+
+    What it catches is the specific failure section 5 exists to prevent. Phase 029
+    defines credential collection, and the obvious convenience to add while doing
+    it -- a way to print the secret back so somebody can check it -- is the one
+    thing that turns an operating-system vault into a value in a scrollback
+    buffer. The day that command is added, this goes red and the contract has to
+    be argued with rather than forgotten.
+
+    `show` and `print` are deliberately absent from the list. Both are ordinary
+    English that a legitimate command could carry -- `show` a manifest, `print` a
+    report -- and a tripwire that fires on innocent names is one somebody deletes.
+    The three kept are the ones whose only plausible object here is the material.
+    """
+    offenders: list[str] = []
+    for path in (repo_root / "src" / "globin").rglob("*.py"):
+        stem = path.stem.lower()
+        offenders.extend(
+            f"src/globin module {path.stem!r} (matches {verb!r})"
+            for verb in FORBIDDEN_REVEAL_VERBS
+            if verb in stem
+        )
+    for name in command_names():
+        offenders.extend(
+            f"quality command {name!r} (matches {verb!r})"
+            for verb in FORBIDDEN_REVEAL_VERBS
+            if verb in name
+        )
+    assert not offenders, (
+        "docs/security/SECRET_STORE_CONTRACT.md section 5 says no verb returns a "
+        f"secret to a terminal, and these have appeared: {offenders}"
     )
 
 

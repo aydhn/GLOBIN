@@ -219,11 +219,35 @@ that the day it starts moving is the day coverage silently stopped.
 
 ---
 
+## What this gate is not, since Phase 020
+
+Phase 020 added `python -m tools.quality.lock installed`, which also compares this
+environment against a written record. The two are not redundant and they are not
+interchangeable.
+
+**This gate asks whether the machine is what it *was*.** Its record is a baseline
+somebody accepted with `drift accept`, and with no baseline it is `unmeasured`
+rather than clean. **The lock gate asks whether the environment is what the
+repository *declares*.** Its record is a committed file, and Git is the
+acceptance. Folding one into the other would make a single exit code mean two
+kinds of thing.
+
+The scopes differ too, deliberately. `observe_toolchain` reads only the tools this
+repository declares by name; the lock covers all forty-nine distributions those
+tools resolve to. Widening this gate to match would break the boundary it
+documents about itself, and would make `drift accept` record a baseline of the
+whole of `site-packages`.
+
+Neither subsumes the other in practice: this catches a tool moving on the host
+between two accepted baselines even when the lock is stale, and the lock gate
+catches a transitive package no baseline ever covered.
+
+---
+
 ## What this does not cover
 
 | Question | Owning phase |
 |---|---|
-| Resolving dependencies, and writing a lockfile | 020 |
 | Which distributions GLOBIN depends on at runtime | 021 |
 | Where configuration files live, and what profiles exist | 026 |
 | Which configuration sources are consulted, and in what order | 027 |

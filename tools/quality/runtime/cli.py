@@ -32,11 +32,13 @@ SUBCOMMANDS: Final[frozenset[str]] = frozenset({CHECK, BOOTSTRAP})
 
 RECREATE: Final[str] = "--recreate"
 INSTALL_PYTHON: Final[str] = "--install-python"
+FROM_PINS: Final[str] = "--from-pins"
 
-OPTIONS: Final[frozenset[str]] = frozenset({RECREATE, INSTALL_PYTHON})
+OPTIONS: Final[frozenset[str]] = frozenset({RECREATE, INSTALL_PYTHON, FROM_PINS})
 
 USAGE: Final[str] = """\
-usage: python -m tools.quality.runtime [check|bootstrap] [--recreate] [--install-python]
+usage: python -m tools.quality.runtime [check|bootstrap]
+           [--recreate] [--install-python] [--from-pins]
 
   check       Compare this host against docs/engineering/runtime-contract.toml
               and write the manifest. Changes nothing: no directory is created,
@@ -44,7 +46,7 @@ usage: python -m tools.quality.runtime [check|bootstrap] [--recreate] [--install
 
   bootstrap   Everything check does, and build the project environment as well:
               create .venv from the running interpreter and install the toolchain
-              the workflows already pin.
+              recorded in pylock.dev.toml, hash-checked.
 
   --recreate        Remove an existing .venv before creating it. Refused unless
                     the target is exactly .venv at the repository root and is not
@@ -52,6 +54,10 @@ usage: python -m tools.quality.runtime [check|bootstrap] [--recreate] [--install
   --install-python  Permit installing a missing runtime through the Python
                     install manager. Opt-in because it changes the host, and a
                     no-op where no manager is present. bootstrap only.
+  --from-pins       Install the exact versions .github/workflows/ pins instead of
+                    the lock. The documented recovery path for a lock that cannot
+                    be installed from, and it installs the seven direct tools
+                    rather than all forty-nine. bootstrap only.
 
 Run check through the environment's own interpreter, or it measures the wrong one:
 
@@ -81,11 +87,13 @@ class Invocation:
         bootstrap: Whether to build the environment as well as check it.
         recreate: Whether an existing environment may be removed first.
         install_python: Whether a missing runtime may be installed.
+        from_pins: Whether to install the workflow pins rather than the lock.
     """
 
     bootstrap: bool = False
     recreate: bool = False
     install_python: bool = False
+    from_pins: bool = False
 
 
 def parse(argv: Sequence[str]) -> Invocation:
@@ -127,6 +135,7 @@ def parse(argv: Sequence[str]) -> Invocation:
         bootstrap=bootstrap,
         recreate=RECREATE in seen,
         install_python=INSTALL_PYTHON in seen,
+        from_pins=FROM_PINS in seen,
     )
 
 
@@ -151,6 +160,7 @@ def main(argv: Sequence[str]) -> int:
             bootstrap=invocation.bootstrap,
             recreate=invocation.recreate,
             install_python=invocation.install_python,
+            from_pins=invocation.from_pins,
         )
     except OSError as fault:
         print(f"runtime: the gate could not write its artefacts: {fault}")

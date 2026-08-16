@@ -19,6 +19,54 @@ can be opened and read.
 
 ## [Unreleased]
 
+### Dependency locking
+
+- The development toolchain is locked. `pylock.dev.toml` records all forty-nine
+  distributions the seven declared tools resolve to, each with a digest, in the
+  PEP 751 format `pip lock` produces. Before this, seven were pinned by the
+  workflows and the other forty-two entered an environment at whatever version an
+  index served that day.
+- **The lock is load-bearing rather than decorative.** `scripts/bootstrap.ps1`
+  builds `.venv` from it and pip verifies every digest; an unreadable lock is a
+  refusal rather than a silent fall back to the pins, and `-FromPins` restores the
+  previous behaviour as a deliberate act.
+- **The vulnerability audit changed meaning, not only scope.** It ran against a
+  requirements file synthesised from the pins, which `pip-audit` then resolved
+  against a live index *at audit time* — so the report described a resolution
+  nobody had installed, and two runs on one commit could disagree.
+  `pip-audit --locked` resolves nothing, so the audited set is the installed set.
+- Every claim the lock makes is **recomputed from the lock's own evidence** by
+  `python -m tools.quality lock`, offline: each digest, each artefact host, each
+  wheel's PEP 425 tags against the runtime contract, and each version the four
+  registers carry. pip wrote the file and labels the feature experimental;
+  validating it with pip would establish only that pip agrees with itself.
+- `lock installed` compares this environment; `lock relock` and `lock upgrade`
+  regenerate the lock and reach the index. A relock holds the workflow pins and
+  the producer, so it records the transitive set rather than upgrading the tools
+  somebody chose. A regenerated lock that is wrong *about itself* is refused and
+  set aside with the committed file untouched; one that merely disagrees with the
+  pins is kept, and the exact edits are printed.
+- **There is no runtime lock, and that is enforced rather than remembered.**
+  `project.dependencies` is empty, and `pip-audit --locked` raises on a lock
+  recording no packages — so creating one would break the gate this work
+  strengthens. `LOCK_RUNTIME_UNLOCKED` fails the moment a runtime dependency is
+  declared without `pylock.toml` beside it, which is Phase 021's to add.
+- What the gate cannot check is stated rather than implied: pip records no
+  dependency edges, so nothing offline can prove every locked package is reachable
+  from a declared root.
+
+### Secret store contract
+
+- [`docs/security/SECRET_STORE_CONTRACT.md`](docs/security/SECRET_STORE_CONTRACT.md)
+  records what Windows actually offers a credential store, closing a question
+  ADR-0048 left open when it chose the store's properties as capabilities "so that
+  Phase 028 can satisfy them with whatever Windows actually offers".
+- **No store is implemented and no mechanism is chosen.** The measured limits bind
+  Phases 026 to 029: a credential blob has a documented 2560-byte ceiling, a target
+  name is case-insensitive and cannot be edited after creation, a write replaces
+  with no compare-and-swap, and the protection separates accounts rather than
+  processes. No claim of memory erasure is made, because CPython cannot support one.
+
 ### Environment drift
 
 - The machine the gates are measured on is now compared against a baseline a

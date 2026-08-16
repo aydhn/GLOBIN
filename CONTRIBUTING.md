@@ -59,10 +59,13 @@ is recorded in
 Tests import the package straight from `src/` because `pythonpath = ["src"]` is
 configured, so **no build or install step is required** to work on the project.
 
-Phase 017 solved the virtual environment; dependency locking is Phase 020 and is
-deliberately not solved yet. `bootstrap.ps1` installs the exact toolchain versions
-`.github/workflows/` already pins, read from there rather than declared again —
-that is reproducible enough to work with, and it is not a lock file.
+Phase 017 solved the virtual environment and Phase 020 the lock. `bootstrap.ps1`
+installs `pylock.dev.toml`, which records all forty-nine distributions the
+toolchain resolves to with a digest each, and pip verifies every one against it.
+An unreadable lock is a refusal rather than a silent fall back; `-FromPins`
+installs the workflow register's exact pins instead, and is the documented
+recovery path. See
+[`docs/engineering/DEPENDENCY_LOCKING.md`](docs/engineering/DEPENDENCY_LOCKING.md).
 
 ## The verification gate
 

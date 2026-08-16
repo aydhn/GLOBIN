@@ -270,11 +270,18 @@ If you need it somewhere else, recreate it there.
 | Question | Owner |
 |---|---|
 | Which libraries have wheels for the pinned interpreter | Phase 018 |
-| Locking the dependency set | Phase 020 |
+| Runtime dependencies, and the lock that must accompany the first one | Phase 021 |
 | Runtime configuration, and credential onboarding | Phases 021-032 |
 
-The toolchain this phase installs is the one the workflows already pin. That is
-not a lock file, and Phase 020 is where reproducible resolution is decided.
+**What `bootstrap` installs changed in Phase 020.** It was the exact versions the
+workflows pin -- seven direct tools, with the forty-two they resolve to left to
+whatever an index served that day. It is now `pylock.dev.toml`, hash-checked, and
+an unreadable lock is a refusal rather than a fall back to the pins. `--from-pins`
+restores the previous behaviour as a deliberate act, because
+`pip install -r pylock.toml` is labelled experimental upstream and this is the one
+command somebody runs before they have a working tree. See
+[`DEPENDENCY_LOCKING.md`](DEPENDENCY_LOCKING.md) and
+[ADR-0054](../adr/0054-the-toolchain-is-locked-with-pep-751-and-the-verdict-is-recomputed.md).
 
 **Drift over time is no longer deferred.** Phase 019 delivered it as a separate
 gate, because it asks a different question from this one: this document's checks

@@ -51,6 +51,7 @@ Every class of fact has exactly one document that owns it. Others link.
 | How to report a vulnerability | [`SECURITY.md`](../../SECURITY.md) |
 | How a vulnerability is triaged, fixed and disclosed | [`VULNERABILITY_RESPONSE.md`](../security/VULNERABILITY_RESPONSE.md) |
 | Where a secret may live, and what redaction guarantees | [`SECURITY_BASELINE.md`](../security/SECURITY_BASELINE.md) |
+| What interface a stored secret is reached through, and what the platform beneath it guarantees | [`SECRET_STORE_CONTRACT.md`](../security/SECRET_STORE_CONTRACT.md) |
 | Who owns which change, and which paths are security-sensitive | [`GOVERNANCE.md`](../security/GOVERNANCE.md) |
 | Git procedure | [`GIT_WORKFLOW.md`](../GIT_WORKFLOW.md) |
 | How a version is chosen, tagged and published | [`RELEASE_POLICY.md`](../release/RELEASE_POLICY.md) |

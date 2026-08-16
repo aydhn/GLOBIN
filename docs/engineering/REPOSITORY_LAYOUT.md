@@ -90,6 +90,7 @@ responsibilities and the test that enforces them.
 | `scripts/` | Host-specific entry points that must not be importable — currently the PowerShell gate | Logic worth testing; that belongs in `tools/` |
 | `tools/` | Importable, typed, tested development tooling that acts on the repository | Anything the application imports, or that ships in a distribution |
 | `.github/` | Repository templates | Configuration that belongs in `pyproject.toml` |
+| `pylock.*.toml` | A generated, committed dependency lock, at the root because PEP 751 fixes the name and every consumer looks there | Anything hand-written; regenerate it with `python -m tools.quality.lock relock` |
 
 ### The `scripts/` and `tools/` split
 
@@ -138,7 +139,7 @@ not add `setup.cfg`, `tox.ini`, `.flake8`, `mypy.ini`, `pytest.ini` or a second
 table for a tool that already has one — see
 [`SOURCE_OF_TRUTH.md`](SOURCE_OF_TRUTH.md).
 
-Two other `.toml` files exist and neither is configuration, which is the
+Other `.toml` files exist and none of them is configuration, which is the
 distinction to hold on to. `docs/architecture/dependency-rules.toml` is a
 **contract**: it states what is permitted, and the suite reads it. Since Phase
 008, `docs/engineering/mutation-baseline.toml` is **evidence**: it records what
@@ -146,6 +147,17 @@ was measured and why each exception was accepted. Settings say how a tool should
 behave; a contract says what the code must satisfy; evidence says what was found.
 A file that is not the first belongs beside the document explaining it, not in
 `pyproject.toml`.
+
+Since Phase 020 there is a **fourth** kind, and it is the reason `pylock.dev.toml`
+sits at the root rather than under `docs/`. A lock is *generated*, *committed* and
+*installed from*: unlike a contract nobody writes it by hand, and unlike evidence
+it is not regenerable from the tree alone, because producing it needs an index.
+Its name is fixed by PEP 751 — `pylock.toml` or `pylock.<name>.toml` — and
+`pip-audit --locked` globs exactly that at a project path, so it lives beside the
+three declaration registers rather than beside the document that explains it. That
+document is [`DEPENDENCY_LOCKING.md`](DEPENDENCY_LOCKING.md), and the hand-written
+declaration it reads, `lock-policy.toml`, is an ordinary contract in the usual
+place.
 
 `config/` is reserved for non-secret runtime configuration when a later phase
 genuinely needs it. Phase 007 delivered the configuration *model* — see

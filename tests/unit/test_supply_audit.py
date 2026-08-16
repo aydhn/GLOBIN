@@ -10,8 +10,10 @@ turns a failed audit into a clean one.**
 """
 
 import json
+import subprocess
 from dataclasses import replace
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -160,15 +162,29 @@ def test_the_open_count_excludes_waived_findings_but_the_report_does_not() -> No
     assert len(report.vulnerabilities) == 1
 
 
-def test_the_requirements_file_is_sorted_and_deduplicated() -> None:
-    """``pip-audit`` caches by content, so the bytes must not vary with input order."""
-    first = audit.requirements((("ruff", "0.15.14"), ("mypy", "2.1.0"), ("ruff", "0.15.14")))
-    second = audit.requirements((("mypy", "2.1.0"), ("ruff", "0.15.14")))
-    assert first == second == "mypy==2.1.0\nruff==0.15.14\n"
+def test_the_audit_reads_the_lock_and_resolves_nothing(tmp_path: Path) -> None:
+    """Since Phase 020 the audited set is the locked set.
 
+    Before it, this module wrote a requirements file from the inventory's exact
+    pins and let `pip-audit` resolve it against a live index *at audit time* — so
+    the report described a resolution nobody had installed, and two runs on one
+    commit could disagree. `--locked` resolves nothing, so the audited set and the
+    set `scripts/bootstrap.ps1` installs are the same set.
 
-def test_an_empty_pinned_set_is_a_failure_rather_than_a_clean_audit() -> None:
-    """Auditing nothing successfully is not the same as finding nothing."""
-    report = audit.run((), ())
-    assert report.outcome is not audit.Outcome.CLEAN
-    assert not report.measured
+    Asserted through the argv, because that is where the change lives. `--strict`
+    is checked here too: without it a package whose version cannot be determined
+    is skipped, and skipped is counted as fine.
+    """
+    seen: list[list[str]] = []
+
+    def record(argv: list[str], **_kwargs: object) -> "subprocess.CompletedProcess[str]":
+        seen.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout=CLEAN, stderr="")
+
+    audit.run(tmp_path, (), runner=record)
+    assert seen, "pip-audit was never started"
+    assert "--locked" in seen[0]
+    assert str(tmp_path) in seen[0]
+    assert "--strict" in seen[0]
+    assert "--fix" not in seen[0]
+    assert not any(argument.endswith("requirements.txt") for argument in seen[0])
