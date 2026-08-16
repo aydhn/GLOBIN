@@ -371,10 +371,26 @@ def test_a_cpu_workload_never_errors_whether_or_not_numpy_is_installed() -> None
         assert "numpy" in taken.detail
 
 
-def test_an_unadopted_backend_records_the_library_it_needed() -> None:
+def test_a_device_backend_records_which_kind_of_absence_this_host_has() -> None:
+    """`unavailable` and `absent` are different facts, and both are correct answers.
+
+    Which one appears depends on the host, and this is the assertion that proves
+    the distinction is real rather than decorative. A machine with no `torch` at
+    all reports `unavailable` naming the library, because installing it might
+    help. A machine with a CPU-only `torch` — which is what CPython 3.12 has on
+    this development host — reports `absent`, because installing more would not.
+
+    Telling an operator to install something that would not help them is a
+    different kind of wrong from telling them nothing, which is the whole reason
+    ADR-0062 keeps the two states apart. Never `measured`: nothing here is stubbed,
+    and never `error`, because neither absence is a defect.
+    """
     taken = measure(workload("matmul.cuda", backend="cuda"), 0, 1, "minimum")
-    assert taken.state is State.UNAVAILABLE
-    assert "torch" in taken.detail
+    assert taken.state in {State.UNAVAILABLE, State.ABSENT}
+    if taken.state is State.UNAVAILABLE:
+        assert "torch" in taken.detail
+    else:
+        assert "CUDA device" in taken.detail
 
 
 def test_a_backend_with_no_runner_is_an_error() -> None:

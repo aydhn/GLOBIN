@@ -688,7 +688,7 @@ class FilesystemTreeProbe:
         """
         try:
             anchor = self.root.resolve()
-        except OSError:
+        except (OSError, ValueError):
             return PathSummary(root_present=False)
         rows = tuple(
             self._area(anchor, str(area), self.root / self.layout.segment_for(area))
@@ -708,6 +708,14 @@ class FilesystemTreeProbe:
         Returns:
             Name, present, is a directory, writable, inside the root.
 
+        **``ValueError`` is caught beside ``OSError``, and the difference between
+        interpreter versions is why.** A path carrying an embedded NUL raises
+        ``ValueError`` from ``pathlib`` on CPython 3.12 and is handled without
+        raising at all on 3.14 — so a probe catching only ``OSError`` reports
+        correctly on one supported interpreter and crashes on another. This is a
+        diagnostic: it reports what it could not determine rather than raising,
+        whichever version it happens to be running under.
+
         Writability is tested with ``os.access`` rather than by creating a file.
         A probe that wrote a marker into every area on every snapshot would be a
         diagnostic that changes the thing it measures, and on a full disk it would
@@ -718,7 +726,7 @@ class FilesystemTreeProbe:
             directory = path.is_dir()
             writable = directory and os.access(path, os.W_OK)
             inside = path.resolve().is_relative_to(anchor)
-        except OSError:
+        except (OSError, ValueError):
             return (name, False, False, False, False)
         return (name, present, directory, writable, inside)
 
