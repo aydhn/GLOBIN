@@ -380,14 +380,17 @@ def _talib_indicator_table_is_complete() -> tuple[str, ...]:
     """
     import talib
 
-    # The wrapper is Cython and ships no `py.typed`, so both of these are untyped
-    # calls in a typed context on any host that actually has it installed. The
-    # values are converted to tuples of `str` here, at the boundary, and everything
-    # downstream is checked strictly.
-    return indicator_table_problems(
-        functions=tuple(talib.get_functions()),  # type: ignore[no-untyped-call]
-        groups=tuple(talib.get_function_groups()),  # type: ignore[no-untyped-call]
-    )
+    # Bound to typed names before being called, and a suppression comment would
+    # have been the wrong tool. The wrapper is Cython and ships no `py.typed`, so
+    # on a host that HAS it installed these are untyped calls in a typed context —
+    # but the CI `quality` job installs no runtime lock, so there talib is absent,
+    # every attribute is `Any`, and a `type: ignore` would be flagged as unused.
+    # Suppressing would therefore have failed in exactly one of the two
+    # environments whichever way it was written. Naming the types instead is true
+    # in both, and states the boundary this module converts at.
+    listed: Callable[[], list[str]] = talib.get_functions
+    grouped: Callable[[], Mapping[str, list[str]]] = talib.get_function_groups
+    return indicator_table_problems(functions=tuple(listed()), groups=tuple(grouped()))
 
 
 def _talib_moving_average_warmup_is_the_documented_length() -> tuple[str, ...]:
