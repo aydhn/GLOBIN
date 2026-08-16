@@ -67,13 +67,21 @@ reason = "The study infrastructure Phase 211 establishes."
 
 [[library]]
 name = "ta-lib"
-phase = 25
+phase = 114
 version = "0.7.1"
 requires_python = ">=3.9"
 wheels = ["ta_lib-0.7.1-cp314-cp314-win_amd64.whl"]
 verdict = "available"
 source = "https://pypi.org/pypi/ta-lib/json"
-reason = "The wrapper Phases 025 and 114 name."
+reason = "The wrapper Phase 114 wraps."
+"""
+"""A survey that is well formed, used by most of the tests below.
+
+Synthetic rather than a copy of the committed file, so that a change to the real
+survey cannot silently change what these tests exercise. ``ta-lib`` is kept as the
+second entry because its wheel set — ``cp314`` with no ``cp314t`` — is what drives
+the free-threaded checks, and it names Phase 114 because Phase 025 adopted it and
+``phase_problems`` refuses an entry naming a phase that has shipped.
 """
 
 
@@ -279,7 +287,13 @@ def test_a_gap_belonging_to_nobody_fails(tmp_path: Path, reports: Path) -> None:
 def test_a_gap_owned_by_a_future_phase_passes_and_is_recorded(
     tmp_path: Path, reports: Path
 ) -> None:
-    root = build_tree(tmp_path / "tree", survey=survey_with_a_gap(owner=25))
+    """A recorded gap is a decision when a phase that has not started owns it.
+
+    The owner is 114 rather than 25 because Phase 025 shipped, and this gate
+    refuses a gap assigned to a phase that has already delivered — which is the
+    neighbouring test.
+    """
+    root = build_tree(tmp_path / "tree", survey=survey_with_a_gap(owner=114))
     assert gate.run_wheels(root=root, reports=reports) == gate.EXIT_OK
 
 

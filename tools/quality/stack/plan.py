@@ -62,6 +62,27 @@ FLOAT64_DTYPE: Final[str] = "float64"
 UTC_NAME: Final[str] = "UTC"
 """The timezone name a UTC-aware column must report."""
 
+MINIMUM_INDICATOR_COUNT: Final[int] = 150
+"""How many indicators a fully linked TA-Lib must expose.
+
+A floor rather than the measured figure. The wrapper published 161 on this host,
+and pinning that number would fail the day upstream adds one — which is a release
+note, not a defect. What the floor actually distinguishes is a linked library from
+a module that imported with an empty function table.
+"""
+
+MINIMUM_INDICATOR_GROUPS: Final[int] = 6
+"""How many indicator groups that table must span, for the same reason."""
+
+SMA_SERIES_LENGTH: Final[int] = 20
+"""How many points the moving-average probe feeds in."""
+
+SMA_PERIOD: Final[int] = 5
+"""The averaging window that probe asks for."""
+
+SMA_EXPECTED_TAIL: Final[float] = 18.0
+"""``mean(16, 17, 18, 19, 20)``, which consecutive integers make exact in binary64."""
+
 
 class StackError(Exception):
     """The stack declaration could not be read, or does not describe a stack."""
@@ -165,6 +186,9 @@ def implemented_probes() -> frozenset[str]:
             "pandas.missing_value_survives_a_round_trip",
             "pandas.utc_timestamp_round_trip_preserves_the_instant",
             "pandas.copy_on_write_is_active",
+            "talib.native_library_is_carried_by_the_wheel",
+            "talib.indicator_table_is_complete",
+            "talib.moving_average_warmup_is_the_documented_length",
         }
     )
 
@@ -318,6 +342,118 @@ def timestamp_problems(
         problems.append("the timestamp did not compare equal to the one that went in")
     if not is_utc:
         problems.append("the returned timestamp is not UTC-aware, which TIME_POLICY.md requires")
+    return tuple(problems)
+
+
+def native_library_problems(
+    *, reported_version: str, extension_modules: Sequence[str], external_libraries: Sequence[str]
+) -> tuple[str, ...]:
+    """Judge whether the wheel carried the native TA-Lib C library.
+
+    Args:
+        reported_version: What ``talib.__ta_version__`` said, decoded. Empty when
+            the attribute was absent.
+        extension_modules: Compiled artefacts the distribution ships.
+        external_libraries: Shared libraries it ships *beside* the extension.
+
+    Returns:
+        One sentence per disagreement, empty when the library is carried.
+
+    This is the measurement Phase 025 exists to make.
+    ``docs/engineering/wheel-survey.toml`` refused to conclude from the filename
+    ``ta_lib-0.7.1-cp314-cp314-win_amd64.whl`` that the native library is inside
+    it, because the wrapper has historically required a separately installed C
+    library on Windows and a wheel name cannot say whether that is still true.
+
+    **The version string is the proof, not the file list.** ``__ta_version__`` is
+    answered by the C library itself, so a non-empty reply means it linked,
+    initialised and ran. A file list can only say what was shipped.
+    ``external_libraries`` is reported rather than refused: a wheel that carried
+    the library in a companion DLL would satisfy this phase just as well as one
+    that linked it statically, and refusing the shape would be refusing an
+    implementation detail upstream is entitled to change.
+    """
+    problems: list[str] = []
+    if not reported_version:
+        problems.append(
+            "talib reported no __ta_version__, so the native C library did not answer; "
+            "the wrapper is installed and unusable"
+        )
+    elif not any(character.isdigit() for character in reported_version):
+        problems.append(
+            f"talib reported __ta_version__ {reported_version!r}, which names no version, "
+            "so what answered is not the library"
+        )
+    if not extension_modules and not external_libraries:
+        problems.append(
+            "the ta-lib distribution ships no compiled artefact at all, so nothing in it "
+            "could carry the native library"
+        )
+    return tuple(problems)
+
+
+def indicator_table_problems(*, functions: Sequence[str], groups: Sequence[str]) -> tuple[str, ...]:
+    """Judge whether the linked library exposes a complete indicator table.
+
+    Args:
+        functions: Every indicator name the wrapper reports.
+        groups: Every group name it reports.
+
+    Returns:
+        One sentence per disagreement.
+
+    A truncated table is the failure mode a version string cannot catch: the
+    library answered, so it linked, but a partially initialised one would offer a
+    subset. Phase 113 selects from this table and Phase 114 wraps it, so a subset
+    would narrow both silently.
+    """
+    problems: list[str] = []
+    if len(functions) < MINIMUM_INDICATOR_COUNT:
+        problems.append(
+            f"talib exposes {len(functions)} indicators, and a linked TA-Lib exposes at "
+            f"least {MINIMUM_INDICATOR_COUNT}"
+        )
+    if len(groups) < MINIMUM_INDICATOR_GROUPS:
+        problems.append(
+            f"talib reports {len(groups)} indicator groups, and a linked TA-Lib reports at "
+            f"least {MINIMUM_INDICATOR_GROUPS}"
+        )
+    if len(set(functions)) != len(functions):
+        problems.append("talib reported the same indicator more than once")
+    return tuple(problems)
+
+
+def warmup_problems(*, leading_gaps: int, final_value: float) -> tuple[str, ...]:
+    """Judge whether a moving average is seeded where the convention says.
+
+    Args:
+        leading_gaps: How many not-a-numbers the result opens with.
+        final_value: The last value the average produced.
+
+    Returns:
+        One sentence per disagreement.
+
+    **This is the probe that defends a rule rather than a behaviour.** An
+    indicator whose warm-up were one bar short would emit its first value using a
+    window that reaches back further than it claims, and every later value would
+    be shifted by one bar. That is look-ahead — the thing
+    ``docs/ARCHITECTURE_PRINCIPLES.md`` says must be impossible by construction —
+    arriving through a library rather than through GLOBIN's own code, and arriving
+    as a plausible number rather than as a failure. Every indicator in the library
+    shares this seeding convention, so measuring one measures the convention.
+    """
+    problems: list[str] = []
+    expected_gaps = SMA_PERIOD - 1
+    if leading_gaps != expected_gaps:
+        problems.append(
+            f"a {SMA_PERIOD}-period average opened with {leading_gaps} gaps, and the "
+            f"convention seeds it with {expected_gaps}"
+        )
+    if final_value != SMA_EXPECTED_TAIL:
+        problems.append(
+            f"a {SMA_PERIOD}-period average of consecutive integers ended at "
+            f"{final_value!r}, and the exact answer is {SMA_EXPECTED_TAIL!r}"
+        )
     return tuple(problems)
 
 

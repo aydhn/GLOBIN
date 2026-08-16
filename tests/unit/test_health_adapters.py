@@ -29,10 +29,10 @@ from globin.adapters.health import (
     SystemThreadProbe,
     TracemallocProbe,
     UnavailableProcessProbe,
-    _relative_location,
     _sanitised_name,
     _seconds_to_nanoseconds,
     cpu_percent_reading,
+    relative_location,
     snapshot_document,
     system_host_probe,
     system_process_probe,
@@ -488,11 +488,11 @@ def test_the_real_tracer_reports_a_sanitised_location() -> None:
 
 def test_a_module_under_the_package_is_named_relative_to_it() -> None:
     here = str(Path(__file__).resolve().parents[2] / "src" / "globin" / "domain" / "health.py")
-    assert _relative_location(here).startswith("globin/")
+    assert relative_location(here).startswith("globin/")
 
 
 def test_an_unattributable_path_is_reduced_to_its_filename() -> None:
-    assert _relative_location("Z:/somewhere/private/mod.py") == "mod.py"
+    assert relative_location("Z:/somewhere/private/mod.py") == "mod.py"
 
 
 # ---------------------------------------------------------------------------

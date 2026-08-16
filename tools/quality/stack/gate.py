@@ -95,13 +95,19 @@ RUNTIME_LOCK: Final[str] = "pylock.toml"
 PROJECT_MANIFEST: Final[str] = "pyproject.toml"
 """The manifest that bounds them."""
 
-DELIVERED_PHASE: Final[int] = 22
+DELIVERED_PHASE: Final[int] = 25
 """A floor on what has shipped: no deferral may name this phase or an earlier one.
 
 A floor rather than a mirror, for the reason ``tools/quality/wheels/gate.py`` gives
 about its own constant: requiring equality would oblige every remaining phase to
 edit this line, and a constant that must be bumped to keep an unrelated suite green
 is a constant people bump without reading.
+
+Raised from 22 to 25 by Phase 025, and raising it found something. Two of the four
+deferrals ADR-0058 recorded had been answered while the floor sat below them: the
+TA-Lib question this phase closes, and the GPU question Phases 023 and 024 closed.
+The second had been quietly false since Phase 023 shipped, which is exactly the
+staleness the bound exists to catch and exactly what a floor left too low cannot.
 """
 
 ROADMAP_TOTAL_PHASES: Final[int] = 320

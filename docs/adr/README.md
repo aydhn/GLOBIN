@@ -128,6 +128,9 @@ a future reader can judge whether the reason still holds.
 | [0061](0061-phase-024-widens-to-deliver-runtime-health-and-support-bundles.md) | Phase 024 widens to deliver runtime health and support bundles, and this is the eighth amendment | Accepted |
 | [0062](0062-workload-benefit-is-measured-and-a-timing-is-not-evidence-of-reproducibility.md) | Workload benefit is measured against a declared contract, and a timing is not evidence of reproducibility | Accepted |
 | [0063](0063-a-support-bundle-is-allowlist-first-self-validating-and-atomically-published.md) | A measurement that was not taken is never zero, and a support bundle is allowlist-first, self-validating and atomically published | Accepted |
+| [0064](0064-phase-025-widens-to-deliver-the-runtime-watchdog.md) | Phase 025 widens to deliver the runtime watchdog alongside TA-Lib, and this is the ninth amendment | Accepted |
+| [0065](0065-liveness-is-monotonic-and-escalation-is-bounded-from-the-stall.md) | Liveness is a monotonic sequence rather than a timestamp, and escalation is bounded from the stall rather than from the request | Accepted |
+| [0066](0066-a-stack-may-be-published-once-its-paths-are-reduced-and-it-stays-out-of-a-bundle.md) | A stack may be published once its paths are reduced and it stays out of a support bundle | Accepted |
 
 ## Relationship to other documents
 

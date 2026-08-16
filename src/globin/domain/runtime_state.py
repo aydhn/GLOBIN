@@ -153,6 +153,19 @@ class ShutdownReason(StrEnum):
     different routes and an operator reading the record wants to know which:
     ``INTERRUPTED`` is a keyboard interrupt in a foreground session, ``SIGNALLED``
     is a termination request from something else.
+
+    **A watchdog-requested stop is ``SIGNALLED``, and no member was added for it.**
+    Phase 025 lets the process ask itself to stop, and "something else asked" is
+    what that is — the watchdog is as external to the work as an operator's
+    ``SIGTERM``. What this record deliberately does not carry is *which* something,
+    because a run can only be stopped once and the detail belongs where the rest of
+    the post-mortem is: ``state/watchdog.json``, correlated by ``run_id``. Splitting
+    the enum would have put half an answer in each of two files.
+
+    Note also which case never reaches here at all. If the watchdog escalates, the
+    process is ended by :class:`~globin.ports.watchdog.ProcessTerminator` and no
+    closing record is written — the last durable evidence is the incident, which is
+    published before the exit precisely because this is not.
     """
 
     COMPLETED = "completed"

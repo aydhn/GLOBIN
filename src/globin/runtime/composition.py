@@ -20,11 +20,12 @@ ADR-0015 names in its own risk section.
 import os
 import signal
 import sys
+import threading
 import types
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, TextIO
+from typing import IO, Final, TextIO
 
 import globin
 from globin.adapters.architecture import AstModuleImportSource, TomlArchitectureContractSource
@@ -81,6 +82,13 @@ from globin.adapters.runtime_state import ProjectRuntimeTree as UserRuntimeTree
 from globin.adapters.runtime_state import render as render_state_document
 from globin.adapters.serialization import JsonCodec
 from globin.adapters.support import ZipArchiveWriter, digest_of
+from globin.adapters.watchdog import (
+    ImmediateProcessExit,
+    ProcessStackEvidence,
+    SharedHeartbeatRegistry,
+    WatchdogThread,
+    heartbeats,
+)
 from globin.application.architecture_review import ArchitectureReview
 from globin.application.bootstrap import BootstrapPipeline
 from globin.application.configuration import ConfigurationResolution
@@ -88,6 +96,7 @@ from globin.application.health import HealthCollector
 from globin.application.lifecycle import Lifecycle
 from globin.application.observability import Logger
 from globin.application.support import BundleBuilder, Candidate
+from globin.application.watchdog import RuntimeWatchdog
 from globin.domain.bootstrap import (
     BootstrapOutcome,
     ProjectIdentity,
@@ -106,10 +115,12 @@ from globin.domain.runtime_state import (
     RuntimeLayout,
 )
 from globin.domain.support import ArtifactKind, safe_member_name
+from globin.domain.watchdog import WatchdogEpisode
 from globin.errors import ConfigurationError
 from globin.ports.clock import Clock, MonotonicClock
 from globin.ports.configuration import ConfigurationSource
 from globin.ports.serialization import Codec
+from globin.ports.watchdog import ProcessTerminator
 
 CONTRACT_RELATIVE_PATH: Final[str] = "docs/architecture/dependency-rules.toml"
 """Where the declared contract lives, relative to the repository root."""
@@ -119,6 +130,13 @@ PACKAGE_RELATIVE_PATH: Final[str] = "src/globin"
 
 ROOT_PACKAGE: Final[str] = "globin"
 """The import namespace the review is scoped to."""
+
+MILLISECONDS_PER_SECOND: Final[float] = 1000.0
+"""What a millisecond setting is divided by to reach the seconds a wait takes.
+
+A float because :meth:`threading.Event.wait` takes seconds as a float, and the
+one place the conversion happens is here rather than at the call site.
+"""
 
 DEFAULT_PROFILE: Final[str] = "default"
 """The profile name recorded until Phase 026 defines any.
@@ -836,3 +854,116 @@ def _reader(path: Path) -> Callable[[], bytes]:
         return path.read_bytes()
 
     return read
+
+
+WATCHDOG_FILE: Final[str] = "watchdog.json"
+"""Where a stall incident is published inside the state area.
+
+Deliberately **not** a support-bundle candidate, and that absence is the answer to
+Phase 024's refusal to put stacks in the health surface. The objection there was
+about travel: a health snapshot goes into a bundle and from there to whoever an
+operator sends it to. This document is a local post-mortem in the user-local
+runtime tree, and ``tests/contract`` asserts it stays out of
+:func:`bundle_candidates`.
+"""
+
+
+def build_heartbeats(monotonic: MonotonicClock | None = None) -> SharedHeartbeatRegistry:
+    """The heartbeat table every monitored component reports into.
+
+    Args:
+        monotonic: The clock a beat is stamped with.
+
+    Returns:
+        The registry, which satisfies both watchdog heartbeat ports.
+
+    Built separately from the watchdog because its lifetime is different: a
+    component registers once at wiring time, and the watchdog may be armed and
+    stood down around it.
+    """
+    return heartbeats(build_monotonic_clock() if monotonic is None else monotonic)
+
+
+def build_watchdog(
+    state: RuntimeState,
+    beats: SharedHeartbeatRegistry,
+    *,
+    run_id: str,
+    correlation_id: str,
+    config: GlobinConfig | None = None,
+    logger: Logger | None = None,
+    clock: Clock | None = None,
+    monotonic: MonotonicClock | None = None,
+    faults: IO[str] | None = None,
+    terminator: ProcessTerminator | None = None,
+    new_incident_id: Callable[[], str] | None = None,
+) -> WatchdogThread:
+    """The watchdog, wired to this runtime tree and not started.
+
+    Args:
+        state: The runtime tree its incident is published into.
+        beats: The heartbeat table it reads.
+        run_id: Which run this is.
+        correlation_id: The run's correlation identifier.
+        config: Where the thresholds come from.
+        logger: Where its records go.
+        clock: The wall clock, read once per incident.
+        monotonic: The clock every elapsed quantity is measured on.
+        faults: An already-open fault file for the native dump. ``None`` when
+            diagnostics were never started, which the collector records rather than
+            treats as an error.
+        terminator: What ends the process. Substituted in tests so that no test
+            ever kills the runner.
+        new_incident_id: Mints an incident identifier.
+
+    Returns:
+        The thread, **not started**. Starting it creates a thread and arms a
+        mechanism that can end the process, which is a decision for the caller that
+        owns the process — the same rule :func:`build_diagnostics` follows.
+    """
+    settings = default_config() if config is None else config
+    resolved_logger = build_logger(config=settings) if logger is None else logger
+    cycle = RuntimeWatchdog(
+        monotonic=build_monotonic_clock() if monotonic is None else monotonic,
+        clock=build_clock() if clock is None else clock,
+        beats=beats,
+        policy=settings.watchdog.policy(),
+        evidence=ProcessStackEvidence(handle=faults),
+        signals=state.signals,
+        terminator=ImmediateProcessExit() if terminator is None else terminator,
+        logger=resolved_logger,
+        run_id=run_id,
+        correlation_id=correlation_id,
+        new_incident_id=new_correlation_id if new_incident_id is None else new_incident_id,
+        episode=WatchdogEpisode(),
+        publish=_watchdog_publisher(state),
+        enabled=settings.watchdog.enabled,
+        escalation_enabled=settings.watchdog.escalation_enabled,
+    )
+    return WatchdogThread(
+        cycle=cycle,
+        wake=threading.Event(),
+        interval_seconds=settings.watchdog.interval_millis / MILLISECONDS_PER_SECOND,
+        logger=resolved_logger,
+    )
+
+
+def _watchdog_publisher(state: RuntimeState) -> Callable[[Mapping[str, object]], None]:
+    """How a stall incident reaches disk.
+
+    Args:
+        state: The runtime tree.
+
+    Returns:
+        A callable that publishes atomically.
+
+    It takes no notice of ``watchdog.escalation_enabled``, and the omission is the
+    decision: that switch changes whether the process is ended, never whether the
+    evidence is kept. An operator who turned the killing off still wants to know
+    what happened — arguably more, since nothing else will tell them.
+    """
+
+    def publish(document: Mapping[str, object]) -> None:
+        state.store.publish(RuntimeArea.STATE, WATCHDOG_FILE, document)
+
+    return publish

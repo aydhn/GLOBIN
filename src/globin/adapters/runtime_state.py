@@ -747,11 +747,29 @@ class PlatformShutdownSignals:
         """
         self.stopped = True
 
+    def request(self) -> None:
+        """Ask this process to stop, from inside it.
+
+        Deliberately the same single line as :meth:`_handle`, and the sameness is
+        the design rather than a coincidence. One latch, written two ways, read
+        once — so :meth:`~globin.application.lifecycle.Session.stop_requested` sees
+        a watchdog's request exactly as it sees an operator's ``Ctrl+C``.
+
+        **A plain attribute store, and it must stay one.** Making :attr:`stopped`
+        an :class:`threading.Event` would put a lock acquisition on this line and
+        on :meth:`_handle`, and the class docstring above records why a lock inside
+        a signal handler is the one thing this type may not do. There is no
+        read-modify-write to protect, so nothing is lost by having no lock: the
+        store is a single bytecode and the value only ever moves one way.
+        """
+        self.stopped = True
+
     def requested(self) -> bool:
         """Whether a stop has been asked for.
 
         Returns:
-            ``True`` once a handled signal has arrived.
+            ``True`` once a handled signal has arrived, or :meth:`request` was
+            called.
         """
         return self.stopped
 

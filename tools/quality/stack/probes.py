@@ -24,14 +24,19 @@ from importlib import metadata, util
 from typing import Final
 
 from tools.quality.stack.plan import (
+    SMA_PERIOD,
+    SMA_SERIES_LENGTH,
     Library,
     binary64_problems,
     copy_on_write_problems,
+    indicator_table_problems,
     missing_value_problems,
     nan_infinity_problems,
+    native_library_problems,
     overflow_problems,
     round_trip_problems,
     timestamp_problems,
+    warmup_problems,
 )
 
 WHEEL_METADATA: Final[str] = "WHEEL"
@@ -42,6 +47,20 @@ TAG_FIELD: Final[str] = "tag:"
 
 INT64_MAXIMUM: Final[int] = 2**63 - 1
 """The value the overflow probe adds one to."""
+
+TALIB_DISTRIBUTION: Final[str] = "ta-lib"
+"""The distribution name, which is not the module name. The module is ``talib``."""
+
+EXTENSION_SUFFIXES: Final[tuple[str, ...]] = (".pyd", ".so")
+"""What a compiled Python extension is called, on Windows and elsewhere."""
+
+LIBRARY_SUFFIXES: Final[tuple[str, ...]] = (".dll", ".dylib")
+"""What a shared library shipped beside one is called.
+
+Reported rather than refused. On this host TA-Lib's C library is linked into the
+extension and no companion library ships, but a wheel that shipped one would carry
+the library just as well, and the probe is about whether the library is *there*.
+"""
 
 SAMPLE_INSTANT: Final[str] = "2026-08-16T12:34:56.789000Z"
 """The timestamp the round-trip probe uses.
@@ -309,6 +328,88 @@ def _pandas_copy_on_write_is_active() -> tuple[str, ...]:
     return copy_on_write_problems(parent_unchanged=bool(parent["x"].iloc[0] == 1.0))
 
 
+def _shipped_binaries(distribution: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Which compiled artefacts a distribution installed.
+
+    Args:
+        distribution: The distribution name to read.
+
+    Returns:
+        Extension modules, then shared libraries shipped beside them. Both empty
+        when the distribution is not installed, which the probe's judgement turns
+        into a finding rather than a crash.
+    """
+    try:
+        files = metadata.distribution(distribution).files or []
+    except metadata.PackageNotFoundError:
+        return (), ()
+    names = [str(item) for item in files]
+    extensions = tuple(name for name in names if name.lower().endswith(EXTENSION_SUFFIXES))
+    libraries = tuple(name for name in names if name.lower().endswith(LIBRARY_SUFFIXES))
+    return extensions, libraries
+
+
+def _talib_native_library_is_carried_by_the_wheel() -> tuple[str, ...]:
+    """Ask the native TA-Lib library to name itself.
+
+    Returns:
+        What was wrong, empty when the wheel carried it.
+
+    ``__ta_version__`` is answered by the C library rather than by the wrapper, so
+    a reply proves it linked and initialised. It is ``bytes`` on this host, and the
+    decode handles ``str`` too — the attribute is not documented in the project's
+    README, so its type is a measurement rather than a contract.
+    """
+    import talib
+
+    raw = getattr(talib, "__ta_version__", b"")
+    reported = raw.decode("ascii", "replace") if isinstance(raw, bytes) else str(raw)
+    extensions, libraries = _shipped_binaries(TALIB_DISTRIBUTION)
+    return native_library_problems(
+        reported_version=reported.strip(),
+        extension_modules=extensions,
+        external_libraries=libraries,
+    )
+
+
+def _talib_indicator_table_is_complete() -> tuple[str, ...]:
+    """Count what the linked library actually offers.
+
+    Returns:
+        What was wrong, empty when the table is complete.
+    """
+    import talib
+
+    # The wrapper is Cython and ships no `py.typed`, so both of these are untyped
+    # calls in a typed context on any host that actually has it installed. The
+    # values are converted to tuples of `str` here, at the boundary, and everything
+    # downstream is checked strictly.
+    return indicator_table_problems(
+        functions=tuple(talib.get_functions()),  # type: ignore[no-untyped-call]
+        groups=tuple(talib.get_function_groups()),  # type: ignore[no-untyped-call]
+    )
+
+
+def _talib_moving_average_warmup_is_the_documented_length() -> tuple[str, ...]:
+    """Measure where a moving average starts emitting, and what it emits.
+
+    Returns:
+        What was wrong, empty when the seeding convention held.
+
+    Consecutive integers are used because their mean is exact in binary64, so the
+    value check is an equality rather than a tolerance — this probe is about a
+    convention, and a tolerance would let a one-bar shift through.
+    """
+    import numpy
+    import talib
+
+    series = numpy.arange(1.0, float(SMA_SERIES_LENGTH) + 1.0)
+    averaged = talib.SMA(series, timeperiod=SMA_PERIOD)
+    finite = numpy.flatnonzero(~numpy.isnan(averaged))
+    leading = int(finite[0]) if finite.size else int(averaged.size)
+    return warmup_problems(leading_gaps=leading, final_value=float(averaged[-1]))
+
+
 def registry() -> Mapping[str, Callable[[], tuple[str, ...]]]:
     """Every probe this module can run, by identifier.
 
@@ -330,6 +431,13 @@ def registry() -> Mapping[str, Callable[[], tuple[str, ...]]]:
             _pandas_utc_timestamp_round_trip_preserves_the_instant
         ),
         "pandas.copy_on_write_is_active": _pandas_copy_on_write_is_active,
+        "talib.native_library_is_carried_by_the_wheel": (
+            _talib_native_library_is_carried_by_the_wheel
+        ),
+        "talib.indicator_table_is_complete": _talib_indicator_table_is_complete,
+        "talib.moving_average_warmup_is_the_documented_length": (
+            _talib_moving_average_warmup_is_the_documented_length
+        ),
     }
 
 

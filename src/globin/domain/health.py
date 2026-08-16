@@ -38,6 +38,7 @@ from typing import Final
 
 from globin.domain.clock import Duration, Instant
 from globin.domain.observability import redact
+from globin.domain.watchdog import WatchdogSummary
 from globin.errors import ValidationError
 
 HEALTH_SCHEMA_VERSION: Final[int] = 1
@@ -709,10 +710,21 @@ class ThreadDescription:
         daemon: Whether the interpreter will exit without waiting for it.
         main: Whether it is the interpreter's main thread.
 
-    **No stack.** A stack trace names functions, files and line numbers, and a
-    thread parked inside a credential read would say so. Phase 023's
+    **No stack in the health surface**, and the qualifier is load-bearing. A stack
+    trace names functions, files and line numbers, and a thread parked inside a
+    credential read would say so — and *this* document travels, into a support
+    bundle and from there to whoever an operator sends it to. Phase 023's
     ``faulthandler`` already writes stacks, deliberately, into a file that is not
-    the log and is not a bundle candidate by default.
+    the log.
+
+    Phase 025 does publish thread stacks, and answers this refusal on its own terms
+    rather than overriding it: a stall incident is written to the user-local
+    ``state/watchdog.json``, is deliberately **not** a support-bundle candidate, and
+    reduces every frame's filename through :func:`~globin.adapters.health.relative_location`
+    — the same reduction :class:`AllocationSite` already uses. What crosses into
+    this surface from the watchdog is
+    :class:`~globin.domain.watchdog.WatchdogSummary`, which is counts and names.
+    Reasoning: ADR-0066.
     """
 
     name: str
@@ -926,6 +938,10 @@ class RuntimeHealthSnapshot:
         logging: The diagnostics subsystem.
         threads: The live thread inventory.
         memory: The allocator tracer, present only when it was running.
+        watchdog: The liveness watchdog, present only when this process has one.
+            ``None`` is a real answer rather than a gap — a short-lived command
+            starts no watchdog, and Phase 025 deliberately added no long-running
+            one, so today this is ``None`` everywhere the CLI renders a snapshot.
         results: Every check's result, in registry order.
         state: What the results amount to.
         schema_version: The snapshot shape's version.
@@ -960,6 +976,7 @@ class RuntimeHealthSnapshot:
     threads: ThreadSummary
     state: RuntimeHealthState
     memory: MemorySummary | None = None
+    watchdog: WatchdogSummary | None = None
     results: tuple[HealthCheckResult, ...] = ()
     schema_version: int = HEALTH_SCHEMA_VERSION
     evidence_version: int = EVIDENCE_FORMAT_VERSION

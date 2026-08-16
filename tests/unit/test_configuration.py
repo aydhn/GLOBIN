@@ -42,6 +42,12 @@ from globin.domain.configuration import (
     TRACEMALLOC_ENABLED,
     TRACEMALLOC_FRAME_DEPTH,
     TRACEMALLOC_TOP,
+    WATCHDOG_ENABLED,
+    WATCHDOG_ESCALATE_MILLIS,
+    WATCHDOG_ESCALATION_ENABLED,
+    WATCHDOG_GRACE_MILLIS,
+    WATCHDOG_INTERVAL_MILLIS,
+    WATCHDOG_STALL_MILLIS,
     ConfigLayer,
     LoggingConfig,
     ResolvedConfig,
@@ -200,6 +206,12 @@ def test_the_known_keys_are_exactly_what_as_config_binds() -> None:
         TRACEMALLOC_ENABLED,
         TRACEMALLOC_FRAME_DEPTH,
         TRACEMALLOC_TOP,
+        WATCHDOG_ENABLED,
+        WATCHDOG_INTERVAL_MILLIS,
+        WATCHDOG_GRACE_MILLIS,
+        WATCHDOG_STALL_MILLIS,
+        WATCHDOG_ESCALATE_MILLIS,
+        WATCHDOG_ESCALATION_ENABLED,
     }
 
 

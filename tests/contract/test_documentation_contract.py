@@ -125,6 +125,16 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/research/phase_023_sources.md",
     "docs/engineering/GPU_CAPABILITY.md",
     "docs/engineering/RUNTIME_DIAGNOSTICS.md",
+    # Phase 024 wrote four artefacts and registered none of them, which is the
+    # third recurrence of the drift the two comments above record. Phase 025 adds
+    # them alongside its own rather than only its own, for the reason given there:
+    # a list required to be complete and quietly is not reads as a guarantee.
+    "docs/research/phase_024_sources.md",
+    "docs/research/phase_025_sources.md",
+    "docs/engineering/GPU_BENEFIT.md",
+    "docs/engineering/RUNTIME_HEALTH.md",
+    "docs/engineering/SUPPORT_BUNDLE.md",
+    "docs/engineering/RUNTIME_WATCHDOG.md",
 )
 
 #: Minimum byte length for a document to count as substantive rather than a

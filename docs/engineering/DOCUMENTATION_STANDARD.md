@@ -59,6 +59,7 @@ Every class of fact has exactly one document that owns it. Others link.
 | Whether a phase band is complete, and on what evidence | [`FOUNDATION_ACCEPTANCE.md`](../release/FOUNDATION_ACCEPTANCE.md) |
 | Whether the planned stack has wheels for the pinned interpreter | [`WHEEL_AVAILABILITY.md`](WHEEL_AVAILABILITY.md) |
 | Whether this host is still the host the gates were measured on, and what repairs each way it is not | [`ENVIRONMENT_DRIFT.md`](ENVIRONMENT_DRIFT.md) |
+| How a process notices it has stopped making progress, and what it does then | [`RUNTIME_WATCHDOG.md`](RUNTIME_WATCHDOG.md) |
 | Where files live | [`REPOSITORY_LAYOUT.md`](REPOSITORY_LAYOUT.md) |
 | Precedence between artefacts | [`SOURCE_OF_TRUTH.md`](SOURCE_OF_TRUTH.md) |
 | Terminology | [`GLOSSARY.md`](../GLOSSARY.md) |

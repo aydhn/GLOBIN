@@ -128,6 +128,7 @@ reason without parsing English.
 | 20 | Another GLOBIN coordinator is already running on this machine |
 | 21 | The runtime state could not be written |
 | 22 | A diagnostic could not be produced, which is not a health verdict |
+| 23 | The watchdog ended this process, which did not stop when asked. **No command returns this** — the watchdog terminates rather than returning, so a launcher seeing it knows the run did not choose its own ending. See [`RUNTIME_WATCHDOG.md`](RUNTIME_WATCHDOG.md). |
 
 Unmeasured outranks failed: a check that could not run has not passed, and
 reporting it as a specific failure would claim knowledge nobody has.

@@ -206,7 +206,15 @@ class InstanceLock(Protocol):
 
 
 class ShutdownSignals(Protocol):
-    """Notices that something has asked this process to stop."""
+    """Notices that something has asked this process to stop.
+
+    Note the name: *something*, not *a signal*. Only :meth:`install` was ever
+    signal-specific, and Phase 025 added :meth:`request` so that a stop asked for
+    from inside the process reaches the same latch a stop asked for from outside
+    does. One latch with two writers is what keeps
+    :meth:`~globin.application.lifecycle.Session.stop_requested` able to see both;
+    a second port with a second flag would have let one of them go unnoticed.
+    """
 
     def install(self) -> None:
         """Register handlers for whichever signals this platform has.
@@ -218,11 +226,27 @@ class ShutdownSignals(Protocol):
         """
         ...
 
+    def request(self) -> None:
+        """Ask this process to stop, from inside it.
+
+        Idempotent by construction rather than by a guard: the latch only ever goes
+        from unset to set, so calling this twice is calling it once.
+
+        **Safe from any thread, and safe for a reason worth writing down.** The
+        implementation must be a plain attribute store, exactly as the signal
+        handler is — an :class:`threading.Event` would take a lock, and the same
+        latch is written from a signal handler where CPython warns against
+        synchronisation primitives. There is no read-modify-write here, so there is
+        nothing for a lock to protect and no lock is permitted.
+        """
+        ...
+
     def requested(self) -> bool:
         """Whether a stop has been asked for.
 
         Returns:
-            ``True`` once a handled signal has arrived.
+            ``True`` once a handled signal has arrived, or :meth:`request` was
+            called.
 
         A handler sets a flag and returns; this is how the ordinary control flow
         learns about it. Nothing waits, blocks or does I/O inside a handler.

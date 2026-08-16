@@ -73,10 +73,20 @@ classifiers = [
 # so psutil is not there; `system_process_probe()` therefore records
 # `Availability.UNAVAILABLE` rather than raising, which is ADR-0045's rule applied
 # to a library instead of a device. See ADR-0063.
+#
+# ta-lib joins in Phase 025 and is a THIRD kind again. Like numpy and pandas it is
+# declared, locked and never imported; unlike either, the thing being provisioned
+# is not the Python distribution but the native C library inside its wheel.
+# `docs/engineering/wheel-survey.toml` refused to conclude from a filename that the
+# wheel carries it, so `docs/engineering/stack-contract.toml` measures it on this
+# host instead. Its review records one surprise worth knowing before reading the
+# lock diff: `build` is declared as an install requirement upstream, so
+# `packaging` and `pyproject_hooks` arrive with it.
 dependencies = [
     "numpy>=2.5.2",
     "pandas>=3.0.5",
     "psutil>=7.2.2",
+    "ta-lib>=0.7.1",
 ]
 
 # The one console entry point, introduced in Phase 021.
@@ -433,6 +443,30 @@ ignore_missing_imports = true
 # graph rather than trusting this comment.
 [[tool.mypy.overrides]]
 module = ["psutil"]
+ignore_missing_imports = true
+
+# `ta-lib` is a FIFTH override, and it needs two settings where the others needed
+# one. Its import name is `talib`, which is not its distribution name.
+#
+# `ignore_missing_imports` for psutil's first reason: the CI `quality` job has no
+# ta-lib, so without it mypy reports `import-not-found` there and passes locally.
+#
+# What this override deliberately does NOT do is silence the untyped calls. The
+# wrapper is Cython with no `py.typed`, so on a machine that has it installed every
+# call into it is an untyped call in a typed context. `disallow_untyped_calls =
+# false` here would not have worked anyway — a per-module override governs the
+# module being *checked*, not the module being *called* — and putting it on
+# `tools.quality.stack.probes` would have switched the rule off for that whole
+# file, including the numpy and pandas probes it also holds. The two calls carry
+# narrow suppressions at their own sites instead, which is one comment per real
+# fact rather than one setting hiding several.
+#
+# The untyped region is `tools/quality/stack/probes.py` and nothing else. Nothing
+# under `src/globin` may import it at all — `tests/architecture/test_stack_discipline.py`
+# derives that ban from `docs/engineering/stack-contract.toml`, so it holds without
+# anybody remembering this comment.
+[[tool.mypy.overrides]]
+module = ["talib"]
 ignore_missing_imports = true
 
 # `torch` is the fourth override and the only one for a library this repository

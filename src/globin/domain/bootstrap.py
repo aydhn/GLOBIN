@@ -107,6 +107,16 @@ class ExitCode(IntEnum):
     one, and :attr:`DIAGNOSTICS_FAILED` is the value for it. Collapsing the two
     would make *the process is unhealthy* and *nobody could tell* indistinguishable
     to the one consumer that most needs them apart.
+
+    **Phase 025 adds one value that no command ever returns.**
+    :attr:`WATCHDOG_STALLED` is the status a process leaves behind when the
+    watchdog ends it, and the watchdog ends it by terminating rather than by
+    returning — so nothing in ``globin.runtime.cli`` can produce this code, and a
+    launcher seeing it knows the run did not choose its own ending. That is the
+    whole point of giving it a number of its own rather than reusing
+    :attr:`INTERNAL`: a supervisor restarting on ``17`` and on ``23`` should not
+    behave the same way, because one is a defect and the other is the safety
+    mechanism working.
     """
 
     OK = 0
@@ -126,6 +136,7 @@ class ExitCode(IntEnum):
     INSTANCE_ALREADY_ACTIVE = 20
     RUNTIME_PERSISTENCE_FAILED = 21
     DIAGNOSTICS_FAILED = 22
+    WATCHDOG_STALLED = 23
 
 
 class PathLocation(StrEnum):

@@ -71,6 +71,29 @@ from globin.domain.support import (
     MINIMUM_ARCHIVE_BYTES,
     BundleLimits,
 )
+from globin.domain.watchdog import (
+    DEFAULT_ESCALATE_MILLIS as DEFAULT_WATCHDOG_ESCALATE_MILLIS,
+)
+from globin.domain.watchdog import (
+    DEFAULT_GRACE_MILLIS as DEFAULT_WATCHDOG_GRACE_MILLIS,
+)
+from globin.domain.watchdog import (
+    DEFAULT_INTERVAL_MILLIS as DEFAULT_WATCHDOG_INTERVAL_MILLIS,
+)
+from globin.domain.watchdog import (
+    DEFAULT_STALL_MILLIS as DEFAULT_WATCHDOG_STALL_MILLIS,
+)
+from globin.domain.watchdog import (
+    MAXIMUM_ESCALATE_MILLIS,
+    MAXIMUM_GRACE_MILLIS,
+    MAXIMUM_INTERVAL_MILLIS,
+    MAXIMUM_STALL_MILLIS,
+    MINIMUM_ESCALATE_MILLIS,
+    MINIMUM_GRACE_MILLIS,
+    MINIMUM_INTERVAL_MILLIS,
+    MINIMUM_STALL_MILLIS,
+    WatchdogPolicy,
+)
 from globin.errors import ConfigurationError, InternalError, ValidationError
 
 KEY_SEPARATOR: Final[str] = "."
@@ -85,6 +108,17 @@ DIAGNOSTICS_SECTION: Final[str] = "diagnostics"
 A second section, added in Phase 024. ``known_keys`` had until now been able to
 return one section's keys directly; it now unions two, which is the change a reader
 comparing this module against ``CONFIGURATION_POLICY.md`` should expect to find.
+"""
+
+WATCHDOG_SECTION: Final[str] = "watchdog"
+"""The section name liveness settings are filed under.
+
+A third section, added in Phase 025, and the smallest of the three on purpose.
+Only the four durations and the two switches are here; the bounds on how much
+evidence a stall may gather are ``Final`` constants in
+``globin.domain.watchdog``, because no operator has a basis for preferring
+twenty-four frames to thirty-two and ``CONFIGURATION_POLICY.md`` warns that this is
+exactly where such fields accumulate.
 """
 
 DEFAULTS_ORIGIN: Final[str] = "defaults"
@@ -170,6 +204,18 @@ TRACEMALLOC_FRAME_DEPTH: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}trac
 """How many frames each traced allocation retains."""
 
 TRACEMALLOC_TOP: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}tracemalloc_top"
+
+WATCHDOG_ENABLED: Final[str] = f"{WATCHDOG_SECTION}{KEY_SEPARATOR}enabled"
+
+WATCHDOG_INTERVAL_MILLIS: Final[str] = f"{WATCHDOG_SECTION}{KEY_SEPARATOR}interval_millis"
+
+WATCHDOG_GRACE_MILLIS: Final[str] = f"{WATCHDOG_SECTION}{KEY_SEPARATOR}grace_millis"
+
+WATCHDOG_STALL_MILLIS: Final[str] = f"{WATCHDOG_SECTION}{KEY_SEPARATOR}stall_millis"
+
+WATCHDOG_ESCALATE_MILLIS: Final[str] = f"{WATCHDOG_SECTION}{KEY_SEPARATOR}escalate_millis"
+
+WATCHDOG_ESCALATION_ENABLED: Final[str] = f"{WATCHDOG_SECTION}{KEY_SEPARATOR}escalation_enabled"
 """How many allocation sites a memory summary reports."""
 
 DEFAULT_MINIMUM_FREE_BYTES: Final[int] = 268_435_456
@@ -389,6 +435,67 @@ class DiagnosticsConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class WatchdogConfig:
+    """When silence stops being normal, and what happens then.
+
+    Args:
+        enabled: Whether the watchdog runs at all.
+        interval_millis: How often it looks. Also what a first missed beat is
+            measured against, which is why ``suspect`` needs no threshold of its
+            own.
+        grace_millis: How long start-up is given before anything is judged.
+        stall_millis: How long a required component may be silent.
+        escalate_millis: How long after that the process has to stop itself.
+        escalation_enabled: Whether the process is ended when it does not.
+
+    **Six settings, and the two switches are the ones worth defending.**
+    ``enabled`` exists because a watchdog is a safety mechanism and an operator
+    diagnosing something else must be able to take it out of the picture without
+    editing code. ``escalation_enabled`` is the narrower one: it keeps the
+    detection, the evidence and the graceful request, and stops only at the
+    termination — which is what an operator wants while they are still learning
+    what their own thresholds mean. Neither defaults to off, because a safety
+    mechanism nobody switched on protects nobody.
+
+    What is deliberately *not* here: how many threads or frames a stall dump may
+    describe, and which exit code a termination leaves. The first two are bounds on
+    a record's size, chosen so it stays readable, and
+    ``globin.domain.watchdog`` holds them as constants on the precedent
+    ``TRACEBACK_LIMIT`` set. The third is
+    :attr:`~globin.domain.bootstrap.ExitCode.WATCHDOG_STALLED`, and a configurable
+    exit code would let an operator set it to zero, which would tell a launcher the
+    run succeeded.
+    """
+
+    enabled: bool = True
+    interval_millis: int = DEFAULT_WATCHDOG_INTERVAL_MILLIS
+    grace_millis: int = DEFAULT_WATCHDOG_GRACE_MILLIS
+    stall_millis: int = DEFAULT_WATCHDOG_STALL_MILLIS
+    escalate_millis: int = DEFAULT_WATCHDOG_ESCALATE_MILLIS
+    escalation_enabled: bool = True
+
+    def policy(self) -> WatchdogPolicy:
+        """The validated thresholds these settings describe.
+
+        Returns:
+            The :class:`~globin.domain.watchdog.WatchdogPolicy`.
+
+        Raises:
+            ValidationError: If the durations describe a watchdog that could not do
+                its job. Unreachable through :func:`as_config`, which refuses first
+                with a message naming the document the values came from. Kept as
+                the second gate for the reason :meth:`LoggingConfig.rotation` keeps
+                its own: the first exists to explain, the second to guarantee.
+        """
+        return WatchdogPolicy(
+            interval_millis=self.interval_millis,
+            grace_millis=self.grace_millis,
+            stall_millis=self.stall_millis,
+            escalate_millis=self.escalate_millis,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class GlobinConfig:
     """Everything an operator may vary, one field per subsystem that has any.
 
@@ -414,6 +521,7 @@ class GlobinConfig:
 
     logging: LoggingConfig
     diagnostics: DiagnosticsConfig
+    watchdog: WatchdogConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -618,8 +726,10 @@ def known_keys() -> tuple[str, ...]:
     new field from being half-added: declare it on the model and it is a known key,
     a default and a documented row in the same commit or not at all.
     """
-    return section_keys(LOGGING_SECTION, LoggingConfig) + section_keys(
-        DIAGNOSTICS_SECTION, DiagnosticsConfig
+    return (
+        section_keys(LOGGING_SECTION, LoggingConfig)
+        + section_keys(DIAGNOSTICS_SECTION, DiagnosticsConfig)
+        + section_keys(WATCHDOG_SECTION, WatchdogConfig)
     )
 
 
@@ -641,6 +751,7 @@ def default_layer() -> ConfigLayer:
         {
             **section_defaults(LOGGING_SECTION, LoggingConfig),
             **section_defaults(DIAGNOSTICS_SECTION, DiagnosticsConfig),
+            **section_defaults(WATCHDOG_SECTION, WatchdogConfig),
         },
     )
 
@@ -655,7 +766,9 @@ def default_config() -> GlobinConfig:
     ``tests/property/test_configuration_properties.py`` can assert the two routes
     to "the defaults" agree. If they ever disagree, one of them is lying.
     """
-    return GlobinConfig(logging=LoggingConfig(), diagnostics=DiagnosticsConfig())
+    return GlobinConfig(
+        logging=LoggingConfig(), diagnostics=DiagnosticsConfig(), watchdog=WatchdogConfig()
+    )
 
 
 def resolve(layers: Sequence[ConfigLayer]) -> ResolvedConfig:
@@ -797,6 +910,30 @@ def as_config(resolved: ResolvedConfig) -> GlobinConfig:
             tracemalloc_top=_bounded(
                 resolved.setting(TRACEMALLOC_TOP), low=1, high=MAXIMUM_TOP_SITES
             ),
+        ),
+        watchdog=WatchdogConfig(
+            enabled=_flag(resolved.setting(WATCHDOG_ENABLED)),
+            interval_millis=_bounded(
+                resolved.setting(WATCHDOG_INTERVAL_MILLIS),
+                low=MINIMUM_INTERVAL_MILLIS,
+                high=MAXIMUM_INTERVAL_MILLIS,
+            ),
+            grace_millis=_bounded(
+                resolved.setting(WATCHDOG_GRACE_MILLIS),
+                low=MINIMUM_GRACE_MILLIS,
+                high=MAXIMUM_GRACE_MILLIS,
+            ),
+            stall_millis=_bounded(
+                resolved.setting(WATCHDOG_STALL_MILLIS),
+                low=MINIMUM_STALL_MILLIS,
+                high=MAXIMUM_STALL_MILLIS,
+            ),
+            escalate_millis=_bounded(
+                resolved.setting(WATCHDOG_ESCALATE_MILLIS),
+                low=MINIMUM_ESCALATE_MILLIS,
+                high=MAXIMUM_ESCALATE_MILLIS,
+            ),
+            escalation_enabled=_flag(resolved.setting(WATCHDOG_ESCALATION_ENABLED)),
         ),
     )
 

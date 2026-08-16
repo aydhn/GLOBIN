@@ -334,3 +334,73 @@ With psutil absent the probe records `Availability.UNAVAILABLE` and the snapshot
 is still produced — which is not a hypothetical: it is what happens in the CI \
 `quality` job on every run. Replacing the library means replacing one adapter \
 against a port that already has a second implementation."""
+
+# ---------------------------------------------------------------------------
+# Adopted in Phase 025 — the entry whose native half is the reason the phase
+# exists.
+#
+# Every other runtime entry here is pure Python or ships a self-contained
+# extension. This one wraps a separate C library that has historically had to be
+# installed by hand on Windows, and `docs/engineering/wheel-survey.toml` filed
+# "whether the wheel carries it" against Phase 025 by name rather than reading it
+# off a filename. The review answers the six questions; the measurement that the
+# wheel actually carries the library is `docs/engineering/stack-contract.toml`.
+# ---------------------------------------------------------------------------
+
+[[review]]
+name = "ta-lib"
+ecosystem = "pypi"
+scope = "runtime"
+licence = "BSD-2-Clause"
+licence_source = "https://github.com/ta-lib/ta-lib-python/blob/master/LICENSE"
+adopted = "phase-025"
+reviewed = 2026-08-17
+verdict = "adopted"
+reason = """The indicator wrapper Phases 025 and 114 name. Phase 113 selects the \
+indicator set; Phase 114 wraps this behind a typed interface with a pure-Python \
+fallback. Phase 025 provisions it and proves the native library is here.
+
+WHAT IT COSTS TRANSITIVELY, AND ONE ENTRY IS A SURPRISE. `requires_dist` is two \
+names: `numpy`, which this repository already declares, and `build` — a PEP 517 \
+build FRONTEND, appearing as an install-time requirement of a wheel that needs no \
+building. It is not conditioned on an extra, so a resolver takes it, and with it \
+`packaging`, `pyproject_hooks` and — because `build` requires it on Windows — \
+`colorama`. That is four distributions arriving to satisfy a declaration that \
+looks like a packaging mistake upstream rather than a real dependency, and the \
+count is read from `pylock.toml` after resolving rather than from `requires_dist` \
+before it. It is recorded here rather than worked around: the lock is the place \
+that says what actually lands, and a dependency nobody expected is exactly what \
+this register exists to make visible.
+
+LICENCE, AND IT IS NOT MACHINE-READABLE. BSD-2-Clause, counted by reading the \
+clauses in the project's own LICENSE file. PyPI serves `license: null` and \
+`license_expression: null`, and the only metadata signal is the classifier \
+`License :: OSI Approved :: BSD License`, which does not distinguish two clauses \
+from three. Unlike pandas and psutil, no automated check could have established \
+this identifier — it came from the file.
+
+MAINTAINED, ON THE EVIDENCE THAT MATTERS HERE. 0.7.1 published 2026-07-16, and \
+the release line 0.6.5 through 0.7.1 is present on the index. The relevant fact is \
+narrower than activity: binary wheels carrying the C library began at 0.6.5, which \
+is what turned "provision a native library on Windows" from a documented manual \
+procedure into an install. The wrapper is the long-standing one the ecosystem \
+uses, and the C library beneath it has been stable for years.
+
+RUNTIME, AND FREE. No paid tier, no account, no service. ADR-0003 is satisfied.
+
+COULD IT BE WRITTEN INSTEAD? THE WRAPPER, YES; THE LIBRARY, NO — AND THAT IS THE \
+POINT. TA-Lib is roughly one hundred and fifty indicators whose exact conventions \
+— seeding, warm-up length, which average an indicator uses internally — are the \
+thing being depended on, not the arithmetic. Reimplementing them would mean \
+reimplementing those conventions and then discovering the differences against live \
+data. Phase 114 nonetheless schedules a pure-Python fallback path, which is the \
+honest hedge: not "this cannot be replaced" but "replacing it is a project, and \
+one phase already owns it".
+
+WHAT BREAKS IF IT DISAPPEARS? Nothing today, and Phase 114 by design. Nothing \
+under `src/globin` imports it — `tests/architecture/test_stack_discipline.py` \
+derives its guarded set from the stack contract, so adding it here forbids the \
+import until a phase removes the tripwire deliberately. The fallback if a future \
+interpreter has no wheel is documented rather than assumed: build from source, \
+which requires the C library installed first, which is the manual Windows \
+procedure this phase exists to avoid needing."""

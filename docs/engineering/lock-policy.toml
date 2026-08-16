@@ -60,7 +60,7 @@ artefact_host = "files.pythonhosted.org"
 
 # A bare TOML date, not a string. TOML has a date type, and a quoted date has
 # been validated as a date by nothing.
-locked = 2026-08-16
+locked = 2026-08-17
 
 # ---------------------------------------------------------------------------
 # What the contents must satisfy
@@ -136,6 +136,13 @@ pinned interpreter without a compiler on this host.
 `project.dependencies` itself. The development lock names `dev` because that is
 the extra it covers; this one names nothing because there is nothing to name, and
 an empty string says that more honestly than omitting the key would.
+
+Phase 025 added ta-lib, and it is the first root here whose resolution pulls
+something nobody asked for. Upstream declares `build` — a PEP 517 build frontend —
+as an install requirement of a wheel that needs no building, so `build`,
+`packaging`, `pyproject_hooks` and `colorama` are in this lock as transitive
+packages. They are recorded rather than excluded: a lock exists to say what
+actually lands, and `dependency-reviews.toml` explains where they came from.
 """
 
 # Every root the runtime lock was resolved from. Compared against
@@ -145,6 +152,7 @@ roots = [
     "numpy>=2.5.2",
     "pandas>=3.0.5",
     "psutil>=7.2.2",
+    "ta-lib>=0.7.1",
 ]
 
 # ---------------------------------------------------------------------------

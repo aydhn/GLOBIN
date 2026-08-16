@@ -28,8 +28,10 @@ import pytest
 from globin.domain.configuration import (
     DIAGNOSTICS_SECTION,
     LOGGING_SECTION,
+    WATCHDOG_SECTION,
     DiagnosticsConfig,
     LoggingConfig,
+    WatchdogConfig,
     as_config,
     config_layer,
     default_config,
@@ -119,6 +121,7 @@ def test_every_documented_type_is_the_type_the_default_actually_has(
     defaults = {
         **section_defaults(LOGGING_SECTION, LoggingConfig),
         **section_defaults(DIAGNOSTICS_SECTION, DiagnosticsConfig),
+        **section_defaults(WATCHDOG_SECTION, WatchdogConfig),
     }
     for key, declared, _default in rows:
         assert type(defaults[key]).__name__ == declared, key

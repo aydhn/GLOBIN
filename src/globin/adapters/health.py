@@ -59,6 +59,7 @@ from globin.domain.health import (
     absent,
     measured,
 )
+from globin.domain.watchdog import WatchdogSummary
 
 BYTES: Final[str] = "bytes"
 """The unit label for a byte count."""
@@ -525,7 +526,7 @@ class TracemallocProbe:
         statistics = snapshot.statistics("lineno")[: max(limit, 0)]
         sites = [
             AllocationSite(
-                location=_relative_location(str(statistic.traceback[0].filename))
+                location=relative_location(str(statistic.traceback[0].filename))
                 + f":{statistic.traceback[0].lineno}",
                 size_bytes=int(statistic.size),
                 count=int(statistic.count),
@@ -536,8 +537,45 @@ class TracemallocProbe:
         return tuple(sites)
 
 
-def _relative_location(filename: str) -> str:
+def _watchdog_document(watchdog: WatchdogSummary | None) -> dict[str, object] | None:
+    """The watchdog's summary, as the snapshot carries it.
+
+    Args:
+        watchdog: What the watchdog said about itself, or ``None`` when this
+            process has none.
+
+    Returns:
+        The mapping, or ``None``.
+
+    **Counts and names only.** This document travels into a support bundle, which
+    is why the stall evidence — paths, functions, line numbers — is not here. That
+    stays in ``state/watchdog.json``, which is not a bundle candidate.
+    """
+    if watchdog is None:
+        return None
+    silent = watchdog.quietest_silent
+    return {
+        "enabled": watchdog.enabled,
+        "running": watchdog.running,
+        "state": str(watchdog.state),
+        "monitored": watchdog.monitored,
+        "required": watchdog.required,
+        "suspects": list(watchdog.suspects),
+        "quietest": watchdog.quietest,
+        "quietest_silent_nanoseconds": None if silent is None else silent.nanoseconds,
+        "incident_id": watchdog.incident_id,
+        "escalated": watchdog.escalated,
+    }
+
+
+def relative_location(filename: str) -> str:
     """Reduce an absolute source path to something that names no person.
+
+    Public since Phase 025, which is when it acquired a second caller.
+    ``globin.adapters.watchdog`` reduces stack-frame filenames through it for
+    exactly the reason the allocation sites below do — a traceback names files, and
+    a file outside the tree names the account holder. One reduction shared by both
+    is what keeps them from disagreeing about what is safe to publish.
 
     Args:
         filename: The path a traceback recorded.
@@ -930,6 +968,7 @@ def snapshot_document(snapshot: object) -> dict[str, object]:
             ],
         },
         "memory": _memory_document(snapshot.memory),
+        "watchdog": _watchdog_document(snapshot.watchdog),
         "checks": [
             {
                 "id": result.identifier,

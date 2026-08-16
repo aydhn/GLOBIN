@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 024 of 320 complete — foundation only
+## Current status: Phase 025 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -28,7 +28,7 @@ capability cannot be claimed here without pointing at something real.
 |---|---|
 | Repository, branch policy, engineering contract — [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) | Implemented |
 | 320-phase roadmap, every phase named — [`ROADMAP.md`](ROADMAP.md) | Implemented |
-| Architecture decision records (63) — [`docs/adr/`](docs/adr/README.md) | Implemented |
+| Architecture decision records (66) — [`docs/adr/`](docs/adr/README.md) | Implemented |
 | Research source ledgers with primary sources — [`docs/research/`](docs/research/phase_001_sources.md) | Implemented |
 | UTC-only internal time: an injected clock, aware instants, milliseconds as a floored projection — [`TIME_POLICY.md`](docs/TIME_POLICY.md) | Implemented |
 | Exact decimal arithmetic, four rounding modes, tick and step alignment — [`PRECISION_POLICY.md`](docs/PRECISION_POLICY.md) | Implemented |
@@ -56,6 +56,8 @@ capability cannot be claimed here without pointing at something real.
 | Which workloads actually benefit from GPU execution here, measured against a declared method and threshold — [`GPU_BENEFIT.md`](docs/engineering/GPU_BENEFIT.md) | Implemented |
 | A typed runtime health snapshot where a measurement that was not taken is never zero — [`RUNTIME_HEALTH.md`](docs/engineering/RUNTIME_HEALTH.md) | Implemented |
 | Redacted, allowlist-first support bundles that validate against their own SHA-256 manifest before they are published — [`SUPPORT_BUNDLE.md`](docs/engineering/SUPPORT_BUNDLE.md) | Implemented |
+| A liveness watchdog: monotonic heartbeats, a suspect threshold distinct from a confirmed stall, bounded redacted stall evidence and a bounded escalation to a hard exit — [`RUNTIME_WATCHDOG.md`](docs/engineering/RUNTIME_WATCHDOG.md) | Implemented |
+| The native TA-Lib C library provisioned and proved present on this host rather than read off a wheel filename — [`SCIENTIFIC_STACK.md`](docs/engineering/SCIENTIFIC_STACK.md) | Implemented |
 | Everything else | Not started |
 
 ### What does not exist

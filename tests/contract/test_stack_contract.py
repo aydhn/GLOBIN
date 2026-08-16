@@ -44,7 +44,14 @@ def manifest_document(repo_root: Path) -> dict[str, object]:
 
 
 def test_the_declaration_parses_and_declares_the_stack(declaration: Declaration) -> None:
-    assert {library.name for library in declaration.libraries} == {"numpy", "pandas"}
+    """The three libraries whose behaviour is measured rather than assumed.
+
+    ``psutil`` is a declared runtime dependency and is deliberately not here: it
+    reports on the host rather than computing anything, so there is no behaviour
+    for a probe to defend. Membership of this set means "GLOBIN depends on what
+    this library computes", not "GLOBIN installs it".
+    """
+    assert {library.name for library in declaration.libraries} == {"numpy", "pandas", "ta-lib"}
 
 
 def test_the_declared_target_is_the_runtime_contract(
@@ -197,12 +204,20 @@ def test_the_boundaries_this_gate_refuses_to_decide_are_all_named(
 ) -> None:
     """Silence must not read as a gap.
 
-    ADR-0058 names four questions this gate does not answer. Each must appear in
-    the declaration, so a reader learns the boundary from the file rather than
-    from the record.
+    ADR-0058 named four questions this gate does not answer, owned by Phases 113,
+    158, 23 and 25. Each must appear in the declaration, so a reader learns the
+    boundary from the file rather than from the record.
+
+    **Two of those four have since been answered, and the owners moved.** Phase 025
+    provisioned TA-Lib, so its question closed and what remains of it — a
+    pure-Python fallback when no wheel serves the interpreter — is Phase 114's.
+    Phases 023 and 024 answered the GPU question, and its residue — whether a GPU
+    accelerates *this* stack, which needs a CUDA-capable library first — is Phase
+    183's. ADR-0058 is immutable and still correct on its own date; this set
+    tracks where those boundaries live now.
     """
     phases = {deferral.phase for deferral in declaration.deferrals}
-    assert {113, 158, 23, 25} <= phases
+    assert {113, 158, 114, 183} <= phases
 
 
 def test_the_reason_set_matches_what_the_gate_can_emit() -> None:

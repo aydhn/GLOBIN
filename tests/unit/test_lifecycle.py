@@ -128,9 +128,14 @@ class _Signals:
 
     stopped: bool = False
     installed: bool = False
+    asked: int = 0
 
     def install(self) -> None:
         self.installed = True
+
+    def request(self) -> None:
+        self.asked += 1
+        self.stopped = True
 
     def requested(self) -> bool:
         return self.stopped

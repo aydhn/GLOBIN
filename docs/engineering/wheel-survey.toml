@@ -85,26 +85,23 @@ surveyed = 2026-08-16
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Phase 025 — TA-Lib Native Library Provisioning.
+# Phase 025 — TA-Lib Native Library Provisioning. DELIVERED.
+#
+# `ta-lib` was surveyed here and is no longer, for the reason numpy and pandas
+# left above: Phase 025 adopted it, and an entry naming a shipped phase is an
+# adoption wearing a survey's clothes. `docs/engineering/stack-contract.toml` now
+# holds it, and three probes recompute on this host what the survey could only
+# claim — that the wheel carries the native C library, that the indicator table is
+# complete, and that a moving average is seeded where the convention says.
+#
+# THE FREE-THREADED GAP LEFT WITH IT, AND THAT IS A CHANGE OF BOOKKEEPING RATHER
+# THAN OF FACT. `ta-lib` was the single entry publishing `cp314-cp314` and no
+# `cp314t`, so this file now reports that nothing it surveys would block a
+# free-threaded build. The gap itself has not closed — it has moved to a library
+# this repository has adopted, where ADR-0050's refusal is a property of the
+# installed stack rather than of a survey. Read `free_threaded` here as "of the
+# libraries not yet adopted", which is all it was ever measuring.
 # ---------------------------------------------------------------------------
-
-[[library]]
-name = "ta-lib"
-phase = 25
-version = "0.7.1"
-requires_python = ">=3.9"
-wheels = ["ta_lib-0.7.1-cp314-cp314-win_amd64.whl"]
-verdict = "available"
-source = "https://pypi.org/pypi/ta-lib/json"
-reason = """The Python wrapper Phases 025 and 114 name. A binary wheel for the \
-pinned line exists, which is a narrower claim than "TA-Lib is provisioned": \
-S-16 records that the wrapper requires the native C library, and whether the \
-wheel carries it is Phase 025's measurement to make on this host rather than a \
-conclusion to draw from a filename.
-
-THE ONE FREE-THREADED GAP IN THIS FILE. It publishes `cp314-cp314` and no \
-`cp314t`, so it is the single entry that would not install on a free-threaded \
-build of the same line. That is the evidence ADR-0050's refusal was waiting for."""
 
 # ---------------------------------------------------------------------------
 # Phases 045-089 — the Binance SDK family.

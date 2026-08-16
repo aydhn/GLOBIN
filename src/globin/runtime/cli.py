@@ -136,6 +136,7 @@ Exit codes:
   20  another GLOBIN coordinator is already running on this machine
   21  the runtime state could not be written
   22  a diagnostic could not be produced, which is not a health verdict
+  23  the watchdog ended this process, which did not stop when asked
 """
 
 

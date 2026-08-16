@@ -177,7 +177,6 @@ why each is in it.
 
 | Distribution | Phase | Why it is scheduled | Wheel shape |
 |---|:---:|---|---|
-| `ta-lib` | 025 | The indicator wrapper Phases 025 and 114 name | `cp314` only |
 | `binance-common` | 045 | The shared runtime the SDK family requires | pure |
 | `binance-sdk-spot` | 066 | Spot | pure |
 | `binance-sdk-margin-trading` | 068 | Cross and isolated margin | pure |
@@ -230,10 +229,17 @@ matter most and would otherwise arrive silently.
 ADR-0050 refused free-threaded builds because *"Phase 018 has not yet surveyed
 whether the planned stack publishes for it"*. It has now.
 
-Of the surveyed set, exactly one — `ta-lib` — publishes `cp314-cp314` and no
-`cp314t`. Every pure-Python entry serves a free-threaded build because `py3-none`
-binds to no ABI; so do `xgboost` and `lightgbm`, for the same reason; and `numpy`,
-`pandas` and `torch` publish `cp314t` explicitly.
+Of the surveyed set, **none** now blocks one, and that is a change of bookkeeping
+rather than of fact. Until Phase 025 the answer was `ta-lib`, which publishes
+`cp314-cp314` and no `cp314t`; that phase adopted it, so it left this survey for
+`stack-contract.toml` and took the gap with it. The gap has not closed — it has
+moved to a library this repository installs, where ADR-0050's refusal is a
+property of the adopted stack rather than of a survey. Read `free_threaded` here
+as *of the libraries not yet adopted*, which is all it ever measured.
+
+Every pure-Python entry serves a free-threaded build because `py3-none` binds to
+no ABI; so do `xgboost` and `lightgbm`, for the same reason; and `numpy`, `pandas`
+and `torch` publish `cp314t` explicitly.
 
 **One blocker is enough to keep the refusal standing.** The gate reports it and
 does not fail on it: a gap there is the refusal being correct, not something going

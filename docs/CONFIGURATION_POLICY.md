@@ -49,14 +49,46 @@ so a new setting is one line and cannot be half-added.
 | `diagnostics.tracemalloc_enabled` | `bool` | `false` | Whether the interpreter's allocator tracer runs. |
 | `diagnostics.tracemalloc_frame_depth` | `int` | `8` | How many frames each traced allocation retains. Between 1 and 64. |
 | `diagnostics.tracemalloc_top` | `int` | `10` | How many allocation sites a memory summary reports. Between 1 and 64. |
+| `watchdog.enabled` | `bool` | `true` | Whether the liveness watchdog runs at all. |
+| `watchdog.interval_millis` | `int` | `1000` | How often it looks. Between 100 and 60000. |
+| `watchdog.grace_millis` | `int` | `5000` | How long start-up is given before anything is judged. Between 0 and 600000. |
+| `watchdog.stall_millis` | `int` | `30000` | How long a required component may be silent. Between 1000 and 3600000, and above the interval. |
+| `watchdog.escalate_millis` | `int` | `15000` | How long after that the process has to stop itself. Between 1000 and 600000, and not below the interval. |
+| `watchdog.escalation_enabled` | `bool` | `true` | Whether the process is ended when it does not stop itself. |
 
-Sixteen settings in two sections. Of everything Phases 001-006 built, only
+Twenty-two settings in three sections. Of everything Phases 001-006 built, only
 logging held anything an operator may reasonably change: the project contract and
 the roadmap are immutable identity, the error taxonomy has nothing to tune, and
 the architecture review's paths are constants rather than settings. Phase 023
 added the two rotation values when it gave GLOBIN somewhere to write, and Phase
 024 added the `diagnostics` section — the first second section this register has
-had.
+had. Phase 025 added `watchdog`, which is the third.
+
+**The `watchdog` section is six rows where thirteen were available, and what it
+leaves out is the point.** How many threads a stall dump describes, how many frames
+of each, and how large the whole dump may be are all bounds this phase chose — and
+they live in `src/globin/domain/watchdog.py` as constants, on the precedent
+`TRACEBACK_LIMIT` set in Phase 023. They are there rather than here because no
+operator has a basis for preferring twenty-four frames to thirty-two: the number
+exists so a record stays readable, which is a decision, not a policy. The exit code
+a termination leaves is absent for a sharper reason — a configurable one could be
+set to `0`, which would tell a launcher that a process the watchdog killed had
+succeeded.
+
+**Two of the six are the interval, used twice.** `watchdog.interval_millis` says
+how often the watchdog looks *and* defines what a first missed beat is, which is
+why `suspect` has no threshold of its own. A fourth duration would have had to
+justify itself, and "we looked, and it had not moved since last time" is already
+the natural meaning of a first warning.
+
+**Both switches default to `true`, and that is the opposite of
+`diagnostics.tracemalloc_enabled`.** Tracing defaults off because it costs the
+whole process to produce a diagnostic nobody asked for. A watchdog costs one thread
+waiting on an event, and a safety mechanism nobody switched on protects nobody.
+`watchdog.escalation_enabled` is the narrower switch: turning it off keeps the
+detection, the evidence and the graceful request, and stops only at the
+termination — which is what an operator wants while they are still learning what
+their own thresholds mean on their own host.
 
 **Thirteen at once is a lot, and the alternative was worse.** Each is a number a
 health check or a bundle limit compares a measurement against, and the only other

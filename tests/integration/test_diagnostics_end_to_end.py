@@ -32,7 +32,12 @@ from globin.adapters.diagnostics import (
     HookRegistry,
     RuntimeDiagnostics,
 )
-from globin.domain.configuration import DiagnosticsConfig, GlobinConfig, LoggingConfig
+from globin.domain.configuration import (
+    DiagnosticsConfig,
+    GlobinConfig,
+    LoggingConfig,
+    WatchdogConfig,
+)
 from globin.domain.observability import Severity
 from globin.domain.runtime_state import RuntimeArea, RuntimeLayout
 from globin.runtime.composition import build_diagnostics, build_runtime_state
@@ -246,6 +251,7 @@ def test_the_file_rotates_inside_the_runtime_tree_and_stays_bounded(
             min_severity=Severity.DEBUG, rotation_max_bytes=4096, rotation_backup_count=2
         ),
         diagnostics=DiagnosticsConfig(),
+        watchdog=WatchdogConfig(),
     )
     subject = build_diagnostics(
         state, correlation_id="corr-rotate", config=config, stream=io.StringIO(), hooks=registry
@@ -276,6 +282,7 @@ def test_the_severity_threshold_is_honoured_by_both_destinations(
         config=GlobinConfig(
             logging=LoggingConfig(min_severity=Severity.ERROR),
             diagnostics=DiagnosticsConfig(),
+            watchdog=WatchdogConfig(),
         ),
         stream=console,
         hooks=registry,

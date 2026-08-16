@@ -74,12 +74,13 @@ reason = "Pure Python; the study infrastructure Phase 211 establishes."
 
 [[library]]
 name = "numpy"
-# Phase 023 rather than 022, and the number is not arbitrary: Phase 022 delivered,
-# so `DELIVERED_PHASE` rose to 22 and an entry naming it is refused as an adoption
-# wearing a survey's clothes. What this fixture needs is an extension publishing
-# for both builds of the pinned line, which is a fact about the wheels below and
-# not about the phase that schedules them.
-phase = 23
+# The number tracks the floor rather than the library: an entry naming a delivered
+# phase is refused as an adoption wearing a survey's clothes, so this has moved
+# 022 -> 023 -> 113 as `DELIVERED_PHASE` rose to 22 and then, in Phase 025, to 25.
+# What this fixture needs is an extension publishing for both builds of the pinned
+# line, which is a fact about the wheels below and not about the phase that
+# schedules them.
+phase = 113
 version = "2.5.2"
 requires_python = ">=3.12"
 wheels = [
@@ -92,7 +93,9 @@ reason = "An extension publishing for both builds of the pinned line."
 
 [[library]]
 name = "ta-lib"
-phase = 25
+# 114 rather than 25, for the reason above: Phase 025 adopted this library, so the
+# real survey no longer lists it and a fixture naming 25 would be refused too.
+phase = 114
 version = "0.7.1"
 requires_python = ">=3.9"
 wheels = ["ta_lib-0.7.1-cp314-cp314-win_amd64.whl"]

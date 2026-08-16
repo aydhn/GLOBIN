@@ -206,11 +206,21 @@ phase that has not shipped.
 |---|---|
 | The numeric type indicators and models use, and its tolerance | 113 |
 | Bit-identical reproducibility of a float computation across hosts | 158 |
-| Whether a GPU accelerates any of this, and whether one is present | 023 |
-| The native TA-Lib library the Python wrapper requires | 025 |
+| Whether a GPU accelerates this stack, once a CUDA library is adopted | 183 |
+| A pure-Python fallback for the indicators, when no wheel serves the interpreter | 114 |
 | Which storage engine and columnar format persist these frames | 097 |
 
-Seven behaviours are not the whole of two large libraries, and this gate does not
+**Two rows in that table changed in Phase 025, and one of them had been wrong for
+two phases.** The TA-Lib question closed — the wheel carries the native library on
+this host, which is now three probes rather than a deferral — and what remains of
+it is Phase 114's pure-Python fallback. The GPU row said 023, and Phases 023 and
+024 answered it; it went stale because this gate's `DELIVERED_PHASE` sat below 23
+until Phase 025 raised it, so nothing compared the claim against the roadmap. What
+is genuinely still open is narrower: every CUDA workload in the benchmark contract
+records `unavailable` naming `torch`, so nothing can accelerate *this* stack until
+the phase that adopts a CUDA-capable library arrives.
+
+Ten behaviours are not the whole of three large libraries, and this gate does not
 pretend otherwise. What it establishes is that *the specific assumptions GLOBIN has
 written down* hold here. ADR-0058 records why upstream's own test suites are
 deliberately not run.

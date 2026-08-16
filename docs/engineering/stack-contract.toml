@@ -85,6 +85,23 @@ probes = [
     "pandas.copy_on_write_is_active",
 ]
 
+[[library]]
+name = "ta-lib"
+import_name = "talib"
+version = "0.7.1"
+wheel_tag = "cp314-cp314-win_amd64"
+role = """The indicator wrapper Phases 025 and 114 name, and the only entry here \
+whose real dependency is not the Python distribution but a C library inside it. \
+Phase 025 provisions it; Phase 113 selects indicators and Phase 114 wraps them. \
+Its probes therefore ask a different question from numpy's and pandas': not "does \
+this compute correctly" but "is the native library actually here, and does it seed \
+where the convention says"."""
+probes = [
+    "talib.native_library_is_carried_by_the_wheel",
+    "talib.indicator_table_is_complete",
+    "talib.moving_average_warmup_is_the_documented_length",
+]
+
 # ---------------------------------------------------------------------------
 # The probes.
 #
@@ -141,6 +158,33 @@ parent, so a function that takes a slice can mutate its caller's data. The probe
 asserts the behaviour rather than reading `mode.copy_on_write`, which pandas 3.0 \
 deprecated and pandas 4.0 removes."""
 
+[[probe]]
+id = "talib.native_library_is_carried_by_the_wheel"
+because = """The measurement Phase 025 exists to make. \
+`docs/engineering/WHEEL_AVAILABILITY.md` recorded that a published wheel filename \
+is a claim about availability and filed "whether the wheel carries the native C \
+library" against this phase by name, because the wrapper has historically needed \
+that library installed by hand on Windows. `__ta_version__` is answered by the C \
+library itself, so a reply is proof it linked rather than an inference from a \
+filename."""
+
+[[probe]]
+id = "talib.indicator_table_is_complete"
+because = """The failure a version string cannot catch. A partially initialised \
+library still answers with its version but offers a subset of its indicators, and \
+Phase 113 selects from that table while Phase 114 wraps it — so a subset would \
+narrow both silently rather than loudly."""
+
+[[probe]]
+id = "talib.moving_average_warmup_is_the_documented_length"
+because = """`docs/ARCHITECTURE_PRINCIPLES.md` requires look-ahead to be \
+impossible by construction rather than caught by review. An indicator seeded one \
+bar short emits its first value from a window reaching further back than it \
+claims, and shifts every later value — arriving as a plausible number rather than \
+as a failure, and arriving through a library rather than through GLOBIN's own \
+code. Every indicator in TA-Lib shares this convention, so measuring one measures \
+the convention."""
+
 # ---------------------------------------------------------------------------
 # What this gate deliberately does not answer.
 #
@@ -156,13 +200,21 @@ phase = 113
 question = "Bit-identical reproducibility of a float computation across hosts"
 phase = 158
 
+# Was "Whether a GPU accelerates any of this, and whether one is present", filed
+# against Phase 023. Both halves have since been answered and the row went stale
+# without anything noticing, because this gate's floor sat below 23 until Phase
+# 025 raised it. Phase 023 detects the device (`tools.quality gpu`) and Phase 024
+# measures whether a workload benefits (`tools.quality benchmark`). What is left is
+# narrower and genuinely open: every CUDA workload in the benchmark contract
+# records `unavailable` naming `torch`, so nothing can accelerate this stack until
+# the phase that adopts a CUDA-capable library arrives.
 [[deferral]]
-question = "Whether a GPU accelerates any of this, and whether one is present"
-phase = 23
+question = "Whether a GPU accelerates this numerical stack, once a CUDA library is adopted"
+phase = 183
 
 [[deferral]]
-question = "The native TA-Lib library the Python wrapper requires"
-phase = 25
+question = "A pure-Python fallback for the indicators, when no wheel serves the interpreter"
+phase = 114
 
 [[deferral]]
 question = "Which storage engine and columnar format persist these frames"

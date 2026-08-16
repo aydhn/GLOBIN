@@ -243,6 +243,14 @@ def test_the_survey_covers_the_libraries_the_phase_001_ledger_names(
     Phase 001 recorded distribution metadata for each of these against a named
     source; a survey that quietly dropped one would leave the interpreter pinned
     on evidence about a smaller stack than the programme actually schedules.
+
+    Three of the ledger's names are deliberately absent from this set rather than
+    from the programme. ``numpy`` and ``pandas`` left in Phase 022 and ``ta-lib``
+    in Phase 025, each on adoption: once a library is installed the answerable
+    question stops being whether a wheel exists and becomes whether the thing
+    inside it computes, which ``docs/engineering/stack-contract.toml`` measures.
+    Dropping a name here is only safe because that file picks it up, which
+    ``test_stack_contract.py`` asserts from the other side.
     """
     surveyed = {library.name for library in declaration.libraries}
     named = {
@@ -252,7 +260,6 @@ def test_the_survey_covers_the_libraries_the_phase_001_ledger_names(
         "optuna",
         "gymnasium",
         "stable-baselines3",
-        "ta-lib",
         "binance-sdk-spot",
         "binance-sdk-margin-trading",
         "binance-sdk-derivatives-trading-usds-futures",
@@ -286,17 +293,24 @@ def test_the_binance_family_still_caps_below_the_next_interpreter_line(
         assert plan.admits(library.requires_python, declaration.target)
 
 
-def test_exactly_one_library_would_block_a_free_threaded_build(
+def test_no_surveyed_library_would_block_a_free_threaded_build(
     declaration: plan.Declaration,
 ) -> None:
-    """ADR-0050 refused the free-threaded build pending this survey.
+    """The list this survey tracks has emptied, and that does not reopen ADR-0050.
 
-    One blocker is enough to keep the refusal standing, and naming it is what makes
-    the refusal revisitable rather than permanent. When this list empties, the
-    decision is worth reopening — which is a different thing from this test being
-    wrong.
+    Until Phase 025 the answer here was ``("ta-lib",)``, and the older test said
+    that when the list emptied the refusal would be worth revisiting. It has
+    emptied, and it is not — because the blocker did not go away, it was adopted.
+    ``ta-lib`` publishes ``cp314-cp314`` and no ``cp314t``, which is as true of the
+    installed distribution as it was of the surveyed one; what changed is which
+    file is answerable for it.
+
+    So this asserts emptiness of *the survey*, and the assertion is worth keeping
+    for the case it still catches: a library scheduled but not yet adopted that
+    would block the build. Read together with the survey's own note, the pair says
+    what is true — nothing unadopted blocks it, and one adopted thing does.
     """
-    assert plan.free_threaded_gaps(declaration.libraries, declaration.target) == ("ta-lib",)
+    assert plan.free_threaded_gaps(declaration.libraries, declaration.target) == ()
 
 
 # ---------------------------------------------------------------------------

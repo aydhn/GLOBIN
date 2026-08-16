@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-024 are complete. Phase 025 is next and has not started.**
-> Nothing beyond Phase 024 is implemented. GLOBIN does not trade, does not
+> **Phases 001-025 are complete. Phase 026 is next and has not started.**
+> Nothing beyond Phase 025 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
 >
@@ -106,10 +106,14 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Seven have been made. Each cost an ADR, and each is
+> **Scope amendments.** Nine have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
-> unchanged by all seven.
+> unchanged by all nine.
+>
+> This count said *seven* while listing eight from Phase 024 until Phase 025
+> repaired it. Nothing tests it, which is why it drifted and why it is worth
+> reading sceptically.
 >
 > **First.** Phase 003 originally read *Coding Standards and Static Analysis
 > Baseline*, and Phase 013 read *Continuous Verification Script and Quality
@@ -224,6 +228,28 @@ the contract:
 > [ADR-0061](docs/adr/0061-phase-024-widens-to-deliver-runtime-health-and-support-bundles.md)
 > records that, and the four courses the conflict was surfaced with, on the owner's
 > decision. A ninth amendment inherits nothing from this one.
+>
+> **Ninth.** Phase 025 still delivers the TA-Lib native library provisioning its
+> title names, and now also gives the running application its watchdog: a monotonic
+> heartbeat registry, a suspect threshold distinct from a confirmed stall, bounded
+> and redacted stall evidence, a graceful shutdown request and a bounded escalation
+> to a hard exit.
+>
+> **It scores one of four, and it fails the third criterion in a way no predecessor
+> did.** Restating ADR-0021's test in full: nothing is deferred and no other title
+> changes, but work is displaced -- parts of 030, 262, 266 and 302 arrive here --
+> and the two halves do not need each other. What is new is that Phase 263 owns this
+> work **by its title**, *Supervisor and Watchdog*, rather than merely inside its
+> purpose text; every earlier amendment collided with a purpose at most. What it can
+> say in return is the thing ADR-0061 could also say and this one had to earn
+> separately: **it overlaps no completed phase**, and the collision with 263 is
+> refused rather than rebuilt -- recovery, restart, subsystem ordering and draining
+> are all absent by design, and the watchdog is delivered on the lifecycle seam with
+> no driver at all, because the long-lived process is Phase 257's.
+> [ADR-0064](docs/adr/0064-phase-025-widens-to-deliver-the-runtime-watchdog.md)
+> records that, and the three courses the conflict was surfaced with, on the owner's
+> decision. A tenth amendment inherits nothing from this one and must additionally
+> say whether it too collides with a title.
 
 ---
 
@@ -269,7 +295,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 022 | Scientific Stack Installation and Verification | Install and verify the numerical and dataframe stack, confirming correctness rather than assuming it; and, as the sixth scope amendment, deliver the application's mutable runtime filesystem, atomic state publication, single-instance coordinator lock and graceful shutdown. | Complete |
 | 023 | NVIDIA Driver and CUDA Capability Detection | Detect GPU presence, driver version, compute capability and CUDA availability without assuming any of them; and, as the seventh scope amendment, give the running application its diagnostics -- a bounded log file in the runtime tree, a lifecycle event vocabulary, the process fault hooks, `faulthandler`, and a bridge for standard-library records. | Complete |
 | 024 | GPU Runtime Verification Harness | Build a harness that proves which workloads actually benefit from GPU execution on this host; and, as the eighth scope amendment, give the running application its health surface -- a typed runtime health snapshot, process and host resource diagnostics, bounded thread and memory introspection, and a redacted, self-validating support bundle. | Complete |
-| 025 | TA-Lib Native Library Provisioning | Provision the native TA-Lib dependency required by the Python wrapper on Windows, with a documented fallback. | Planned |
+| 025 | TA-Lib Native Library Provisioning | Provision the native TA-Lib dependency required by the Python wrapper on Windows, with a documented fallback, measured on this host rather than read off a filename; and, as the ninth scope amendment, give the running application its watchdog -- a monotonic heartbeat registry, a suspect threshold distinct from a confirmed stall, bounded and redacted stall evidence, a graceful shutdown request and a bounded escalation to a hard exit. | Complete |
 | 026 | Configuration File Layout and Profiles | Define on-disk configuration locations and the paper, demo, testnet and live profile structure. | Planned |
 | 027 | Environment Variable and Profile Resolution | Implement deterministic precedence between defaults, files, environment variables and launcher selection. | Planned |
 | 028 | Local Secret Storage Mechanism | Implement the approved local secret store so credentials never reach the repository or plain configuration. | Planned |

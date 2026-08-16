@@ -57,6 +57,10 @@ EXPECTED_CODES: dict[str, int] = {
     # state rather than a health state, and `diagnostics snapshot` reports the
     # state itself through 0, 1 and 3 like every other gate.
     "DIAGNOSTICS_FAILED": 22,
+    # Phase 025. The one value no command returns: the watchdog ends the process
+    # rather than letting it exit, so nothing in `globin.runtime.cli` can produce
+    # this and a launcher seeing it knows the run did not choose its own ending.
+    "WATCHDOG_STALLED": 23,
 }
 
 #: Which check answers for which failure class. A launcher that saw code 12 must

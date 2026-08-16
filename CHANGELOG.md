@@ -19,6 +19,55 @@ can be opened and read.
 
 ## [Unreleased]
 
+### The native TA-Lib library, provisioned and proved present
+
+- **`ta-lib` is a declared, locked runtime dependency**, and the wheel carries the
+  native C library — measured on this host rather than concluded from
+  `ta_lib-0.7.1-cp314-cp314-win_amd64.whl`.
+  [`docs/engineering/wheel-survey.toml`](docs/engineering/wheel-survey.toml) had
+  refused to draw that conclusion from a filename and filed the question against
+  this phase by name.
+- **Three probes in
+  [`stack-contract.toml`](docs/engineering/stack-contract.toml) recompute it.** The
+  C library answers with its own version, so it linked and initialised; the
+  indicator table is complete, which is the failure a version string cannot catch;
+  and a moving average is seeded at `timeperiod - 1`, because an indicator one bar
+  short is look-ahead arriving as a plausible number.
+- `ta-lib` left the wheel survey for the stack contract, as `numpy` and `pandas` did
+  in Phase 022, and `DELIVERED_PHASE` rose 22 → 25 in both gates. **Raising the
+  stack gate's floor found a stale deferral** that had been false since Phase 023
+  shipped, which is exactly what a floor left too low cannot catch.
+- Its review records one surprise: upstream declares `build`, a PEP 517 build
+  *frontend*, as an install requirement of a wheel that needs no building, so
+  `packaging`, `pyproject_hooks` and `colorama` arrive with it.
+
+### A watchdog, so a wedged process does not stay open for ever
+
+- **A heartbeat is a sequence, not a timestamp.** A component looping inside a
+  wedged call rewrites a timestamp indefinitely, so *alive* and *progressing* are
+  recorded as different observations. Beating a name nobody registered raises rather
+  than doing nothing.
+- **The escalation deadline is measured from the stall, not from the request**, so a
+  slow evidence capture cannot postpone the end of the process. Recovery has exactly
+  one inbound edge, so a component that resumes after a confirmed stall is recorded
+  and ignored — a run whose evidence claims a stall it then denies is worth nothing.
+- **Exactly one incident per stall is a property of the transition graph** rather
+  than of a counter: one edge enters `stalled`, and the machine is confined to one
+  thread. `threading` being I/O-capable pushed the state machine out of the
+  application layer, which is why the whole chain is testable with a fake clock and
+  **no threads at all**.
+- **GLOBIN starts its first thread.** Non-daemon, waiting on an `Event` rather than
+  sleeping, and disarmed before it is joined. Termination is `os._exit` behind an
+  injected port, because `sys.exit` from a background thread ends only that thread —
+  and no test ever kills the runner.
+- **Phase 024's refusal to publish stacks is answered by destination.** A stall
+  incident goes to the user-local `state/watchdog.json`, is deliberately not a
+  support-bundle candidate, and reduces every frame path through the reduction Phase
+  024 already used for allocation sites. No locals are ever read.
+  [`RUNTIME_WATCHDOG.md`](docs/engineering/RUNTIME_WATCHDOG.md), ADR-0066.
+- Exit code `23`, six `watchdog` settings, and **no driver**: no command starts one,
+  because the long-lived process is Phase 257's.
+
 ### Which workloads benefit from a GPU, measured rather than assumed
 
 - **`python -m tools.quality benchmark`** reads

@@ -75,6 +75,18 @@ probes = [
     "pandas.copy_on_write_is_active",
 ]
 
+[[library]]
+name = "ta-lib"
+import_name = "talib"
+version = "0.7.1"
+wheel_tag = "cp314-cp314-win_amd64"
+role = "the indicator half"
+probes = [
+    "talib.native_library_is_carried_by_the_wheel",
+    "talib.indicator_table_is_complete",
+    "talib.moving_average_warmup_is_the_documented_length",
+]
+
 [[probe]]
 id = "numpy.float64_is_binary64"
 because = "PRECISION_POLICY.md defines the approximate regime in these terms"
@@ -102,6 +114,18 @@ because = "TIME_POLICY.md makes internal time UTC and aware"
 [[probe]]
 id = "pandas.copy_on_write_is_active"
 because = "without it a slice can mutate its caller's data"
+
+[[probe]]
+id = "talib.native_library_is_carried_by_the_wheel"
+because = "a wheel filename cannot say whether the native C library is inside it"
+
+[[probe]]
+id = "talib.indicator_table_is_complete"
+because = "a partially linked library still answers with its version"
+
+[[probe]]
+id = "talib.moving_average_warmup_is_the_documented_length"
+because = "an indicator seeded one bar short is look-ahead arriving as a number"
 
 [[deferral]]
 question = "the indicator numeric type"
@@ -133,6 +157,17 @@ url = "https://files.pythonhosted.org/packages/bb/pandas-3.0.5-cp314-cp314-win_a
 
 [packages.wheels.hashes]
 sha256 = "cd8f7c6dc98527058ee6264219343f5392240a6f1bfa654fc5d79023020d0c92"
+
+[[packages]]
+name = "ta-lib"
+version = "0.7.1"
+
+[[packages.wheels]]
+name = "ta_lib-0.7.1-cp314-cp314-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/cc/ta_lib-0.7.1-cp314-cp314-win_amd64.whl"
+
+[packages.wheels.hashes]
+sha256 = "3b1f9a6c2e4d7085a1c3f6e2b9d4708c5f2a1e6b3d8c407f9a2e5b1d6c3f8074"
 """
 
 MANIFEST = """
@@ -141,18 +176,20 @@ name = "globin"
 dependencies = [
     "numpy>=2.5.2",
     "pandas>=3.0.5",
+    "ta-lib>=0.7.1",
 ]
 """
 
 INSTALLED: dict[str, tuple[str, str]] = {
     "numpy": ("2.5.2", "cp314-cp314-win_amd64"),
     "pandas": ("3.0.5", "cp314-cp314-win_amd64"),
+    "ta-lib": ("0.7.1", "cp314-cp314-win_amd64"),
 }
 
 
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
-    """A repository whose four registers agree about both libraries."""
+    """A repository whose four registers agree about all three libraries."""
     (tmp_path / "docs" / "engineering").mkdir(parents=True)
     (tmp_path / "docs" / "engineering" / "stack-contract.toml").write_text(
         DECLARATION, encoding="utf-8"
@@ -241,7 +278,7 @@ def test_the_manifest_records_every_probe_separately(tree: Path) -> None:
     assert isinstance(findings, dict)
     probes = findings["probes"]
     assert isinstance(probes, dict)
-    assert len(probes) == 7
+    assert len(probes) == 10
     assert probes["pandas.copy_on_write_is_active"]["verdict"] == "passed"
 
 
@@ -408,7 +445,7 @@ def test_a_deferral_naming_a_delivered_phase_is_refused(tree: Path) -> None:
 
 
 def test_the_lock_reader_returns_every_pinned_version(tree: Path) -> None:
-    assert locked_versions(tree) == {"numpy": "2.5.2", "pandas": "3.0.5"}
+    assert locked_versions(tree) == {"numpy": "2.5.2", "pandas": "3.0.5", "ta-lib": "0.7.1"}
 
 
 @pytest.mark.parametrize(
@@ -437,7 +474,11 @@ def test_an_unusable_lock_reads_as_empty_rather_than_raising(
 
 
 def test_the_manifest_reader_returns_every_declared_bound(tree: Path) -> None:
-    assert declared_bounds(tree) == {"numpy": ">=2.5.2", "pandas": ">=3.0.5"}
+    assert declared_bounds(tree) == {
+        "numpy": ">=2.5.2",
+        "pandas": ">=3.0.5",
+        "ta-lib": ">=0.7.1",
+    }
 
 
 def test_a_dependency_with_no_specifier_maps_to_an_empty_bound(tree: Path) -> None:
