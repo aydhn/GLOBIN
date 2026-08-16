@@ -295,7 +295,7 @@ def test_a_field_of_the_wrong_type_is_refused_by_name(
 def test_a_tree_that_resolves_inside_its_root_passes() -> None:
     outcome = boundary_outcome((), RuntimeLayout())
     assert outcome.status is CheckStatus.PASS
-    assert "4 areas" in outcome.summary
+    assert "5 areas" in outcome.summary
 
 
 def test_a_tree_that_escapes_its_root_fails_with_a_remediation() -> None:

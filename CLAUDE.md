@@ -422,6 +422,32 @@ phase that has a legitimate use edits the stack contract in its own diff.
 Reasoning: [`docs/engineering/SCIENTIFIC_STACK.md`](docs/engineering/SCIENTIFIC_STACK.md)
 and [ADR-0058](docs/adr/0058-the-scientific-stack-is-verified-by-measurement-and-stays-in-the-approximate-regime.md).
 
+A ninth sibling asks what this *machine* has rather than what the tree declares,
+and like the six above it **reaches nothing**:
+
+```bash
+python -m tools.quality gpu
+```
+
+It reads [`docs/engineering/gpu-contract.toml`](docs/engineering/gpu-contract.toml)
+and asks `nvidia-smi` only the fields that contract permits, recording a **state**
+for each of five capabilities — device presence, driver version, compute
+capability, CUDA runtime, CUDA toolkit. It writes `.globin/gpu/gpu-manifest.json`.
+
+**Absence is a state, not a failure.** A host with no NVIDIA device records
+`ABSENT` and exits `0`, which is what lets this run on CI's GPU-less runner;
+`ERROR` always fails, because not knowing why differs from knowing why. The
+contract declares an *interface*, never a baseline — no driver version is
+committed, so nothing goes red on a driver update. Three field names are named as
+**forbidden**: `nvidia-smi` refuses `cuda_version` outright *and asking breaks the
+whole query*, and it answers two of its own `--version` labels with the word
+*Deprecated*. All four traps were measured on this host, not remembered
+([`docs/research/phase_023_sources.md`](docs/research/phase_023_sources.md)).
+Detection is Phase 023; **which workloads benefit is Phase 024**, and nothing here
+times anything. Reasoning:
+[`docs/engineering/GPU_CAPABILITY.md`](docs/engineering/GPU_CAPABILITY.md) and
+[ADR-0060](docs/adr/0060-gpu-capability-is-detected-and-the-runtime-explains-itself.md).
+
 Since Phase 021 there is also an **application** command, which is not a gate and
 does not live in that table. It exists once GLOBIN is installed, which
 `scripts/bootstrap.ps1` now does:
@@ -446,7 +472,7 @@ is deliberately *not* checked yet are in
 
 Phase 022 gave that process somewhere to keep state. A running GLOBIN writes to a
 **user-local** tree under `%LOCALAPPDATA%\GLOBIN\` — `state`, `cache`, `run`,
-`tmp` — which is deliberately *not* `.globin/`: that tree is evidence about this
+`tmp`, and since Phase 023 `logs` — which is deliberately *not* `.globin/`: that tree is evidence about this
 repository, read by CI, and this one is state about this machine. **No secret, no
 credential and no bulk data goes in either.** Every small document is published
 atomically, and one coordinator per machine is guaranteed by an operating-system
@@ -455,6 +481,20 @@ only that GLOBIN once ran**, so a stale one never blocks a start-up and is never
 deleted on a guess. `doctor` probes that lock and does not keep it. What is
 guaranteed on each kind of ending, and what is not, is in
 [`docs/engineering/RUNTIME_FILESYSTEM.md`](docs/engineering/RUNTIME_FILESYSTEM.md).
+
+Phase 023 gave that process a voice. `logs/` is the **only area appended to**, so
+it is bounded by a validated rotation policy rather than trusted — a policy that
+could not be honoured cannot be constructed. The three fault hooks
+(`sys.excepthook`, `threading.excepthook`, `sys.unraisablehook`) are installed by
+the composition root through an **injected registry** and put back on the way out;
+`faulthandler` writes plain text to its own file, because a native traceback is
+written by C and that is exactly why it still works when the interpreter cannot.
+A bridge routes a dependency's standard-library records and Python's warnings into
+GLOBIN's sinks — **GLOBIN's own call sites still do not use `logging`**, and
+`tests/architecture/test_logging_discipline.py` fails if that changes. Redaction is
+by field *name*, so a credential inside an exception message **is** written, and
+that limit is stated rather than implied. Details:
+[`docs/engineering/RUNTIME_DIAGNOSTICS.md`](docs/engineering/RUNTIME_DIAGNOSTICS.md).
 
 One gate sits outside `full`, because it takes minutes rather than seconds:
 

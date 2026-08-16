@@ -27,6 +27,8 @@ from globin.domain.configuration import (
     KEY_SEPARATOR,
     LOGGING_SECTION,
     MIN_SEVERITY,
+    ROTATION_BACKUP_COUNT,
+    ROTATION_MAX_BYTES,
     ConfigLayer,
     LoggingConfig,
     ResolvedConfig,
@@ -161,8 +163,14 @@ def test_a_setting_with_no_declared_default_is_a_defect_in_the_model() -> None:
 
 
 def test_the_known_keys_are_exactly_what_as_config_binds() -> None:
-    """The tripwire that lets :data:`MIN_SEVERITY` be spelled out separately."""
-    assert known_keys() == (MIN_SEVERITY,)
+    """The tripwire that lets each key name be spelled out separately.
+
+    Compared as a set rather than a tuple. `known_keys()` derives its order from
+    the dataclass's field order, and a phase adding a field in the middle of a
+    section would otherwise fail here for a reason that is not about correctness —
+    the ordering is not a promise this module makes to anybody.
+    """
+    assert set(known_keys()) == {MIN_SEVERITY, ROTATION_MAX_BYTES, ROTATION_BACKUP_COUNT}
 
 
 def test_the_defaults_layer_records_where_its_values_came_from() -> None:

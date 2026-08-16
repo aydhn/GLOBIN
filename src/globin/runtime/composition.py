@@ -43,6 +43,20 @@ from globin.adapters.bootstrap import (
     write,
 )
 from globin.adapters.clock import SystemClock, SystemMonotonicClock
+from globin.adapters.diagnostics import (
+    DIAGNOSTICS_FILE,
+    FAULT_FILE_NAME,
+    LOG_FILE_NAME,
+    FanOutLogSink,
+    FaultFile,
+    HookRegistry,
+    ProcessFaultHooks,
+    RotatingFileLogSink,
+    RuntimeDiagnostics,
+    StandardLibraryBridge,
+    StandardLibraryCapture,
+    system_hooks,
+)
 from globin.adapters.observability import StreamLogSink, ThresholdLogSink, new_correlation_id
 from globin.adapters.runtime_state import (
     AtomicStateStore,
@@ -68,7 +82,7 @@ from globin.domain.bootstrap import (
     RuntimePaths,
 )
 from globin.domain.configuration import GlobinConfig, default_config
-from globin.domain.runtime_state import LOCK_FILE, RuntimeLayout
+from globin.domain.runtime_state import LOCK_FILE, RuntimeArea, RuntimeLayout
 from globin.errors import ConfigurationError
 from globin.ports.clock import Clock, MonotonicClock
 from globin.ports.configuration import ConfigurationSource
@@ -296,7 +310,7 @@ class RuntimeState:
     Args:
         root: The resolved runtime root.
         layout: The declared shape of the tree.
-        tree: Creates the four areas and refuses anything that escapes.
+        tree: Creates the five areas and refuses anything that escapes.
         store: Publishes and reads small documents inside them.
         lock: Decides whether this process may be the one coordinator.
         signals: Notices a stop request.
@@ -366,6 +380,87 @@ def _register_handler(number: int, handler: Callable[[int, types.FrameType | Non
     the port keeps the port describing what GLOBIN actually needs.
     """
     signal.signal(number, handler)
+
+
+def build_diagnostics(
+    state: RuntimeState,
+    *,
+    correlation_id: str | None = None,
+    config: GlobinConfig | None = None,
+    clock: Clock | None = None,
+    stream: TextIO | None = None,
+    hooks: HookRegistry | None = None,
+) -> RuntimeDiagnostics:
+    """Wire the full diagnostic subsystem against a prepared runtime tree.
+
+    Args:
+        state: The runtime tree, already resolved. The log file goes in its logs
+            area, which is the one place a growing file is allowed.
+        correlation_id: Ties every record in this run together. Defaults to a
+            fresh one.
+        config: Supplies the severity threshold and the rotation policy.
+        clock: Stamps each record. Defaults to :func:`build_clock`.
+        stream: Where console records go. Defaults to :data:`sys.stderr`, so that
+            ``--json`` output on standard out stays parseable.
+        hooks: Where the process fault hooks live. Defaults to the real ones; a
+            test passes a registry backed by a dictionary and never touches
+            :mod:`sys`.
+
+    Returns:
+        The assembled :class:`~globin.adapters.diagnostics.RuntimeDiagnostics`,
+        **not started**. Starting it installs process-global hooks, and that is a
+        decision for the caller that owns the process rather than a side effect of
+        asking for the object.
+
+    **The console and the file are one fan-out, not two loggers.** A second logger
+    would mean two correlation ids for one unit of work, and a call site choosing
+    between them. One logger writes to a fan-out whose elements hold their own
+    thresholds, which is the arrangement ``LOGGING_POLICY.md`` describes.
+
+    **The file sink is never the reason a start-up fails.** ``config`` may turn it
+    off, and a tree whose logs area cannot be created is a
+    :class:`~globin.domain.bootstrap.ExitCode.PATHS_UNUSABLE` refusal from the
+    bootstrap checks rather than a surprise from here.
+    """
+    settings = default_config() if config is None else config
+    ticking = build_clock() if clock is None else clock
+    identifier = new_correlation_id() if correlation_id is None else correlation_id
+    logs = state.root / state.layout.segment_for(RuntimeArea.LOGS)
+
+    console = ThresholdLogSink(
+        inner=StreamLogSink(stream=sys.stderr if stream is None else stream, clock=ticking),
+        minimum=settings.logging.min_severity,
+    )
+    file_sink = RotatingFileLogSink(
+        path=logs / LOG_FILE_NAME,
+        clock=ticking,
+        policy=settings.logging.rotation(),
+        handle=None,
+        written=0,
+    )
+    fan_out = FanOutLogSink(
+        sinks=(
+            console,
+            ThresholdLogSink(inner=file_sink, minimum=settings.logging.min_severity),
+        )
+    )
+    logger = Logger(sink=fan_out, correlation_id=identifier)
+    return RuntimeDiagnostics(
+        logger=logger,
+        file_sink=file_sink,
+        hooks=ProcessFaultHooks(
+            logger=logger,
+            registry=system_hooks() if hooks is None else hooks,
+            previous={},
+        ),
+        capture=StandardLibraryCapture(
+            bridge=StandardLibraryBridge(sink=fan_out, correlation_id=identifier),
+            installed=False,
+        ),
+        faults=FaultFile(path=logs / FAULT_FILE_NAME, handle=None),
+        started=False,
+        publish=lambda document: state.store.publish(RuntimeArea.STATE, DIAGNOSTICS_FILE, document),
+    )
 
 
 def build_lifecycle(

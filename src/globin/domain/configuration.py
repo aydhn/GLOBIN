@@ -47,6 +47,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import MISSING, dataclass, fields
 from typing import Any, Final
 
+from globin.domain.diagnostics import (
+    MAXIMUM_BACKUP_COUNT,
+    MAXIMUM_ROTATION_BYTES,
+    MINIMUM_ROTATION_BYTES,
+    RotationPolicy,
+)
 from globin.domain.observability import Severity
 from globin.errors import ConfigurationError, InternalError, ValidationError
 
@@ -64,12 +70,35 @@ reads the same way as one about a value from a file.
 """
 
 MIN_SEVERITY: Final[str] = f"{LOGGING_SECTION}{KEY_SEPARATOR}min_severity"
-"""The one setting GLOBIN has today.
+"""The lowest severity a sink will write.
 
 Spelled out here as well as being derivable from :class:`LoggingConfig` because
 :func:`as_config` needs a name to bind. The two are compared by
 ``tests/contract/test_configuration_contract.py``, which is what makes this a
 tripwire rather than a copy — see ``docs/engineering/SOURCE_OF_TRUTH.md``.
+"""
+
+ROTATION_MAX_BYTES: Final[str] = f"{LOGGING_SECTION}{KEY_SEPARATOR}rotation_max_bytes"
+"""The size at which the log file is rotated."""
+
+ROTATION_BACKUP_COUNT: Final[str] = f"{LOGGING_SECTION}{KEY_SEPARATOR}rotation_backup_count"
+"""How many rotated log files are kept beside the live one."""
+
+DEFAULT_ROTATION_MAX_BYTES: Final[int] = 1_048_576
+"""One mebibyte per file.
+
+Small on purpose. ``RUNTIME_FILESYSTEM.md`` says the runtime tree holds nothing
+large, and with the default backup count this bounds the whole logs area at eight
+mebibytes — a number an operator can lose without noticing and a reviewer can
+check without multiplying.
+"""
+
+DEFAULT_ROTATION_BACKUP_COUNT: Final[int] = 7
+"""How many rotated files are kept by default.
+
+Seven, so that the live file plus its backups span roughly a working week of
+ordinary operation rather than a fixed number of hours. Nothing depends on that
+being exact; it is a default chosen to be useful, not a guarantee about time.
 """
 
 
@@ -80,6 +109,8 @@ class LoggingConfig:
     Args:
         min_severity: The lowest severity a sink will write. Records below it are
             discarded.
+        rotation_max_bytes: The size at which the log file is rotated.
+        rotation_backup_count: How many rotated files are kept beside the live one.
 
     The default is :attr:`~globin.domain.observability.Severity.DEBUG`, which
     discards nothing. Two arguments land on that value independently. It
@@ -95,6 +126,30 @@ class LoggingConfig:
     """
 
     min_severity: Severity = Severity.DEBUG
+    rotation_max_bytes: int = DEFAULT_ROTATION_MAX_BYTES
+    rotation_backup_count: int = DEFAULT_ROTATION_BACKUP_COUNT
+
+    def rotation(self) -> RotationPolicy:
+        """The bound on the logs area these settings describe.
+
+        Returns:
+            The validated :class:`~globin.domain.diagnostics.RotationPolicy`.
+
+        Raises:
+            ValidationError: If the two values are outside the policy's bounds.
+                Unreachable through :func:`as_config`, which refuses them first
+                with a message naming the document they came from. This is the
+                second of two gates, kept because a caller may construct a
+                :class:`LoggingConfig` directly.
+
+        A method rather than a field, because ``RotationPolicy(...)`` in a class
+        body would be a call, and
+        ``tests/architecture/test_architecture_contract.py`` holds every layer
+        package to performing no work at import.
+        """
+        return RotationPolicy(
+            max_bytes=self.rotation_max_bytes, backup_count=self.rotation_backup_count
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -422,8 +477,70 @@ def as_config(resolved: ResolvedConfig) -> GlobinConfig:
         raise InternalError(msg)
 
     return GlobinConfig(
-        logging=LoggingConfig(min_severity=_severity(resolved.setting(MIN_SEVERITY)))
+        logging=LoggingConfig(
+            min_severity=_severity(resolved.setting(MIN_SEVERITY)),
+            rotation_max_bytes=_bounded(
+                resolved.setting(ROTATION_MAX_BYTES),
+                low=MINIMUM_ROTATION_BYTES,
+                high=MAXIMUM_ROTATION_BYTES,
+            ),
+            rotation_backup_count=_bounded(
+                resolved.setting(ROTATION_BACKUP_COUNT), low=0, high=MAXIMUM_BACKUP_COUNT
+            ),
+        )
     )
+
+
+def _bounded(setting: Setting, *, low: int, high: int) -> int:
+    """Read an integer within a declared range, refusing anything else.
+
+    Args:
+        setting: The resolved setting, carrying its origin for the message.
+        low: The smallest acceptable value.
+        high: The largest.
+
+    Returns:
+        The integer.
+
+    Raises:
+        ConfigurationError: If the value is not an integer in range.
+
+    **A ``bool`` is refused**, even though Python makes it an ``int``. ``true``
+    resolving to a rotation size of one byte is the kind of accident that looks
+    like it worked, and refusing it costs an operator nothing they meant to do.
+
+    **A string of plain digits is accepted**, matching what :func:`_severity` does
+    with a severity name. Two reasons, and the second is the load-bearing one. A
+    documented default is written in a Markdown table and
+    ``tests/contract/test_configuration_contract.py`` feeds that spelling back
+    through this binder to prove the column is not stale, so the binder has to
+    accept what the document says. And Phase 027 will resolve environment
+    variables, which are strings and nothing else — a binder that only took
+    integers would have to be widened then, in a phase about precedence rather
+    than about types.
+
+    *Plain* digits, checked with :meth:`str.isdigit` against the unstripped value.
+    That refuses ``" 1 "``, ``"+1"``, ``"1_000"`` and ``"1.0"`` — the same
+    spellings ``VALUE_TYPES_POLICY.md`` refuses for an amount, for the same reason:
+    a value with two possible readings has none.
+
+    The bound is checked here as well as in
+    :class:`~globin.domain.diagnostics.RotationPolicy` deliberately. The value type
+    refuses because a policy that cannot be honoured must not exist; this refuses
+    because an operator who wrote a bad number deserves a message naming the file
+    they wrote it in, which a :class:`ValidationError` raised deeper down cannot
+    give them. Fail closed, and say where.
+    """
+    value = setting.value
+    if isinstance(value, str) and value.isdigit():
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, int):
+        msg = f"{setting.origin}: {setting.key} is {value!r}; expected an integer"
+        raise ConfigurationError(msg)
+    if not low <= value <= high:
+        msg = f"{setting.origin}: {setting.key} is {value}; expected between {low} and {high}"
+        raise ConfigurationError(msg)
+    return value
 
 
 def _severity(setting: Setting) -> Severity:

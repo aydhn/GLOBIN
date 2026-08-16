@@ -113,6 +113,18 @@ REQUIRED_DOCS: tuple[str, ...] = (
     # version it announces rather than only that it exists.
     "docs/release/RELEASE_POLICY.md",
     "docs/release/FOUNDATION_ACCEPTANCE.md",
+    # Added in Phase 023, with its own ledger and the two documents it owns.
+    #
+    # Phases 021 and 022 wrote ledgers and neither was added here, so nothing
+    # required them — the same drift the Phase 014 comment above records, and the
+    # second time it has happened. Both are added now rather than only 023's,
+    # because a list that is required to be complete and is not is worse than no
+    # list: it reads as a guarantee.
+    "docs/research/phase_021_sources.md",
+    "docs/research/phase_022_sources.md",
+    "docs/research/phase_023_sources.md",
+    "docs/engineering/GPU_CAPABILITY.md",
+    "docs/engineering/RUNTIME_DIAGNOSTICS.md",
 )
 
 #: Minimum byte length for a document to count as substantive rather than a

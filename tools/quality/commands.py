@@ -390,6 +390,27 @@ _LOCK = Step("lock", (), ("-m", "tools.quality.lock"))
 # No modules are declared. It starts no child at all.
 _STACK = Step("stack", (), ("-m", "tools.quality.stack"))
 
+# The GPU capability gate. Reads `docs/engineering/gpu-contract.toml`, compares
+# its target against `runtime-contract.toml`, asks `nvidia-smi` only the fields
+# the contract permits, and records a state for every declared capability.
+#
+# It REACHES NOTHING, like `governance`, `release`, `runtime`, `wheels`, `drift`,
+# `lock check` and `stack`. Like `stack` it has no networked subcommand at all:
+# what this host has is entirely answerable from this host.
+#
+# In neither `fast` nor `full`, and here the reason is sharper than the artefact
+# it writes. This gate reports on the MACHINE rather than on the tree, so its
+# verdict can change without a commit and a commit cannot change it. A gate in
+# `full` should fail for something the commit did. ADR-0032 condition 5.
+#
+# ABSENCE IS NOT FAILURE. A host with no NVIDIA device records every capability
+# ABSENT and exits 0, which is what lets this run at all on `windows-latest`,
+# where CI has no GPU. What fails is a contract that contradicts itself, a gap
+# owned by nobody, or a probe that errored. ADR-0045.
+#
+# No modules are declared. It starts a child, but not a Python one.
+_GPU = Step("gpu", (), ("-m", "tools.quality.gpu"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -478,6 +499,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "stack",
         "The installed numerical and dataframe stack, against the behaviour GLOBIN assumes.",
         (_STACK,),
+    ),
+    Command(
+        "gpu",
+        "Whether this host has an NVIDIA device, and what it reports about itself.",
+        (_GPU,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

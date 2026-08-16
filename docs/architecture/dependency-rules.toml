@@ -53,6 +53,12 @@ capable_modules = [
     "asyncio",
     "concurrent",
     "ctypes",
+    # `faulthandler` joined this table in Phase 023; see ADR-0060. It writes a
+    # native traceback to a file descriptor it is handed and keeps writing to it
+    # from a signal context, which is I/O by any reading — and, unusually, I/O
+    # that continues after the interpreter has stopped being able to run Python.
+    # An inner layer reaching for it would be an inner layer holding an open file.
+    "faulthandler",
     "ftplib",
     "http",
     "imaplib",

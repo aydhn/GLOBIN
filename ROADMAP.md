@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-022 are complete. Phase 023 is next and has not started.**
-> Nothing beyond Phase 022 is implemented. GLOBIN does not trade, does not
+> **Phases 001-023 are complete. Phase 024 is next and has not started.**
+> Nothing beyond Phase 023 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
 >
@@ -106,10 +106,10 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Six have been made. Each cost an ADR, and each is
+> **Scope amendments.** Seven have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
-> unchanged by all six.
+> unchanged by all seven.
 >
 > **First.** Phase 003 originally read *Coding Standards and Static Analysis
 > Baseline*, and Phase 013 read *Continuous Verification Script and Quality
@@ -185,6 +185,28 @@ the contract:
 > records that, and the three courses the conflict was surfaced with, on the
 > owner's decision. A seventh amendment cannot cite this one either, and cannot
 > cite the series.
+>
+> **Seventh.** Phase 023 still delivers the NVIDIA driver and CUDA capability
+> detection its title names, and now also gives the running application its
+> diagnostics: a bounded log file in the runtime tree, a lifecycle event
+> vocabulary, the three process fault hooks, `faulthandler`, and a bridge for
+> third-party standard-library records and Python warnings.
+>
+> **It scores one of four, and fails the third criterion worse than any amendment
+> before it.** Restating ADR-0021's test in full: nothing is deferred and no other
+> title changes, but work is displaced — rotation and retention are Phase 282's by
+> name, with parts of 026, 027 and 030 arriving too — the two halves do not need
+> each other, and **the phase that owns the work has already shipped**. Phase 006
+> delivered the structured logging foundation and is marked `Complete`; every
+> previous amendment displaced work forwards into phases that had not started.
+> What shipped is the part Phase 006 could not have built, because in Phase 006
+> there was no application to instrument, and the overlap was refused rather than
+> rebuilt: the record schema is unchanged, ADR-0026's explicit correlation stands,
+> and the standard library's `logging` did not enter GLOBIN's call sites.
+> [ADR-0060](docs/adr/0060-gpu-capability-is-detected-and-the-runtime-explains-itself.md)
+> records that, and the four courses the conflict was surfaced with, on the
+> owner's decision. An eighth amendment can cite neither this one nor the series,
+> and must additionally say which completed phase it overlaps.
 
 ---
 
@@ -228,7 +250,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 020 | Dependency Resolution and Lockfile Strategy | Choose the locking mechanism and define reproducible resolution, upgrade and audit procedures. | Complete |
 | 021 | Core Runtime Dependency Introduction | Introduce the first runtime dependencies under the zero-budget policy with explicit justification per package. | Complete |
 | 022 | Scientific Stack Installation and Verification | Install and verify the numerical and dataframe stack, confirming correctness rather than assuming it; and, as the sixth scope amendment, deliver the application's mutable runtime filesystem, atomic state publication, single-instance coordinator lock and graceful shutdown. | Complete |
-| 023 | NVIDIA Driver and CUDA Capability Detection | Detect GPU presence, driver version, compute capability and CUDA availability without assuming any of them. | Planned |
+| 023 | NVIDIA Driver and CUDA Capability Detection | Detect GPU presence, driver version, compute capability and CUDA availability without assuming any of them; and, as the seventh scope amendment, give the running application its diagnostics -- a bounded log file in the runtime tree, a lifecycle event vocabulary, the process fault hooks, `faulthandler`, and a bridge for standard-library records. | Complete |
 | 024 | GPU Runtime Verification Harness | Build a harness that proves which workloads actually benefit from GPU execution on this host. | Planned |
 | 025 | TA-Lib Native Library Provisioning | Provision the native TA-Lib dependency required by the Python wrapper on Windows, with a documented fallback. | Planned |
 | 026 | Configuration File Layout and Profiles | Define on-disk configuration locations and the paper, demo, testnet and live profile structure. | Planned |

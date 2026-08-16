@@ -237,7 +237,7 @@ def render(document: Mapping[str, object]) -> str:
 
 @dataclass(frozen=True, slots=True)
 class ProjectRuntimeTree:
-    """Creates the four areas beneath the resolved root, and refuses what escapes.
+    """Creates the five areas beneath the resolved root, and refuses what escapes.
 
     Args:
         root: The canonical runtime root.

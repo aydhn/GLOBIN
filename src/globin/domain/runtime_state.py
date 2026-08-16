@@ -100,7 +100,7 @@ class InstanceAlreadyActiveError(ConfigurationError):
 
 
 class RuntimeArea(StrEnum):
-    """The four directories of the mutable runtime tree.
+    """The five directories of the mutable runtime tree.
 
     A closed set rather than free-form names, so a component asking for somewhere
     to write has to answer the question the enumeration poses: may this be deleted,
@@ -111,6 +111,25 @@ class RuntimeArea(StrEnum):
     CACHE = "cache"
     RUN = "run"
     TMP = "tmp"
+
+    LOGS = "logs"
+    """Diagnostic records of what this installation did, newest first.
+
+    Added by Phase 023, and the only area whose contents are *appended* rather
+    than published whole. Every other area holds small documents written through
+    :meth:`~globin.ports.runtime_state.StateStore.publish`, which replaces a file
+    atomically; a log is the one thing GLOBIN writes that grows.
+
+    That makes it the area ADR-0059 warned about — "a later phase writing
+    something large into ``state/`` because the directory was already there" — so
+    it is bounded rather than trusted. A sink here rotates at a declared size and
+    keeps a declared number of files, and the two together are a hard ceiling on
+    what this directory can ever cost. It is separate from ``state`` precisely so
+    that the bound applies to the growing thing and not to the small ones.
+
+    It is deletable. Deleting it loses the record of what happened and nothing
+    else; no decision GLOBIN makes reads from here.
+    """
 
 
 class LifecycleStatus(StrEnum):
@@ -153,6 +172,7 @@ class RuntimeLayout:
         cache: Reproducible data that may be deleted at any time.
         run: The live instance's lock and metadata.
         tmp: Per-run scratch space.
+        logs: Bounded diagnostic records. The only area that is appended to.
 
     Raises:
         ValidationError: If any segment could leave the tree.
@@ -167,6 +187,7 @@ class RuntimeLayout:
     cache: str = "cache"
     run: str = "run"
     tmp: str = "tmp"
+    logs: str = "logs"
 
     def __post_init__(self) -> None:
         """Refuse any segment that is not a plain directory name."""
@@ -190,6 +211,7 @@ class RuntimeLayout:
             "cache": self.cache,
             "run": self.run,
             "tmp": self.tmp,
+            "logs": self.logs,
         }
 
     def segment_for(self, area: RuntimeArea) -> str:
@@ -206,17 +228,24 @@ class RuntimeLayout:
             RuntimeArea.CACHE: self.cache,
             RuntimeArea.RUN: self.run,
             RuntimeArea.TMP: self.tmp,
+            RuntimeArea.LOGS: self.logs,
         }[area]
 
     def areas(self) -> tuple[RuntimeArea, ...]:
         """Every area, in a fixed order.
 
         Returns:
-            The four areas. Fixed rather than sorted at the call site, so two runs
+            The five areas. Fixed rather than sorted at the call site, so two runs
             report their problems in the same order and a manifest built from them
             is deterministic.
         """
-        return (RuntimeArea.STATE, RuntimeArea.CACHE, RuntimeArea.RUN, RuntimeArea.TMP)
+        return (
+            RuntimeArea.STATE,
+            RuntimeArea.CACHE,
+            RuntimeArea.RUN,
+            RuntimeArea.TMP,
+            RuntimeArea.LOGS,
+        )
 
 
 def segment_problems(segment: str, *, named: str) -> tuple[str, ...]:

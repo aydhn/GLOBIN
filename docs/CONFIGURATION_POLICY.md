@@ -34,11 +34,22 @@ so a new setting is one line and cannot be half-added.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `logging.min_severity` | `Severity` | `DEBUG` | The lowest severity a sink keeps. Records below it are discarded. |
+| `logging.rotation_max_bytes` | `int` | `1048576` | The size at which the runtime log file is rotated. Between 4096 and 67108864. |
+| `logging.rotation_backup_count` | `int` | `7` | How many rotated log files are kept beside the live one. Between 0 and 32. |
 
-One setting is the honest register today. Of everything Phases 001-006 built,
-only logging holds anything an operator may reasonably change: the project
+Three settings, and all three are logging's. Of everything Phases 001-006 built,
+only logging held anything an operator may reasonably change: the project
 contract and the roadmap are immutable identity, the error taxonomy has nothing
 to tune, and the architecture review's paths are constants rather than settings.
+Phase 023 added the two rotation values when it gave GLOBIN somewhere to write.
+
+**The two integers are bounded, and refused twice.** `as_config` refuses an
+out-of-range value with a message naming the document it came from, because that
+is what an operator needs; `RotationPolicy` refuses it again on construction,
+because a policy that cannot be honoured must not exist. Neither gate is
+redundant — the first exists to explain, the second to guarantee. A `bool` is
+refused for both, even though Python makes it an `int`: `true` resolving to a
+rotation size of one byte is the kind of accident that looks like it worked.
 
 A configuration model is exactly where speculative fields accumulate, so the
 register grows in the phase that needs the setting and not before —

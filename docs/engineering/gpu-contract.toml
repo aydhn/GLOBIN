@@ -1,0 +1,152 @@
+# ---------------------------------------------------------------------------
+# What GLOBIN may ask this machine about its GPU, and what an answer means.
+#
+# NOT A BASELINE. This file records no driver version, no compute capability and
+# no device name, which is the difference between it and
+# `drift-policy.toml`'s accepted baseline. A driver updates on its own schedule;
+# a file that pinned 610.88 would go red on a Tuesday for a reason nobody in this
+# programme decided, and the bump would be applied without being read. What is
+# declared here is the *interface* and the *policy* — which documented fields may
+# be asked, which must never be, and who answers for an absence. The observed
+# values live in `.globin/gpu/gpu-manifest.json`, which is regenerated and never
+# committed.
+#
+# ABSENCE IS A STATE, NOT A FAILURE. ADR-0045 settled this for platform controls
+# and the same reasoning applies to hardware: a gate that went red because a
+# laptop has no NVIDIA card would be reporting the laptop, not the repository.
+# The roadmap asks Phase 023 to detect "without assuming any of them", and a
+# check that can only pass on one machine assumes that machine. Continuous
+# integration runs on `windows-latest`, which has no GPU at all, so a gate that
+# required one would be permanently red on the only host that must stay green.
+#
+# WHAT FAILS, THEN. A malformed declaration; a capability whose gap is owned by
+# nobody; a probe that errored, because not knowing why is a different fact from
+# knowing why; a deprecated field being read; and a manifest that is
+# non-deterministic or carries something that must not be published.
+#
+# THIS IS DETECTION, NOT BENEFIT. Phase 024 owns "which workloads actually
+# benefit from GPU execution on this host". Nothing here times anything, and
+# nothing here concludes that a workload should use a GPU. Recording that a
+# device exists is not recommending it, in the same way that Phase 018 surveying
+# a wheel was not adopting it.
+#
+# ADDING A CAPABILITY is a claim that the roadmap schedules the question, and
+# `phase` is where that claim is checked: it must name a real phase that has not
+# yet been delivered. Reasoning: `docs/engineering/GPU_CAPABILITY.md`.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# The host this was written against.
+#
+# A TRIPWIRE, not a second source of truth. Both values are copied from
+# `runtime-contract.toml`, and `tests/contract/test_gpu_contract.py` fails when
+# the two disagree — the one form of duplication `SOURCE_OF_TRUTH.md` permits.
+# ---------------------------------------------------------------------------
+
+[target]
+system = "Windows"
+architecture = "AMD64"
+
+# ---------------------------------------------------------------------------
+# The one interface this gate is allowed to use.
+#
+# `nvidia-smi` ships with the NVIDIA display driver and documents its own query
+# vocabulary through `--help-query-gpu`, which makes it a primary source in the
+# sense `docs/SOURCE_POLICY.md` requires: the tool states what it accepts, and
+# the statement was read on this host rather than remembered. No registry key is
+# read, no vendor web page is parsed, and no undocumented interface is called.
+#
+# `query_fields` are the four `--query-gpu` names verified present in this
+# host's own `--help-query-gpu` output. Asking for a field outside this list is
+# how a detector starts inventing, so the gate refuses rather than passing an
+# unknown name through to the driver.
+# ---------------------------------------------------------------------------
+
+[interface]
+command = "nvidia-smi"
+query_fields = ["name", "driver_version", "compute_cap", "memory.total"]
+version_arguments = ["--version"]
+format_arguments = ["--format=csv,noheader"]
+
+# ---------------------------------------------------------------------------
+# Field names that must never be read, and the reason each is here.
+#
+# EVERY ONE OF THESE WAS MEASURED, not assumed. `nvidia-smi --version` on this
+# host answers "Deprecated, see ..." for two of its own labels, which means a
+# detector that read them would record the STRING "Deprecated, see "KMD version"
+# instead" as a driver version and would be believed. That is the precise failure
+# the roadmap's "without assuming any of them" is guarding against, and it is why
+# this table exists rather than a comment.
+#
+# `docs/research/phase_023_sources.md` records the exact output each row came
+# from, with the date it was read.
+# ---------------------------------------------------------------------------
+
+[[forbidden_field]]
+name = "cuda_version"
+where = "--query-gpu"
+reason = "not a valid field to query; the driver answers with an error, not a version"
+
+[[forbidden_field]]
+name = "DRIVER version"
+where = "--version"
+reason = "self-declared deprecated; the driver directs the reader to KMD version"
+
+[[forbidden_field]]
+name = "CUDA version"
+where = "--version"
+reason = "self-declared deprecated; the driver directs the reader to CUDA UMD version"
+
+# ---------------------------------------------------------------------------
+# The four questions the roadmap names, plus the one the fourth splits into.
+#
+# `policy` is `optional` for every row and that is deliberate rather than
+# provisional: GLOBIN has no GPU-dependent behaviour, and will not have one until
+# a phase decides it does. A row becomes `required` in the phase that makes
+# something depend on it, not before.
+#
+# `phase` is who answers if the capability is absent. An absence owned by nobody
+# is the only kind that fails, which is ADR-0052's rule applied to hardware.
+# ---------------------------------------------------------------------------
+
+[[capability]]
+id = "gpu.present"
+question = "Is an NVIDIA device visible to the driver on this host?"
+source = "--query-gpu=name"
+policy = "optional"
+phase = 24
+absence_means = "Every later GPU question is unmeasurable rather than negative."
+
+[[capability]]
+id = "gpu.driver_version"
+question = "Which display driver version is installed?"
+source = "--query-gpu=driver_version"
+policy = "optional"
+phase = 24
+absence_means = "No driver, so no CUDA of any kind."
+
+[[capability]]
+id = "gpu.compute_capability"
+question = "What compute capability does the device report?"
+source = "--query-gpu=compute_cap"
+policy = "optional"
+phase = 24
+absence_means = "Which kernels a library may run cannot be decided."
+
+[[capability]]
+id = "cuda.runtime_present"
+question = "Does the driver expose a CUDA user-mode runtime, and at which version?"
+source = "--version:CUDA UMD version"
+policy = "optional"
+phase = 24
+absence_means = "A CUDA-enabled wheel would load but find no runtime."
+
+[[capability]]
+id = "cuda.toolkit_present"
+question = "Is a CUDA toolkit installed, so that CUDA source could be compiled?"
+source = "nvcc"
+policy = "optional"
+phase = 25
+absence_means = "Prebuilt CUDA wheels remain usable; building from CUDA source does not."

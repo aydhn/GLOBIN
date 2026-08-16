@@ -19,6 +19,80 @@ can be opened and read.
 
 ## [Unreleased]
 
+### GPU capability, measured rather than assumed
+
+- **`python -m tools.quality gpu`** reads
+  [`docs/engineering/gpu-contract.toml`](docs/engineering/gpu-contract.toml),
+  compares its target against the runtime contract, and asks `nvidia-smi` only the
+  fields the contract permits — recording a **state** for each of five
+  capabilities rather than a pass. Reaches no network, and has no networked
+  subcommand at all: what this host has is answerable from this host.
+- **Absence is a state, not a failure.** A machine with no NVIDIA device records
+  `ABSENT` and exits `0`, which is what lets the gate run at all on the GPU-less
+  `windows-latest` runner CI uses. `ABSENT` and `UNMEASURABLE` are kept apart
+  because *we asked and there is none* and *there was nothing to ask* are
+  different facts. `ERROR` always fails, whatever the capability's policy: not
+  knowing why is a different fact from knowing why.
+- **The contract declares an interface, not a baseline.** No driver version, no
+  compute capability and no device name is committed, so nothing goes red on a
+  driver update and no value is ever bumped without being read. The observed
+  values live in the regenerated `.globin/gpu/gpu-manifest.json`.
+- **Four traps were measured on the target host, not assumed.** `cuda_version` is
+  not a queryable field *and asking for it breaks the entire query*; `DRIVER
+  version` and `CUDA version` are both answered by the driver with the word
+  *Deprecated*; and the banner spelling has already changed. A detector reading
+  any of them would publish a sentence where a version belongs. Hence the
+  `[[forbidden_field]]` table, checked against the interface table in the same
+  file, plus a shape check on every recorded value.
+- **A CUDA runtime and a CUDA toolkit are asked separately**, and neither is
+  inferred from the other. The development host has the first without the second,
+  which is the proof the inference would be wrong — and the distinction is what
+  Phase 024 needs when it asks which workloads benefit.
+- Nothing here times anything. Detection is Phase 023; benefit is Phase 024.
+
+### The runtime explains itself
+
+- **GLOBIN logs.** Phase 006 built the logging subsystem and nothing in the
+  product called it — `build_logger` had no production caller and the CLI printed
+  with `print`. There is now a lifecycle event vocabulary, a fan-out to a console
+  and a bounded file, and a diagnostics subsystem the composition root assembles.
+- **A fifth runtime area, `logs/`, and it is bounded because it is the only one
+  appended to.** Every other area holds small documents published whole and
+  atomically; a log is the one thing GLOBIN writes that grows, which is exactly
+  the risk ADR-0059 named about adding a directory. `RotationPolicy` is a
+  validated value type — a policy that could not be honoured cannot be constructed
+  — and `ceiling_bytes()` states the worst case as a number rather than leaving a
+  reviewer to multiply. Eight mebibytes at the defaults.
+- **The file sink flushes every record and the stream sink does not.** The file
+  exists so a process that dies badly leaves an explanation behind, and an
+  explanation still in a buffer when the interpreter is killed is not one.
+- **The three process fault hooks, installed through an injected registry.**
+  `sys.excepthook`, `threading.excepthook` and `sys.unraisablehook` are replaced
+  and put back — not chained to, because the default prints prose to standard
+  error and one fault should produce one report. `SystemExit` and
+  `KeyboardInterrupt` are `INFO`: an operator who sees `CRITICAL` on every Ctrl-C
+  stops reading it.
+- **`faulthandler`, to its own non-JSON file.** A native traceback is written by C
+  with no encoder involved, which is why it still works when the interpreter
+  cannot run Python — so it goes beside the log rather than in it. No signal is
+  registered: `faulthandler.register` does not exist on Windows, measured rather
+  than assumed.
+- **A bridge for standard-library records and Python warnings**, which is the
+  addition `adapters/observability.py` anticipated in Phase 006. GLOBIN's own call
+  sites still do not use `logging`, and
+  `tests/architecture/test_logging_discipline.py` fails if that changes.
+- **The existing design was extended, not replaced.** ADR-0026's explicit
+  correlation stands — no `contextvars` — the record envelope is unchanged, and
+  the warning *filters* are untouched.
+- **What redaction does not cover is stated rather than implied.** It matches
+  field names, so a credential inside an exception message is written. Nothing can
+  close that until Phase 028 gives GLOBIN a set of secret values to scan for; the
+  defence until then is the rule that a secret is never passed to a diagnostic.
+- ADR-0060 records both halves, and scores the **seventh scope amendment** against
+  ADR-0021's four criteria at one of four — failing the "no phase owns the work"
+  criterion worse than any amendment before it, because Phase 006 has already
+  shipped.
+
 ### The scientific stack, verified rather than assumed
 
 - **`python -m tools.quality stack`** recomputes what

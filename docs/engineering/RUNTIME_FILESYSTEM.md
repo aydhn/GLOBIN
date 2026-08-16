@@ -46,14 +46,15 @@ instead.
 
 ---
 
-## The four areas
+## The five areas
 
 ```text
 <runtime root>/
 ├── state/    small, long-lived operational metadata
 ├── cache/    reproducible data
 ├── run/      the live instance's lock and metadata
-└── tmp/      one directory per run, owned by that run
+├── tmp/      one directory per run, owned by that run
+└── logs/     bounded diagnostic records — the only area appended to
 ```
 
 The difference between them is a promise about deletion.
@@ -64,6 +65,28 @@ The difference between them is a promise about deletion.
 | `cache/` | Anything GLOBIN can regenerate | **Always.** Deleting it must change no answer; a component that cannot honour that needs `state/` |
 | `run/` | `instance.lock`, `instance.json` | Only while nothing is running |
 | `tmp/` | One directory per run id | Between runs |
+| `logs/` | `globin.log` and its rotated backups, `faults.txt` | Yes. Nothing GLOBIN decides reads from here |
+
+### Why `logs/` is separate, and why it is bounded
+
+Phase 023 added the fifth area, and it is the only one that is **appended to**.
+Every other area holds small documents published whole through `publish`, which
+replaces a file atomically; a log is the one thing GLOBIN writes that grows.
+
+That makes it precisely the risk ADR-0059 named about adding a directory — "a
+later phase writing something large into `state/` because the directory was
+already there". Keeping it out of `state/` is what lets the bound apply to the
+growing thing and not to the small ones. The bound itself is a validated value
+type rather than a number passed around: `RotationPolicy` refuses a size below
+4 KiB or above 64 MiB and a backup count above 32, so a policy that could not be
+honoured cannot be constructed, and `ceiling_bytes()` states the worst case as a
+number rather than leaving a reviewer to multiply.
+
+`faults.txt` is **not** JSON, deliberately. `faulthandler` writes a native
+traceback from C with no encoder involved, which is the entire reason it still
+works when the interpreter can no longer run Python — so it goes in its own file
+rather than putting a non-record line in an NDJSON log everything else is
+entitled to parse.
 
 ### What may never go there
 

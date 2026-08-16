@@ -196,6 +196,22 @@ port, not a change to this one.
 
 ---
 
+### The rule redaction does not replace
+
+**Never pass a secret to a log message or to a structured field.** Redaction is
+defence in depth behind that rule, not permission to rely on it.
+
+It matches field *names*, so a secret interpolated into a **string** is past every
+rule it can apply. The clearest case is an exception message: a credential inside
+`str(exception)` reaches the `exception_message` field and is written. Phase 023
+states this plainly rather than implying it is handled —
+[`engineering/RUNTIME_DIAGNOSTICS.md`](engineering/RUNTIME_DIAGNOSTICS.md) has the
+detail. Nothing can close it until Phase 028 gives GLOBIN a set of secret *values*
+to scan for; scanning for anything that merely looks like one is a heuristic that
+would mangle legitimate diagnostics.
+
+---
+
 ## What a change to logging must satisfy
 
 - Fields carry values; messages carry no interpolation.
@@ -204,12 +220,19 @@ port, not a change to this one.
 - Severity is chosen from the table, not from how the code path felt to write.
 - Nothing configures logging at import time — see
   [`architecture/README.md`](architecture/README.md).
+- No secret is deliberately passed to a message or a field, whatever redaction
+  would do with it.
+- GLOBIN's own call sites do not use the standard library's `logging`. Since Phase
+  023 one bridge adapter does, so that a dependency's records and Python's warnings
+  are not lost, and `tests/architecture/test_logging_discipline.py` fails if
+  anything else starts.
 
 ---
 
 ## Related documents
 
 - [`ENGINEERING_CONTRACT.md`](engineering/ENGINEERING_CONTRACT.md) — invariants 10, 23 and 24.
+- [`engineering/RUNTIME_DIAGNOSTICS.md`](engineering/RUNTIME_DIAGNOSTICS.md) — where records go at runtime, the fault hooks, and rotation.
 - [`architecture/README.md`](architecture/README.md) — why only the outer layers may log.
 - [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md) — where a logging test belongs.
 - [`adr/0025-structured-logging-is-a-redacted-domain-event.md`](adr/0025-structured-logging-is-a-redacted-domain-event.md)
