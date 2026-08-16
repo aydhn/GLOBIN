@@ -376,6 +376,28 @@ pretty = true
 module = ["pandas"]
 ignore_missing_imports = true
 
+# `numpy` is a SEPARATE override with a DIFFERENT reason, and conflating the two
+# would make one of the comments false.
+#
+# numpy ships its own type information and it is genuinely checked — on a machine
+# that has numpy installed. The CI `quality` job is not such a machine: it installs
+# the toolchain with plain `pip` and never builds `.venv`, so `numpy` is absent
+# there and mypy reports `import-not-found` rather than `import-untyped`.
+#
+# The asymmetry is real and is stated rather than hidden: **the authoritative
+# numpy typecheck is the one that runs in an environment containing numpy**, which
+# is every developer's and the pre-commit hook's. CI checks everything else about
+# the same file. The alternative — installing two large runtime dependencies into
+# a job whose whole purpose is the toolchain — costs more than it buys, and the
+# `runtime` job already exercises the real stack by running the gate.
+#
+# This exemption belongs to `tools/quality/stack/probes.py` and nothing else. If a
+# second module starts importing numpy, that is a change worth noticing rather
+# than one this line should silently cover.
+[[tool.mypy.overrides]]
+module = ["numpy"]
+ignore_missing_imports = true
+
 # ---------------------------------------------------------------------------
 # coverage
 # ---------------------------------------------------------------------------
