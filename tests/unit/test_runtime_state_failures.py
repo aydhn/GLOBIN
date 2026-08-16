@@ -250,26 +250,28 @@ def test_a_signal_this_platform_lacks_is_skipped_rather_than_registered(
     assert "SIGINT" in signals.installed
 
 
-def test_the_last_resort_hook_is_registered_with_atexit() -> None:
-    """Registered for real, and immediately unregistered.
+def test_the_last_resort_hook_is_handed_to_atexit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The net is `atexit` and nothing cleverer, and it is not invoked here.
 
-    Leaving it registered would run a test's callback at interpreter exit, long
-    after the test that made it has finished — which is the kind of failure that
-    appears in whatever ran last.
+    Observed by substituting `atexit.register` rather than by counting what the
+    real registry holds. **That count is global and shared**: coverage, pytest
+    plugins and the interpreter itself register handlers, so a count taken twice
+    around one call can legitimately differ — which is a flaky test rather than a
+    property of GLOBIN, and is how the first version of this failed in CI and
+    nowhere else.
+
+    Substituting also means nothing is left registered. A real registration would
+    run a test's callback at interpreter exit, long after the test that made it
+    finished, and surface in whatever happened to run last.
     """
-    called: list[str] = []
+    handed: list[Callable[[], None]] = []
+    monkeypatch.setattr(atexit, "register", handed.append)
 
     def note() -> None:
-        called.append("ran")
+        raise AssertionError
 
-    before = atexit._ncallbacks()  # noqa: SLF001 - the only way to observe the registry
     register_last_resort(note)
-    try:
-        assert atexit._ncallbacks() == before + 1  # noqa: SLF001 - as above
-    finally:
-        atexit.unregister(note)
-    assert atexit._ncallbacks() == before  # noqa: SLF001 - as above
-    assert called == []
+    assert handed == [note]
 
 
 def test_the_environment_reader_returns_the_real_environment() -> None:
