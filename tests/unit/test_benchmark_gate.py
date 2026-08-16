@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.support import running_from_the_project_environment
 from tools.quality.benchmark import gate
 from tools.quality.benchmark.cli import EXIT_USAGE, USAGE, UsageError, parse
 from tools.quality.benchmark.cli import main as cli_main
@@ -42,6 +43,20 @@ from tools.quality.benchmark.manifest import (
 )
 from tools.quality.benchmark.plan import CPU, Measurement, State, Workload
 from tools.quality.benchmark.probes import measure
+
+needs_the_project_environment = pytest.mark.skipif(
+    not running_from_the_project_environment(),
+    reason="numpy arrives with the runtime lock, which only .venv installs",
+)
+"""The guard `test_stack_probes.py` established, and for the same reason.
+
+The CPU baselines need `numpy`, which is not in `pylock.dev.toml`; the CI
+`quality` job installs the toolchain with plain `pip` and never builds an
+environment, so it does not have it. Guarding on the environment rather than on
+a CI variable means a developer who has not run the bootstrap gets the same skip
+and the same reason — a true statement about their machine rather than a guess
+about where the code is running.
+"""
 
 CONTRACT = """\
 schema = 1
@@ -326,6 +341,7 @@ def workload(identifier: str, backend: str = CPU, family_size: int = 4) -> Workl
     return Workload(identifier, "why", backend, "numpy", 22, 1.0, family_size)
 
 
+@needs_the_project_environment
 def test_a_cpu_workload_is_measured_with_an_injected_clock() -> None:
     """The clock is injected so the expected figure is exact."""
     ticks = iter([0, 5, 10, 25])
@@ -334,10 +350,25 @@ def test_a_cpu_workload_is_measured_with_an_injected_clock() -> None:
     assert taken.nanoseconds == 5
 
 
+@needs_the_project_environment
 def test_every_declared_family_has_a_runner() -> None:
     for family in ("elementwise", "matmul", "reduction"):
         taken = measure(workload(f"{family}.cpu"), 0, 1, "minimum")
         assert taken.state is State.MEASURED, family
+
+
+def test_a_cpu_workload_never_errors_whether_or_not_numpy_is_installed() -> None:
+    """The branch CI exercises, and the one the guard above would otherwise hide.
+
+    On a host without `numpy` — which is every CI `quality` runner — the workload
+    must record `unavailable` naming the library, not `error`. Absence is a state;
+    not knowing why is a defect. Written to hold either way, so it is the one
+    assertion about the CPU path that runs everywhere.
+    """
+    taken = measure(workload("elementwise.cpu"), 0, 1, "minimum")
+    assert taken.state in {State.MEASURED, State.UNAVAILABLE}
+    if taken.state is State.UNAVAILABLE:
+        assert "numpy" in taken.detail
 
 
 def test_an_unadopted_backend_records_the_library_it_needed() -> None:
@@ -351,6 +382,7 @@ def test_a_backend_with_no_runner_is_an_error() -> None:
     assert taken.state is State.ERROR
 
 
+@needs_the_project_environment
 def test_a_workload_that_raises_becomes_an_error_rather_than_a_crash() -> None:
     """A reduction the harness does not implement fails inside the timed block."""
     taken = measure(workload("matmul.cpu"), 0, 1, "mean")
