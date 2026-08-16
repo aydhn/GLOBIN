@@ -51,17 +51,18 @@ Three of those are worth naming because each has a plausible-sounding argument b
 
 ### What enforces it
 
-Four independent controls, none of which replaces another. Two are in this repository, two are
-GitHub's.
+Five independent controls, none of which replaces another. Three are in this repository, two
+are GitHub's.
 
 | Control | Catches | Where |
 |---|---|---|
 | Filename tripwire | `.env`, `*.pem`, `*.key`, `secrets.toml` and similar, before staging | `tests/contract/test_repository_contract.py` |
 | Content scanner | Key headers and documented provider token prefixes, by fingerprint | `tools/quality/supply/secrets.py` |
+| Key-name tripwire | A committed `.toml`, `.json` or `.yaml` naming a key `api_key`, `password`, `token` and the like, whatever its value | `tests/contract/test_repository_contract.py` |
 | Secret scanning | Known provider patterns, on the pushed commit | GitHub, recorded as a capability |
 | Push protection | The same, at the moment of the push, before it lands | GitHub, recorded as a capability |
 
-The first two run offline and before the commit exists; the last two run on GitHub's side and
+The first three run offline and before the commit exists; the last two run on GitHub's side and
 catch what a local gate was not run for. Their scope, their allowlist rules and why findings are
 reported as fingerprints rather than values are in
 [`../DEPENDENCY_POLICY.md`](../DEPENDENCY_POLICY.md), which owns them.

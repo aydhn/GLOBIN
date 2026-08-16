@@ -48,6 +48,7 @@ that certifies — and the one criterion it could not — is in
 | Who owns this path, and is a change to it security-sensitive? | [`docs/security/GOVERNANCE.md`](docs/security/GOVERNANCE.md), [`.github/CODEOWNERS`](.github/CODEOWNERS) |
 | Which Windows, which Python, and how do I build `.venv`? | [`docs/engineering/RUNTIME_BASELINE.md`](docs/engineering/RUNTIME_BASELINE.md), [`docs/engineering/runtime-contract.toml`](docs/engineering/runtime-contract.toml) |
 | Does the library I need have a wheel for that Python? | [`docs/engineering/WHEEL_AVAILABILITY.md`](docs/engineering/WHEEL_AVAILABILITY.md), [`docs/engineering/wheel-survey.toml`](docs/engineering/wheel-survey.toml) |
+| Is this machine still the one the gates were measured on? | [`docs/engineering/ENVIRONMENT_DRIFT.md`](docs/engineering/ENVIRONMENT_DRIFT.md), [`docs/engineering/drift-policy.toml`](docs/engineering/drift-policy.toml) |
 | How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 | Which error do I raise? | [`src/globin/errors.py`](src/globin/errors.py), [ADR-0022](docs/adr/0022-error-taxonomy-rooted-in-one-type.md) |
 | How do I express a price or a quantity? | [`docs/VALUE_TYPES_POLICY.md`](docs/VALUE_TYPES_POLICY.md) |
@@ -297,6 +298,49 @@ name the phase answering for it, and only an unowned gap fails. Nothing here is
 installed, resolved, locked or adopted — that is Phases 020-021. Reasoning:
 [`docs/engineering/WHEEL_AVAILABILITY.md`](docs/engineering/WHEEL_AVAILABILITY.md)
 and [ADR-0052](docs/adr/0052-wheel-availability-is-a-recorded-survey-whose-verdict-is-recomputed.md).
+
+A sixth sibling asks the question none of the others can, because it needs two
+measurements rather than one — not "is this machine acceptable" but "is this
+machine what it was". Like the three above it, it **reaches nothing**:
+
+```bash
+python -m tools.quality drift
+```
+
+It compares this host against a baseline you accepted, classifies every
+difference against
+[`docs/engineering/drift-policy.toml`](docs/engineering/drift-policy.toml), and
+recomputes each recorded repair verdict from the action declared beside it. It
+writes `.globin/drift/drift-manifest.json`.
+
+**It never records a baseline**, and with no baseline the verdict is `unmeasured`
+rather than clean — a fresh clone exits `3`. Record one deliberately, on a host
+you are willing to be held to:
+
+```bash
+python -m tools.quality.drift accept
+```
+
+It fails where `runtime` correctly passes, which is the reason it exists
+separately: the contract declares a patch *floor*, so an interpreter that went
+backwards satisfies it, and a `PIP_INDEX_URL` or a machine-wide `pip.ini`
+appearing violates nothing at all.
+
+Its third subcommand is the only thing here that writes outside its own evidence,
+and it writes **only inside `.venv`**:
+
+```bash
+python -m tools.quality.drift repair
+```
+
+Exactly one fault is repairable in place. `pyvenv.cfg` is read at interpreter
+start-up, so an environment that has gained access to the machine's global
+packages is corrected by rewriting one key rather than by being destroyed —
+which is what `RUNTIME_BASELINE.md` had advised, alongside four faults that do
+need it. Everything else names what *you* should run, or names something outside
+the repository that ADR-0050 forbids this tooling from touching. Reasoning:
+[`docs/engineering/ENVIRONMENT_DRIFT.md`](docs/engineering/ENVIRONMENT_DRIFT.md)
+and [ADR-0053](docs/adr/0053-drift-is-measured-against-an-accepted-baseline-and-repair-is-a-classification.md).
 
 One gate sits outside `full`, because it takes minutes rather than seconds:
 

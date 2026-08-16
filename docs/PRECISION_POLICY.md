@@ -175,7 +175,7 @@ absence of a rule.
 | A signed money type — profit and loss, spread, drawdown | 155-156 |
 | Whether a ratio, such as a sizing fraction, gets its own type | 243 |
 | The numeric type indicators and models use, and their tolerance | 113-128 |
-| How a `Decimal`, an `Increment` or a `Rounding` is serialised | 012 |
+| How a `Decimal`, an `Increment` or a `Rounding` is serialised | 012, delivered — [`SERIALIZATION_POLICY.md`](SERIALIZATION_POLICY.md) |
 | Canonical identifiers for markets and assets | 011, delivered — [`IDENTIFIER_POLICY.md`](IDENTIFIER_POLICY.md) |
 | Absolute risk ceilings on position and order size | 242 |
 | Bit-identical reproducibility of a float computation across hosts | 158 |

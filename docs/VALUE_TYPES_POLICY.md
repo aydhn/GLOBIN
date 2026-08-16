@@ -193,7 +193,7 @@ absence of a rule.
 | Timestamps, clocks and timezones | 009, delivered — [`TIME_POLICY.md`](TIME_POLICY.md) |
 | Canonical identifiers, and the form each kind of name takes | 011, delivered — [`IDENTIFIER_POLICY.md`](IDENTIFIER_POLICY.md) |
 | The register of assets that exist | 049-050 |
-| Serialization and schema evolution for persisted values | 012 |
+| Serialization and schema evolution for persisted values | 012, delivered — [`SERIALIZATION_POLICY.md`](SERIALIZATION_POLICY.md) |
 | The venue spelling of a market, such as the concatenated form | 033-048 |
 | Absolute risk ceilings on position and order size | 242 |
 

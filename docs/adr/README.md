@@ -117,6 +117,7 @@ a future reader can judge whether the reason still holds.
 | [0050](0050-the-runtime-is-a-declared-contract-and-venv-is-its-only-environment.md) | The runtime is a declared contract checked against the host, and `.venv` is its only environment | Accepted |
 | [0051](0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md) | Phase 017 absorbs interpreter pinning and the environment lifecycle, and this is not covered by precedent | Accepted |
 | [0052](0052-wheel-availability-is-a-recorded-survey-whose-verdict-is-recomputed.md) | Wheel availability is a recorded survey whose verdict is recomputed, and a gap is owned rather than fixed | Accepted |
+| [0053](0053-drift-is-measured-against-an-accepted-baseline-and-repair-is-a-classification.md) | Drift is measured against an accepted baseline, and repair is a declared classification rather than an inferred one | Accepted |
 
 ## Relationship to other documents
 

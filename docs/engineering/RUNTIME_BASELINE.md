@@ -270,12 +270,24 @@ If you need it somewhere else, recreate it there.
 | Question | Owner |
 |---|---|
 | Which libraries have wheels for the pinned interpreter | Phase 018 |
-| Detecting drift over time, and repairing an environment short of recreating it | Phase 019 |
 | Locking the dependency set | Phase 020 |
 | Runtime configuration, and credential onboarding | Phases 021-032 |
 
 The toolchain this phase installs is the one the workflows already pin. That is
 not a lock file, and Phase 020 is where reproducible resolution is decided.
+
+**Drift over time is no longer deferred.** Phase 019 delivered it as a separate
+gate, because it asks a different question from this one: this document's checks
+ask whether the host is *acceptable*, and that one asks whether the host is *what
+it was*. The two disagree wherever the contract is deliberately loose — an
+interpreter whose patch went backwards satisfies the floor above and has still
+been changed by somebody. See [`ENVIRONMENT_DRIFT.md`](ENVIRONMENT_DRIFT.md).
+
+That gate also corrects one piece of advice given above. *Diagnosing each finding*
+answers five distinct `environment` faults with "rebuild with `-Recreate`". Four
+of them need it. `--system-site-packages` does not: `pyvenv.cfg` is read at
+interpreter start-up, so `python -m tools.quality.drift repair` corrects it by
+rewriting one key.
 
 ---
 

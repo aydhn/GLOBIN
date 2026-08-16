@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-018 are complete. Phase 019 is next and has not started.**
-> Nothing beyond Phase 018 is implemented. GLOBIN does not trade, does not
+> **Phases 001-019 are complete. Phase 020 is next and has not started.**
+> Nothing beyond Phase 019 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
 >
@@ -149,7 +149,7 @@ host, including honest verification of GPU capability rather than assumption.
 |:-----:|-------|---------|:------:|
 | 017 | Windows Host and CPython Runtime Baseline | Declare the supported host and interpreter, check both against the machine, and build the project virtual environment deterministically. | Complete |
 | 018 | Wheel Availability Survey for the Planned Stack | Verify every library the roadmap schedules has a Windows wheel for the pinned interpreter, and record each gap rather than assuming one. | Complete |
-| 019 | Environment Drift Detection and Repair | Detect divergence from the runtime contract as it appears, and define repair short of recreating the environment. | Planned |
+| 019 | Environment Drift Detection and Repair | Detect divergence from the runtime contract as it appears, and define repair short of recreating the environment. | Complete |
 | 020 | Dependency Resolution and Lockfile Strategy | Choose the locking mechanism and define reproducible resolution, upgrade and audit procedures. | Planned |
 | 021 | Core Runtime Dependency Introduction | Introduce the first runtime dependencies under the zero-budget policy with explicit justification per package. | Planned |
 | 022 | Scientific Stack Installation and Verification | Install and verify the numerical and dataframe stack, confirming correctness rather than assuming it. | Planned |

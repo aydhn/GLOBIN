@@ -19,6 +19,53 @@ can be opened and read.
 
 ## [Unreleased]
 
+### Environment drift
+
+- The machine the gates are measured on is now compared against a baseline a
+  person accepted, not only against the contract.
+  `python -m tools.quality.drift accept` records this host;
+  `python -m tools.quality drift` reports what has changed since and writes
+  `.globin/drift/drift-manifest.json`. `check` never records a baseline — one that
+  recorded whatever it found would certify its own observation.
+- **With no accepted baseline the verdict is `unmeasured`, not clean.** A fresh
+  clone exits `3`. "Could not look" and "looked and found nothing" are different
+  facts and the three-valued verdict vocabulary exists so they never share a
+  colour.
+- Each way a host can diverge is classified in
+  [`docs/engineering/drift-policy.toml`](docs/engineering/drift-policy.toml), and
+  every recorded repair verdict is recomputed from the action declared beside it:
+  an entry claiming a fault is repairable in place whose own declaration does not
+  support that fails offline.
+- **`drift` fails where `runtime` correctly passes.** The contract declares a
+  patch floor, so an interpreter that went *backwards* satisfies it; a
+  `PIP_INDEX_URL` or a machine-wide `pip.ini` appearing violates nothing at all.
+  Those are changes somebody made to the machine, and they were previously
+  invisible.
+- **Repair short of recreating the environment now exists, for one fault.**
+  `RUNTIME_BASELINE.md` answered five distinct `.venv` faults with "rebuild with
+  `-Recreate`"; four of them need it. `pyvenv.cfg` is read at interpreter
+  start-up, so `python -m tools.quality.drift repair` corrects
+  `include-system-site-packages` by rewriting one key. Everything else names what
+  a person should run, or something outside the repository this tooling may not
+  touch.
+- Reasoning:
+  [ADR-0053](docs/adr/0053-drift-is-measured-against-an-accepted-baseline-and-repair-is-a-classification.md),
+  and [`docs/engineering/ENVIRONMENT_DRIFT.md`](docs/engineering/ENVIRONMENT_DRIFT.md)
+  for what to do about each finding.
+
+### Documentation and secret hygiene
+
+- A policy document may no longer defer a question to a phase that has already
+  answered it. Four rows did — in the configuration, identifier, precision and
+  value-type policies — telling a reader a question was open, and pointing at the
+  wrong number. The convention for recording a met deferral already existed in two
+  of the same tables and had simply not been applied; a contract test now compares
+  every such row against `ROADMAP.md` in both directions.
+- A fifth secret-hygiene control: a committed `.toml`, `.json` or `.yaml` naming a
+  key `api_key`, `password`, `token` or similar is refused, whatever its value.
+  The filename tripwire does not see it, and the content scanner matches issuer
+  grammars rather than key names. The register is reused rather than restated.
+
 ### Wheel availability
 
 - The libraries the roadmap schedules are surveyed against the pinned interpreter

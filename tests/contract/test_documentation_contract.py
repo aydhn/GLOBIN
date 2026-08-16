@@ -12,7 +12,33 @@ from pathlib import Path
 
 import pytest
 
-from tests.support import REPO_ROOT, markdown_prose, markdown_section
+from tests.support import REPO_ROOT, markdown_prose, markdown_section, parse_roadmap
+
+#: Documents carrying a "what this does not cover" table of the form
+#: ``| Question | Phase |``. Found by their header rather than listed by hand
+#: would be neater, but a list that a test compares against the tree is how a new
+#: policy document silently escapes the check below.
+DEFERRAL_TABLES: tuple[str, ...] = (
+    "docs/CONFIGURATION_POLICY.md",
+    "docs/IDENTIFIER_POLICY.md",
+    "docs/PRECISION_POLICY.md",
+    "docs/VALUE_TYPES_POLICY.md",
+)
+
+#: A row of one of those tables: a question, then the phase or phases owning it.
+DEFERRAL_ROW_RE: re.Pattern[str] = re.compile(
+    r"^\|\s*(?P<question>[^|]+?)\s*\|\s*(?P<owner>[^|]+?)\s*\|\s*$", re.MULTILINE
+)
+
+#: A three-digit phase number inside an owner cell. Ranges such as ``021-032``
+#: yield both ends, which is what should be checked: a range whose end has
+#: delivered is as stale as a single number that has.
+PHASE_IN_OWNER_RE: re.Pattern[str] = re.compile(r"\b(\d{3})\b")
+
+#: What an owner cell says when the phase named has already delivered. The
+#: convention already existed in two of these documents and was applied
+#: inconsistently, which is the defect this check exists to stop recurring.
+DELIVERED: str = "delivered"
 
 #: Documents that must exist for the engineering contract to be coherent.
 REQUIRED_DOCS: tuple[str, ...] = (
@@ -69,6 +95,7 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/research/phase_016_sources.md",
     "docs/research/phase_017_sources.md",
     "docs/research/phase_018_sources.md",
+    "docs/research/phase_019_sources.md",
     # Added in Phase 016 with the release governance they carry. The changelog is
     # deliberately not here: it is required by the release gate, which checks the
     # version it announces rather than only that it exists.
@@ -780,3 +807,84 @@ def test_nothing_absent_from_the_readme_has_quietly_acquired_a_module(repo_root:
     assert not started, (
         f"README says these do not exist, but the package has modules for them: {started}"
     )
+
+
+# ---------------------------------------------------------------------------
+# A policy document may not defer a question to a phase that has already answered it
+# ---------------------------------------------------------------------------
+
+
+def _deferral_rows(text: str) -> list[tuple[str, str]]:
+    """Return the question and owner of every deferral row in a document.
+
+    Args:
+        text: The document.
+
+    Returns:
+        One pair per row, excluding the header and the alignment rule.
+
+    Found by walking from the table's own header rather than from a section
+    heading, because the four documents carrying this table do not agree on what
+    to call the section above it — and the table is the thing being checked.
+    """
+    rows: list[tuple[str, str]] = []
+    inside = False
+    for line in text.splitlines():
+        if line.strip() == "| Question | Phase |":
+            inside = True
+            continue
+        if not inside:
+            continue
+        if not line.startswith("|"):
+            inside = False
+            continue
+        match = DEFERRAL_ROW_RE.match(line)
+        if match is None:
+            continue
+        question = match.group("question")
+        if set(question) <= set("-: "):
+            continue
+        rows.append((question, match.group("owner")))
+    return rows
+
+
+def test_the_deferral_row_parser_finds_rows(repo_root: Path) -> None:
+    """Guard the guard.
+
+    A parser that silently matched nothing would make every assertion below pass
+    while comparing empty sets, which is the failure mode a tripwire has.
+    """
+    for relative in DEFERRAL_TABLES:
+        rows = _deferral_rows((repo_root / relative).read_text(encoding="utf-8"))
+        assert len(rows) >= 3, f"{relative}: parsed {len(rows)} deferral rows"
+
+
+@pytest.mark.parametrize("relative", DEFERRAL_TABLES)
+def test_no_document_defers_a_question_to_a_phase_that_has_delivered(
+    repo_root: Path, relative: str
+) -> None:
+    """A deferral is a promise that the answer does not exist yet.
+
+    Each of these tables sits under a heading whose own purpose is to stop a
+    reader inferring a rule from the absence of one. Pointing at a phase that has
+    already shipped does the opposite: the reader is told the question is open
+    when it has been answered, and told where to look by a number that is wrong.
+
+    Three of these rows were stale when Phase 019 looked, and the convention for
+    fixing them — ``012, delivered - <document>`` — already existed in two of the
+    same tables. It had simply not been applied when the phases delivered. Nothing
+    compared them, which is why the disagreement survived.
+    """
+    statuses = {
+        row.phase: row.status
+        for row in parse_roadmap((repo_root / "ROADMAP.md").read_text(encoding="utf-8"))
+    }
+    stale: list[str] = []
+    for question, owner in _deferral_rows((repo_root / relative).read_text(encoding="utf-8")):
+        if DELIVERED in owner.lower():
+            continue
+        for number in PHASE_IN_OWNER_RE.findall(owner):
+            status = statuses.get(int(number))
+            if status is not None and status != "Planned":
+                stale.append(f"{question!r} defers to phase {number}, which is {status}")
+    assert not stale, f"{relative} defers to phases that have delivered: {stale}"

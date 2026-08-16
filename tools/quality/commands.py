@@ -311,6 +311,32 @@ _RUNTIME = Step("runtime", (), ("-m", "tools.quality.runtime"))
 # No modules are declared. It starts no child at all, Python or otherwise.
 _WHEELS = Step("wheels", (), ("-m", "tools.quality.wheels"))
 
+# The environment-drift gate. Reads the classification in
+# `docs/engineering/drift-policy.toml` and compares this host against the baseline
+# a person accepted, rather than against the contract: `runtime` asks whether the
+# machine is acceptable, and this asks whether it is what it was. The two differ
+# wherever a contract is a floor — an interpreter whose patch went backwards
+# satisfies the contract and has still been changed by somebody.
+#
+# It REACHES NOTHING, like `governance`, `release`, `runtime` and `wheels`. Both
+# halves of the comparison are on this machine. Its `repair` subcommand is the one
+# that writes outside its own evidence, and that is exactly why it is a subcommand
+# rather than this step — the same split `runtime` makes for `bootstrap`.
+#
+# In neither `fast` nor `full`, for the reason `governance` gives rather than the
+# reason `supply` does: it WRITES an artefact, and `full` runs before every commit
+# and reports rather than produces. The assertions that must gate a commit are in
+# `tests/contract/test_drift_contract.py`, which the coverage step already runs.
+#
+# There is a second reason here that the other artefact-writing gates do not have.
+# This one is UNMEASURED on a machine that has accepted no baseline, and that is
+# the correct answer rather than a failure to fix. In `full` it would report `3`
+# on every fresh clone, and a gate that is red on a tree nobody has touched is a
+# gate people learn to ignore.
+#
+# No modules are declared. It starts no child at all, Python or otherwise.
+_DRIFT = Step("drift", (), ("-m", "tools.quality.drift"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -384,6 +410,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "wheels",
         "Whether the libraries the roadmap schedules have wheels for the pinned interpreter.",
         (_WHEELS,),
+    ),
+    Command(
+        "drift",
+        "This host against the baseline that was accepted, and what would repair the difference.",
+        (_DRIFT,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

@@ -279,8 +279,8 @@ follows it, and a plan that has changed is corrected rather than left standing.
 | Area | Owner |
 |---|---|
 | Windows host requirements, interpreter pinning, and the virtual environment lifecycle | Phase 017 — **delivered** |
-| Wheel availability across the planned stack, against the pinned interpreter | Phase 018 |
-| Environment drift detection, and repair short of recreation | Phase 019 |
+| Wheel availability across the planned stack, against the pinned interpreter | Phase 018 — **delivered** |
+| Environment drift detection, and repair short of recreation | Phase 019 — **delivered** |
 | Dependency resolution and lock files | Phase 020 |
 | Runtime configuration bootstrap | Phases 021-032 |
 | Credential and secret onboarding — the *store*, not the rules | Phases 021-032 |

@@ -194,7 +194,7 @@ absence of a rule.
 | Question | Phase |
 |---|---|
 | The value types a price, quantity or market is carried in | 008, delivered — [`VALUE_TYPES_POLICY.md`](VALUE_TYPES_POLICY.md) |
-| Serialization and schema evolution for persisted identifiers | 012 |
+| Serialization and schema evolution for persisted identifiers | 012, delivered — [`SERIALIZATION_POLICY.md`](SERIALIZATION_POLICY.md) |
 | Which product families Binance offers, and what each is called there | 033 |
 | What an environment is, and what each class guarantees | 035 |
 | Which product and environment pairs are usable | 036 |

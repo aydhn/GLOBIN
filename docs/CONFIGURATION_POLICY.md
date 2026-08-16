@@ -123,7 +123,8 @@ is a decision rather than a regression.
 |---|---|
 | Where configuration files live, what they are called, and what profiles exist | 026 |
 | Which sources are consulted, in what order, and how environment variables and launcher selection fit | 027 |
-| How secrets are stored and supplied | 015 |
+| The rules a secret is handled under | 015, delivered — [`security/SECURITY_BASELINE.md`](security/SECURITY_BASELINE.md) |
+| Where a secret is stored, and how it is supplied | 028 |
 | What an environment is, and how production, testnet and demo differ | 035 |
 
 Nothing in the configuration model knows about files, environment variables or

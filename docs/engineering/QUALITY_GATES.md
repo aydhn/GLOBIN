@@ -53,6 +53,7 @@ python -m tools.quality full
 | `release` | The foundation acceptance matrix, the version, the tag it implies, the changelog, the release documents and the notes configuration. `release ready` adds the preconditions — branch, clean worktree, agreement with the remote | Establishing that a release may be cut, and publishing the evidence it will carry |
 | `runtime` | The Windows host and its kernel version, the interpreter's implementation, minor line, patch floor, architecture, width and build, the project environment's provenance and settings, and where `pip` would install from. `runtime bootstrap` adds building the environment | Establishing which machine and which interpreter the other gates were measured on |
 | `wheels` | The wheel survey in [`wheel-survey.toml`](wheel-survey.toml) against the runtime contract, with every recorded verdict recomputed from the wheel filenames recorded beside it. `wheels probe` adds asking the index whether the record is still true | Establishing that the libraries the roadmap schedules can be installed on the pinned interpreter |
+| `drift` | This host against the baseline accepted in `.globin/drift/`, classified by [`drift-policy.toml`](drift-policy.toml), with every recorded repair verdict recomputed from the action declared beside it. `drift accept` records a baseline; `drift repair` performs the repairs marked in-place | Establishing that the machine is still the machine the other gates were measured on, and what to do when it is not |
 | `fix` | `ruff check --fix` — **modifies the tree** | Applying safe fixes |
 | `reformat` | `ruff format` — **modifies the tree** | Applying formatting |
 
@@ -337,12 +338,11 @@ Recorded here so that their absence is a decision rather than an oversight.
 
 | Deferred | Owning phase |
 |---|---|
-| Environment drift detection and repair — creating and recreating are Phase 017's and are done; bringing a diverged environment back is not | 019 |
 | Dependency resolution and lockfiles | 020 |
 | Packaging build verification | 017-032 |
 | Secret *storage* — the rules are Phase 015's and are now written; the store itself is not | 028, with credential collection in 029 |
 
-Four rows have left this table when the phases owning them delivered. Docstring
+Five rows have left this table when the phases owning them delivered. Docstring
 linting and naming conventions were Phase 013's and are now part of the `D` rules
 in `pyproject.toml`; the `pytest-xdist` question was Phase 014's and was answered
 by `shards`, which partitions the suite by a stable digest rather than by a plugin
@@ -351,9 +351,11 @@ by `shards`, which partitions the suite by a stable digest rather than by a plug
 delivered by Phase 017 under the fourth scope amendment
 ([ADR-0051](../adr/0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md)),
 and this table went on naming them against phases 018 and 019 until Phase 018
-noticed and corrected it. A deferral that has been met is removed rather than left
-to read as outstanding — including when what met it was a phase other than the one
-recorded here.
+noticed and corrected it. *Environment drift detection and repair* was Phase 019's
+and is now the `drift` gate above
+([ADR-0053](../adr/0053-drift-is-measured-against-an-accepted-baseline-and-repair-is-a-classification.md)).
+A deferral that has been met is removed rather than left to read as outstanding —
+including when what met it was a phase other than the one recorded here.
 
 Phase 004 configures the quality tools it uses and pins the versions it runs
 against. It does not solve dependency management, and nothing here should be

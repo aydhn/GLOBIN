@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 
 from tests.support import markdown_prose
+from tools.quality.evidence.redaction import ASSIGNMENT_RE
 
 # --------------------------------------------------------------------------
 # What must exist
@@ -337,3 +338,71 @@ def test_tool_configuration_is_not_duplicated_outside_pyproject(
     competing = {"setup.cfg", "tox.ini", "pytest.ini", "mypy.ini", ".flake8", "ruff.toml"}
     found = sorted(path for path in committable_files if path.split("/")[-1] in competing)
     assert not found, f"tool configuration duplicated outside pyproject.toml: {found}"
+
+
+#: Extensions of files that carry configuration, where a key named like a secret
+#: is a secret in all but name. Restricted rather than applied to the whole tree:
+#: over every tracked file the check needs an allowlist for the redaction tests
+#: that deliberately plant such names, and an allowlist is the first step towards
+#: a check people learn to silence.
+CONFIG_SHAPED_SUFFIXES: tuple[str, ...] = (".toml", ".json", ".yaml", ".yml")
+
+
+def test_no_committed_configuration_names_a_secret(
+    repo_root: Path, committable_files: tuple[str, ...]
+) -> None:
+    """A committed key called `password` is a committed secret, whatever its value.
+
+    The four controls `docs/security/SECURITY_BASELINE.md` names catch a
+    credential by its *filename* (above), by its *value* matching an issuer's
+    published shape (`tools/quality/supply/secrets.py`), and by either of those in
+    an evidence artefact (`tools/quality/evidence/redaction.py`). None of them sees
+    `api_key = "changeme"` in a committed TOML file: the filename is ordinary, the
+    value matches no issuer's grammar, and the file is not an artefact.
+
+    The register is `redaction.SENSITIVE_NAMES`, imported rather than restated.
+    There are already two lists of these names in this repository — one in
+    `globin.domain.observability` for log fields and one there for artefacts — and
+    they are two deliberately, because a verifier does not import the package it
+    verifies. A third would be one nobody is keeping in step with either.
+
+    This is fail-safe rather than fail-proof, and the limit is worth stating: the
+    pattern requires at least eight value characters, so `password = "hunter2"`
+    passes. That floor exists so `token = ""` and `secret: null` stay quiet, and a
+    check that fired on those is a check somebody disables.
+    """
+    offenders: list[str] = []
+    for relative in committable_files:
+        name = relative.rsplit("/", maxsplit=1)[-1]
+        if not name.endswith(CONFIG_SHAPED_SUFFIXES) or name.endswith(SAMPLE_SUFFIXES):
+            continue
+        try:
+            text = (repo_root / relative).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for match in ASSIGNMENT_RE.finditer(text):
+            offenders.append(f"{relative}: a key named {match.group('name')!r} carries a value")
+    assert not offenders, f"committed configuration names secrets: {offenders}"
+
+
+@pytest.mark.parametrize(
+    ("line", "fires", "why"),
+    [
+        ('api_key = "changeme-please-now"', True, "a TOML key naming a credential"),
+        ('"password": "correct-horse-battery"', True, "the same in JSON"),
+        ("secret: supersecretvalue", True, "and in YAML"),
+        ("persist-credentials: false", False, "a CI idiom whose value is five characters"),
+        ('token = ""', False, "an empty value is not a secret"),
+    ],
+)
+def test_the_secret_name_detector_fires_and_stays_quiet_where_it_should(
+    line: str, fires: bool, why: str
+) -> None:
+    """Guard the guard.
+
+    The check above passes on this repository, and a check that passes because it
+    matches nothing is worth nothing. These cases pin both directions — including
+    `persist-credentials: false`, which appears in every workflow job here and
+    must never fire, because a tripwire that cries wolf is one somebody deletes.
+    """
+    assert bool(list(ASSIGNMENT_RE.finditer(line))) is fires, why

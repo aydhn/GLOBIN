@@ -140,5 +140,5 @@ def test_the_document_names_the_phases_it_defers_to(policy: str) -> None:
     Naming the owning phase is what stops the answer being inferred from the
     absence of a row.
     """
-    for phase in ("015", "026", "027", "035"):
+    for phase in ("015", "026", "027", "028", "035"):
         assert phase in policy

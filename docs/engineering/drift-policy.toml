@@ -1,0 +1,411 @@
+# ---------------------------------------------------------------------------
+# How GLOBIN classifies environment drift: what each observed change means, how
+# serious it is, and what would put it right.
+#
+# NOT A SNAPSHOT. Nothing writes this file, for the reason `runtime-contract.toml`
+# gives about itself: a classification generated from the host could only ever
+# agree with the host, which is a mirror rather than a check. This file is what a
+# human decided; `tools/quality/drift/` obeys it, and
+# `tests/contract/test_drift_contract.py` asserts its shape offline as part of the
+# ordinary suite.
+#
+# NOT A SECOND RUNTIME CONTRACT. `runtime-contract.toml` declares what this host
+# must be, and `tools/quality/runtime/` checks the host against it. That is an
+# absolute question with a fixed answer. This file answers a different one: given
+# that the host has *changed*, does the change matter, and what does a person do
+# about it. A key can satisfy the contract and still have drifted — an interpreter
+# whose patch went backwards is the clearest case, and it is why this gate exists
+# separately rather than as one more finding on that one.
+#
+# IT IS OBEYED, NOT DESCRIBED. The gate reads `repair` from this file and refuses
+# to act on anything it does not mark `in-place`. Editing a line here changes what
+# the tool does, which is what makes this a declaration rather than documentation
+# of one.
+#
+# EVERY VERDICT IS RECOMPUTED. `tools/quality/drift/plan.py::policy_problems`
+# checks each entry against the evidence recorded beside it: an entry claiming a
+# fault is repairable in place must say what the repair does and where it writes,
+# and an entry claiming anything else must claim no action at all. An entry whose
+# own declaration does not support its verdict fails offline, without a host. That
+# is ADR-0052's pattern applied to repair rather than to wheels.
+#
+# WHY THESE VALUES, in `ENVIRONMENT_DRIFT.md` and ADR-0053. What appears below is
+# the conclusion and a pointer, not a second copy of the argument.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# The host.
+#
+# Every one of these is `operator`. The operating system is not something this
+# repository may change, and ADR-0050 draws that boundary explicitly: nothing here
+# edits the registry, PATH, the execution policy, or any interpreter outside the
+# environment. A tool that reconfigured the machine it was asked to describe would
+# be answering a question nobody asked.
+#
+# `host.system` is a violation rather than merely material because the runtime
+# contract names Windows and nothing else; if this key has changed, the comparison
+# is between two different machines and the baseline is describing somewhere else.
+# ---------------------------------------------------------------------------
+
+[[class]]
+key = "host.system"
+severity = "violation"
+repair = "operator"
+writes = "nothing"
+reason = """
+The operating system is not what it was, so the baseline describes a different
+machine. Nothing here can repair that, and nothing should try: accept a new
+baseline deliberately, having decided that this is the machine you meant.
+"""
+
+[[class]]
+key = "host.release"
+severity = "material"
+repair = "operator"
+writes = "nothing"
+reason = """
+Windows was upgraded across a release boundary. The contract's floor may still be
+met — `tools/quality/runtime/` decides that and is the authority on it — but a
+release change is a real event on the machine the gates are measured on, and a
+gate that stayed quiet about it would be claiming the host is what it was.
+"""
+
+[[class]]
+key = "host.kernel"
+severity = "material"
+repair = "operator"
+writes = "nothing"
+reason = """
+Windows was patched. Ordinary, expected, and still worth recording: when a gate
+starts failing the week the kernel moved, the kernel having moved is the first
+thing worth knowing, and reconstructing it afterwards is guesswork.
+"""
+
+# ---------------------------------------------------------------------------
+# The interpreter.
+#
+# `interpreter.version` is the one conditional class in this file, and the reason
+# it is conditional is written out on `RULE_INTERPRETER_VERSION` in
+# `tools/quality/drift/plan.py`. Briefly: a later patch on the contracted line is
+# benign and must stay benign, because failing on it would reinstate the exact pin
+# the runtime contract deliberately refused; an earlier patch is material, because
+# an interpreter that went backwards is a machine somebody changed; a different
+# line is a violation.
+#
+# The rest are violations answered by `recreate`, and the honest reason is the
+# same for all of them: an environment is bound to the interpreter that created
+# it. `venv`'s own documentation states that environments are "not considered as
+# movable or copyable - you just recreate the same environment in the target
+# location", and the same reasoning covers an interpreter changing underneath one.
+# ---------------------------------------------------------------------------
+
+[[class]]
+key = "interpreter.version"
+severity = "conditional"
+rule = "interpreter-version"
+repair = "recreate"
+writes = "nothing"
+reason = """
+Which answer this deserves depends on which way the version moved. Forward on the
+contracted line is a security patch being installed and is benign. Backward on the
+same line is material: the contract is a floor so `runtime` still passes, and it is
+right to, but something changed the interpreter and that is exactly what this gate
+is for. A different minor line is a violation, and only recreating the environment
+resolves it, because the environment is bound to the interpreter that built it.
+"""
+
+[[class]]
+key = "interpreter.implementation"
+severity = "violation"
+repair = "recreate"
+writes = "nothing"
+reason = """
+The environment was built by one implementation and is being run by another. The
+contract names CPython, and nothing short of rebuilding from a verified
+interpreter makes the environment agree with it again.
+"""
+
+[[class]]
+key = "interpreter.release_level"
+severity = "violation"
+repair = "recreate"
+writes = "nothing"
+reason = """
+A release candidate can change behaviour before its final release, so a gate that
+passed on one is evidence about a runtime that no longer exists. The contract
+refuses a prerelease; an environment now running under one must be rebuilt.
+"""
+
+[[class]]
+key = "interpreter.free_threaded"
+severity = "violation"
+repair = "recreate"
+writes = "nothing"
+reason = """
+The free-threaded build is a different ABI with a different wheel set, which is
+why the contract refuses it and why Phase 018 surveyed against the default build.
+An environment that has changed build has changed which wheels it can install.
+"""
+
+[[class]]
+key = "interpreter.pointer_bits"
+severity = "violation"
+repair = "recreate"
+writes = "nothing"
+reason = """
+A 32-bit interpreter cannot load the wheels this project's stack publishes for
+`win_amd64`. Every compiled artefact in the environment is now the wrong width.
+"""
+
+[[class]]
+key = "interpreter.machine"
+severity = "violation"
+repair = "recreate"
+writes = "nothing"
+reason = """
+The architecture changed, so every compiled artefact already installed was built
+for a machine this is not.
+"""
+
+[[class]]
+key = "interpreter.base_prefix.*"
+severity = "violation"
+repair = "recreate"
+writes = "nothing"
+reason = """
+The installation the environment was built from has moved or been replaced. This
+is the failure `RUNTIME_BASELINE.md` calls "stale", and it is quiet: the
+interpreter may still start while the environment resolves to nothing coherent.
+
+A prefix, because a path outside the repository is recorded as a fingerprint and
+one inside it as a relative path - `tools/quality/runtime/plan.py::recorded_path`
+decides which, and a path that names a person is never written down either way.
+Whichever half of that record moves, the base installation moved.
+"""
+
+[[class]]
+key = "interpreter.executable.*"
+severity = "material"
+repair = "operator"
+writes = "nothing"
+reason = """
+A different interpreter ran the gate. What it measured is not what the project
+environment contains, so the reading is about somewhere else. Invoke through
+`.venv\\Scripts\\python.exe`, which `scripts/preflight.ps1` does for you.
+
+A prefix, for the reason `interpreter.base_prefix.*` gives.
+"""
+
+[[class]]
+key = "interpreter.in_virtual_environment"
+severity = "violation"
+repair = "operator"
+writes = "nothing"
+reason = """
+The gate is no longer running inside a virtual environment at all, so what it
+reports about "the environment" is the machine's global installation. Nothing can
+be repaired from here, because the thing that would be repaired is not in scope.
+"""
+
+# ---------------------------------------------------------------------------
+# The environment.
+#
+# One in-place repair lives here and it is the point of the phase. Today
+# `RUNTIME_BASELINE.md` answers five distinct environment faults with the same
+# destructive remedy, "rebuild with -Recreate". Four of them deserve it. One does
+# not, and this file is where that distinction is recorded.
+# ---------------------------------------------------------------------------
+
+[[class]]
+key = "environment.system_site_packages"
+severity = "violation"
+repair = "in-place"
+action = "set include-system-site-packages to false in the environment's pyvenv.cfg"
+writes = "environment"
+reason = """
+The environment can now see the machine's global packages, which makes its
+contents depend on the machine it happens to be on - the precise property a
+locked environment exists to remove, and one the runtime contract refuses by name.
+
+**It does not need recreating, and this is the one entry here that overturns
+existing advice.** `pyvenv.cfg` is read at interpreter start-up rather than
+consulted once at creation: PEP 405 specifies that the file is scanned when the
+interpreter launches, and the `site` module's documentation states that when
+running under a virtual environment `pyvenv.cfg` "is checked for site-specific
+configurations", and that where `include-system-site-packages` is true "the
+system-level prefixes will be searched for site-packages, otherwise they won't".
+So the flag is consulted afresh on every run, and rewriting that one key takes
+effect the next time the interpreter starts. Destroying and rebuilding an
+environment to change a value that is re-read on every start is a remedy out of
+all proportion to the fault.
+
+The repair writes one key in one file inside the environment. It does not touch
+`home`, which would change which interpreter the environment claims to come from.
+"""
+
+[[class]]
+key = "environment.present"
+severity = "violation"
+repair = "bootstrap"
+writes = "nothing"
+reason = """
+The environment is gone. That is not drift to repair but an environment to build,
+and `scripts/bootstrap.ps1` builds it - without `-Recreate`, because there is
+nothing there to remove.
+"""
+
+[[class]]
+key = "environment.location.*"
+severity = "violation"
+repair = "recreate"
+writes = "nothing"
+reason = """
+The environment, or a directory above it, was moved or copied. `venv`'s own
+documentation is unambiguous that this is not supported: environments are "not
+considered as movable or copyable", and "if for any reason you need to move the
+environment to a new location, you should recreate it at the desired location and
+delete the one at the old location". The failure is quiet - the interpreter still
+runs and only the console scripts misbehave - which is why it is worth detecting
+rather than waiting to be surprised by.
+"""
+
+[[class]]
+key = "environment.created_from"
+severity = "violation"
+repair = "recreate"
+writes = "nothing"
+reason = """
+The environment records that it was built by an interpreter other than the one
+that built it before. Rebuilding is the only honest answer: every console script
+in it carries an absolute path to an interpreter that is no longer the one meant.
+"""
+
+[[class]]
+key = "environment.base_present"
+severity = "violation"
+repair = "recreate"
+writes = "nothing"
+reason = """
+The interpreter the environment was built from is gone, usually because Python was
+upgraded in place. The environment is now a set of shims into something that does
+not exist.
+"""
+
+[[class]]
+key = "environment.interpreter_present"
+severity = "violation"
+repair = "recreate"
+writes = "nothing"
+reason = """
+The environment's own interpreter is missing, so nothing in it can run. Whatever
+removed it removed part of the environment, and a partially deleted environment is
+rebuilt rather than patched.
+"""
+
+# ---------------------------------------------------------------------------
+# pip.
+#
+# Every entry here is `operator`, and the boundary is the reason. A machine-wide
+# `pip.ini` and a `PIP_*` environment variable both sit outside the repository,
+# and ADR-0050 forbids this tooling from touching either. What it can do is say
+# that one appeared, which is the fact worth having.
+#
+# NO VALUE IS EVER READ. Only whether a source exists, and only the names of the
+# variables that are set. An index URL is the single most likely place in this
+# whole system for a credential to appear, and the way to keep one out of a
+# published artefact is not to read it.
+# ---------------------------------------------------------------------------
+
+[[class]]
+key = "pip.config.*"
+severity = "material"
+repair = "operator"
+writes = "nothing"
+reason = """
+A pip configuration file appeared or disappeared at one of the documented scopes.
+It can redirect the index every install reads from, so it changes what "install
+the pinned toolchain" means without changing anything in this repository. Only the
+scope is recorded, never the path - a user-scoped path contains the account name -
+and never the contents.
+"""
+
+[[class]]
+key = "pip.overrides"
+severity = "material"
+repair = "operator"
+writes = "nothing"
+reason = """
+A `PIP_*` environment variable is now in force, or one that was is gone. The name
+says an override is active, which is the fact worth having; the value says what it
+is, which is the fact worth not publishing. Unsetting it is the operator's, not
+this tool's: a gate that edited the environment would be reconfiguring the machine
+it was asked to describe.
+"""
+
+[[class]]
+key = "pip.belongs_to_running_interpreter"
+severity = "violation"
+repair = "operator"
+writes = "nothing"
+reason = """
+`pip install` would now write somewhere other than this environment - on this host,
+historically, into a user-level directory shared with every other project on the
+machine. Run the gate through the environment's own interpreter. Never use a global
+`pip install` for this project: it installs for every project at once, and nothing
+records that it happened.
+"""
+
+[[class]]
+key = "pip.version"
+severity = "material"
+repair = "bootstrap"
+writes = "nothing"
+reason = """
+pip itself changed version. `scripts/bootstrap.ps1` installs the toolchain the
+workflows pin and is idempotent, so re-running it restores the intended version
+without destroying anything - which is what distinguishes this from recreation.
+"""
+
+[[class]]
+key = "pip.module.*"
+severity = "material"
+repair = "operator"
+writes = "nothing"
+reason = """
+pip is being imported from a different location than before. Where it resolves
+from decides where an install lands, so a change here changes the meaning of every
+install that follows. A prefix, for the reason `interpreter.base_prefix.*` gives.
+"""
+
+# ---------------------------------------------------------------------------
+# The toolchain.
+#
+# A prefix class, because the members are named by `pyproject.toml` rather than by
+# this file, and restating them here would be a second register to keep in step.
+#
+# THIS IS NOT PHASE 020'S WORK, and the line is worth stating because it is close.
+# Phase 020 owns resolution and locking: running a resolver, writing a lockfile,
+# claiming a transitive tree. Nothing here does any of that. This compares the
+# version of a tool that is installed against the version the workflows already
+# pin, both of which exist and are already parsed elsewhere in this repository.
+# Comparison is not resolution.
+# ---------------------------------------------------------------------------
+
+[[class]]
+key = "toolchain.*"
+severity = "material"
+repair = "bootstrap"
+writes = "nothing"
+reason = """
+A quality tool is at a different version than it was. This is how a gate starts
+disagreeing with continuous integration for no visible reason: the same command,
+the same tree, a different formatter, and no diff to explain it. Phase 004 found
+this class of fault between the pre-commit hook and CI, which is why the two are
+compared; this compares what is actually installed against the same pins.
+
+`scripts/bootstrap.ps1` installs those pins and removes nothing, so re-running it
+is the repair. This tool does not perform it: doing so would reach the index, and
+a gate that must work on an aeroplane does not reach the index.
+"""
