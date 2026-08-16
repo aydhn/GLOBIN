@@ -127,9 +127,19 @@ reason without parsing English.
 | 19 | The recorded runtime state could not be read |
 | 20 | Another GLOBIN coordinator is already running on this machine |
 | 21 | The runtime state could not be written |
+| 22 | A diagnostic could not be produced, which is not a health verdict |
 
 Unmeasured outranks failed: a check that could not run has not passed, and
 reporting it as a specific failure would claim knowledge nobody has.
+
+`22` is Phase 024's, and it is the one code here that is not about starting up.
+`globin diagnostics snapshot` reports a *health state* through the same three
+codes every gate under `tools/` uses — `0` healthy, `1` unhealthy, `3` degraded —
+so a script that branches on one command branches on this one. That leaves the
+case where no snapshot could be produced at all, which is not a health state but a
+failure to measure one, and this is its code. Collapsing the two would make *the
+process is unhealthy* and *nobody could tell* indistinguishable to the consumer
+that most needs them apart.
 
 `tests/contract/test_bootstrap_contract.py` pins every number to a literal. A
 launcher reads these, so changing one is a breaking change.

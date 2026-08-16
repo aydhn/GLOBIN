@@ -422,6 +422,60 @@ phase that has a legitimate use edits the stack contract in its own diff.
 Reasoning: [`docs/engineering/SCIENTIFIC_STACK.md`](docs/engineering/SCIENTIFIC_STACK.md)
 and [ADR-0058](docs/adr/0058-the-scientific-stack-is-verified-by-measurement-and-stays-in-the-approximate-regime.md).
 
+A tenth sibling asks the question the ninth deliberately refused — not "is there
+a device" but "does using it pay" — and like the seven above it **reaches
+nothing**:
+
+```bash
+python -m tools.quality benchmark
+```
+
+It reads [`docs/engineering/benchmark-contract.toml`](docs/engineering/benchmark-contract.toml),
+measures every workload it can with the declared warmup, repeat count and
+reduction, and recomputes each verdict from the recorded nanoseconds against the
+declared speedup threshold. It writes `.globin/benchmark/benchmark-manifest.json`.
+
+**This is the one manifest that is not byte-stable between runs, and it says so.**
+`run.observed` holds timings, which move; `findings` holds verdicts, which are a
+function of the contract and those timings, and the determinism check covers the
+findings half only. **Every CUDA workload records `unavailable` today**, naming
+`torch` and Phase 183 — a measurement rather than a hole, because nothing here is
+stubbed. Two traps are handled rather than remembered: a CUDA timing that does not
+`synchronize()` measures submission and reports a speedup of hundreds, and a
+threshold of `1.0` would recommend moves that lose once the transfer is paid for.
+Reasoning: [`docs/engineering/GPU_BENEFIT.md`](docs/engineering/GPU_BENEFIT.md)
+and [ADR-0062](docs/adr/0062-workload-benefit-is-measured-and-a-timing-is-not-evidence-of-reproducibility.md).
+
+Phase 024 also gave the running process a way to say **how it is doing**, which is
+a different question from whether it may start:
+
+```bash
+.venv\Scripts\globin.exe diagnostics snapshot --json
+```
+
+```bash
+.venv\Scripts\globin.exe diagnostics bundle
+```
+
+`snapshot` reports `healthy`, `degraded` or `unhealthy` through the three exit
+codes every gate already speaks, plus `22` when no snapshot could be produced at
+all — a failure to measure a state rather than a state. **A measurement that was
+not taken is never zero**: every numeric field carries an `Availability`, and no
+instantaneous `cpu_percent` is reported because the first call on a process is
+documented as meaningless. An unmeasurability the registry *predicted* does not
+make a host amber, which is what stops CI — where `psutil` is absent on every run
+— from reporting `degraded` forever. `bundle` writes a redacted archive, validates
+it by **reopening the finished file** and comparing every digest, and publishes it
+atomically into `cache/support/`; the allowlist is a table with no directory walk
+anywhere. `memory` is a separate verb rather than a flag, because the allocator
+tracer costs the whole process while it runs. Details:
+[`docs/engineering/RUNTIME_HEALTH.md`](docs/engineering/RUNTIME_HEALTH.md) and
+[`docs/engineering/SUPPORT_BUNDLE.md`](docs/engineering/SUPPORT_BUNDLE.md).
+
+`psutil` is the third runtime dependency and the **first this repository imports**.
+It is reached through one factory in `globin/adapters/health.py` and nowhere else,
+which `tests/architecture/test_probe_discipline.py` enforces.
+
 A ninth sibling asks what this *machine* has rather than what the tree declares,
 and like the six above it **reaches nothing**:
 

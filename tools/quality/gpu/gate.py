@@ -82,7 +82,7 @@ RUNTIME_CONTRACT: Final[str] = "docs/engineering/runtime-contract.toml"
 ROADMAP_TOTAL_PHASES: Final[int] = 320
 """How many phases the programme has."""
 
-DELIVERED_PHASE: Final[int] = 23
+DELIVERED_PHASE: Final[int] = 24
 """A floor: no capability may be owned by this phase or an earlier one.
 
 Deliberately a constant rather than a read of ``ROADMAP.md``, and deliberately a

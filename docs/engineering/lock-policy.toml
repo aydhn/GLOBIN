@@ -127,7 +127,10 @@ extra = ""
 reason = """
 Phase 021 declared numpy and pandas in project.dependencies, each with a written
 six-question review in dependency-reviews.toml, and produced this lock beside
-them in the same commit.
+them in the same commit. Phase 024 added psutil the same way, and its wheel is
+the reason `allow_source = false` above still holds: psutil publishes
+`psutil-7.2.2-cp37-abi3-win_amd64.whl`, a limited-API wheel that serves the
+pinned interpreter without a compiler on this host.
 
 `extra` is empty because runtime dependencies are not an extra: they are
 `project.dependencies` itself. The development lock names `dev` because that is
@@ -141,6 +144,7 @@ an empty string says that more honestly than omitting the key would.
 roots = [
     "numpy>=2.5.2",
     "pandas>=3.0.5",
+    "psutil>=7.2.2",
 ]
 
 # ---------------------------------------------------------------------------

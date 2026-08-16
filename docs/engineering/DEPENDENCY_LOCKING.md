@@ -35,11 +35,33 @@ nobody had installed, and could differ between two runs on one commit.
 | File | Covers | Produced by | Status |
 |---|---|---|---|
 | `pylock.dev.toml` | The `dev` extra and everything it resolves to | `pip lock` | Committed |
-| `pylock.toml` | Runtime dependencies | — | Does not exist; Phase 021 |
+| `pylock.toml` | Runtime dependencies | `numpy`, `pandas`, `psutil` | Created in Phase 021; regenerable since Phase 024 |
 
 Both names are fixed by PEP 751 rather than chosen: a lock is named `pylock.toml`
 or `pylock.<name>.toml`, and `pip-audit --locked` globs exactly that at a project
 path. Both live at the repository root, which is where every consumer looks.
+
+### The runtime lock could not be regenerated until Phase 024
+
+Stated plainly because it was a real defect rather than a design. This package was
+written in Phase 020, when `project.dependencies` was empty and a contract test
+kept it that way, so `development` was the only scope there could be. Phase 021
+created `pylock.toml` and nothing here learned about it: `relock` and `upgrade`
+both wrote `pylock.dev.toml` and nothing else, and — worse — `coverage_problems`
+read `DEVELOPMENT` as a literal, so every `runtime_*` finding asked only whether
+the runtime lock was sound *in itself* and none asked whether it held what had
+been declared.
+
+The consequence was invisible in exactly the way that matters. Adding `psutil` to
+`project.dependencies` **and** to `[runtime] roots`, while leaving the lock
+untouched, produced `lock: verdict passed`. A gate reporting success for something
+that did not happen is the one failure this package exists to prevent.
+
+Both halves are fixed. `relock` and `upgrade` regenerate both locks — holding the
+workflow pins and the producer for the development scope only, because
+`.github/workflows/` names nothing in `project.dependencies` — and a
+`runtime_coverage` finding now asks the runtime lock the question the development
+one was always asked.
 
 ### Why there is no runtime lock
 

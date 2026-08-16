@@ -125,6 +125,9 @@ a future reader can judge whether the reason still holds.
 | [0058](0058-the-scientific-stack-is-verified-by-measurement-and-stays-in-the-approximate-regime.md) | The scientific stack's verdict is recomputed from measurement, and the stack stays in the approximate regime | Accepted |
 | [0059](0059-the-mutable-runtime-tree-is-user-local-and-one-coordinator-is-proved-by-a-lock.md) | The mutable runtime tree is user-local, its state is published atomically, and one coordinator is proved by a lock rather than by a file | Accepted |
 | [0060](0060-gpu-capability-is-detected-and-the-runtime-explains-itself.md) | GPU capability is detected as a recorded state, the runtime is given diagnostics, and this is the seventh amendment | Accepted |
+| [0061](0061-phase-024-widens-to-deliver-runtime-health-and-support-bundles.md) | Phase 024 widens to deliver runtime health and support bundles, and this is the eighth amendment | Accepted |
+| [0062](0062-workload-benefit-is-measured-and-a-timing-is-not-evidence-of-reproducibility.md) | Workload benefit is measured against a declared contract, and a timing is not evidence of reproducibility | Accepted |
+| [0063](0063-a-support-bundle-is-allowlist-first-self-validating-and-atomically-published.md) | A measurement that was not taken is never zero, and a support bundle is allowlist-first, self-validating and atomically published | Accepted |
 
 ## Relationship to other documents
 

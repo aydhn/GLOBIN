@@ -109,6 +109,20 @@ reason = "self-declared deprecated; the driver directs the reader to CUDA UMD ve
 #
 # `phase` is who answers if the capability is absent. An absence owned by nobody
 # is the only kind that fails, which is ADR-0052's rule applied to hardware.
+#
+# THE FIRST FOUR MOVED FROM 24 TO 31 IN PHASE 024, and the move is a correction
+# rather than a deferral. When this contract was written, Phase 024 was the next
+# phase and the obvious owner of "what do we do if there is no device". Phase 024
+# has now shipped, and what it built is a harness that MEASURES whether a workload
+# benefits — it consumes these capabilities rather than answering for their
+# absence. The phase that still owes an answer is 031, Offline and Degraded
+# Installation Handling, whose whole subject is behaviour when the network, the
+# GPU or an optional native component is unavailable. Each `absence_means` below
+# already reads as an input to that phase.
+#
+# Leaving them at 24 was not an option: `phase_problems` fails any capability
+# naming a delivered phase, because that is a gap nobody will ever close.
+# ADR-0060 recorded this collision as its fifth risk, and this is it arriving.
 # ---------------------------------------------------------------------------
 
 [[capability]]
@@ -116,7 +130,7 @@ id = "gpu.present"
 question = "Is an NVIDIA device visible to the driver on this host?"
 source = "--query-gpu=name"
 policy = "optional"
-phase = 24
+phase = 31
 absence_means = "Every later GPU question is unmeasurable rather than negative."
 
 [[capability]]
@@ -124,7 +138,7 @@ id = "gpu.driver_version"
 question = "Which display driver version is installed?"
 source = "--query-gpu=driver_version"
 policy = "optional"
-phase = 24
+phase = 31
 absence_means = "No driver, so no CUDA of any kind."
 
 [[capability]]
@@ -132,7 +146,7 @@ id = "gpu.compute_capability"
 question = "What compute capability does the device report?"
 source = "--query-gpu=compute_cap"
 policy = "optional"
-phase = 24
+phase = 31
 absence_means = "Which kernels a library may run cannot be decided."
 
 [[capability]]
@@ -140,7 +154,7 @@ id = "cuda.runtime_present"
 question = "Does the driver expose a CUDA user-mode runtime, and at which version?"
 source = "--version:CUDA UMD version"
 policy = "optional"
-phase = 24
+phase = 31
 absence_means = "A CUDA-enabled wheel would load but find no runtime."
 
 [[capability]]

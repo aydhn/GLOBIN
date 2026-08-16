@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-023 are complete. Phase 024 is next and has not started.**
-> Nothing beyond Phase 023 is implemented. GLOBIN does not trade, does not
+> **Phases 001-024 are complete. Phase 025 is next and has not started.**
+> Nothing beyond Phase 024 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
 >
@@ -207,6 +207,23 @@ the contract:
 > records that, and the four courses the conflict was surfaced with, on the
 > owner's decision. An eighth amendment can cite neither this one nor the series,
 > and must additionally say which completed phase it overlaps.
+>
+> **Eighth.** Phase 024 still delivers the GPU runtime verification harness its
+> title names, and now also gives the running application its health surface: a
+> typed runtime health snapshot, process and host resource diagnostics, bounded
+> thread and memory introspection, and a redacted, self-validating support bundle.
+>
+> **It scores one of four, and it makes its own argument rather than citing the
+> series.** Restating ADR-0021's test in full: nothing is deferred and no other
+> title changes, but work is displaced -- parts of 030, 260, 276, 280, 282 and 301
+> arrive here -- six planned phases own it by name, and the two halves do not need
+> each other. What it can say that the seventh could not is the thing ADR-0060
+> demanded of it: **it overlaps no completed phase.** Every phase it displaces has
+> not started, which is a return to the shape of the fourth, fifth and sixth rather
+> than an improvement on any of them.
+> [ADR-0061](docs/adr/0061-phase-024-widens-to-deliver-runtime-health-and-support-bundles.md)
+> records that, and the four courses the conflict was surfaced with, on the owner's
+> decision. A ninth amendment inherits nothing from this one.
 
 ---
 
@@ -251,7 +268,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 021 | Core Runtime Dependency Introduction | Introduce the first runtime dependencies under the zero-budget policy with explicit justification per package. | Complete |
 | 022 | Scientific Stack Installation and Verification | Install and verify the numerical and dataframe stack, confirming correctness rather than assuming it; and, as the sixth scope amendment, deliver the application's mutable runtime filesystem, atomic state publication, single-instance coordinator lock and graceful shutdown. | Complete |
 | 023 | NVIDIA Driver and CUDA Capability Detection | Detect GPU presence, driver version, compute capability and CUDA availability without assuming any of them; and, as the seventh scope amendment, give the running application its diagnostics -- a bounded log file in the runtime tree, a lifecycle event vocabulary, the process fault hooks, `faulthandler`, and a bridge for standard-library records. | Complete |
-| 024 | GPU Runtime Verification Harness | Build a harness that proves which workloads actually benefit from GPU execution on this host. | Planned |
+| 024 | GPU Runtime Verification Harness | Build a harness that proves which workloads actually benefit from GPU execution on this host; and, as the eighth scope amendment, give the running application its health surface -- a typed runtime health snapshot, process and host resource diagnostics, bounded thread and memory introspection, and a redacted, self-validating support bundle. | Complete |
 | 025 | TA-Lib Native Library Provisioning | Provision the native TA-Lib dependency required by the Python wrapper on Windows, with a documented fallback. | Planned |
 | 026 | Configuration File Layout and Profiles | Define on-disk configuration locations and the paper, demo, testnet and live profile structure. | Planned |
 | 027 | Environment Variable and Profile Resolution | Implement deterministic precedence between defaults, files, environment variables and launcher selection. | Planned |

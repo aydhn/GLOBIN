@@ -108,6 +108,25 @@ construction: `..`, a path separator, a drive letter and an empty string are all
 refused, so a tree that could leave its root cannot be built. Every joined child
 is checked again where it is used.
 
+### The one thing Phase 024 added, and why it is in `cache/`
+
+A support bundle — the redacted archive `globin diagnostics bundle` produces — is
+published to `cache/support/globin-support.zip`. **No sixth area was added**, and
+`cache/` rather than `state/` is a decision rather than convenience.
+
+`state/` holds the small documents a run publishes atomically *about itself*, and
+a reader must never observe one half-written. A bundle is none of those things: it
+is a bounded, reproducible artefact an operator asked for and may delete without
+breaking anything, which is what `cache/` is for. It is still published atomically
+— built under a `.partial` name beside its destination, validated, hashed, then
+`os.replace`d — because an incomplete archive appearing under the name somebody is
+about to send is its own kind of failure.
+
+It is bounded twice over: by `diagnostics.bundle_archive_bytes`, and by the rule
+above that nothing large lives in this tree. The bundle's own contents are governed
+by [`SUPPORT_BUNDLE.md`](SUPPORT_BUNDLE.md), which is stricter than this document
+because the file leaves the machine.
+
 ---
 
 ## Publishing state

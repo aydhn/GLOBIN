@@ -52,6 +52,11 @@ EXPECTED_CODES: dict[str, int] = {
     "RUNTIME_STATE_CORRUPT": 19,
     "INSTANCE_ALREADY_ACTIVE": 20,
     "RUNTIME_PERSISTENCE_FAILED": 21,
+    # Phase 024's, and the only one here that is not about starting up. A
+    # diagnostic that could not be produced is a failure to measure a health
+    # state rather than a health state, and `diagnostics snapshot` reports the
+    # state itself through 0, 1 and 3 like every other gate.
+    "DIAGNOSTICS_FAILED": 22,
 }
 
 #: Which check answers for which failure class. A launcher that saw code 12 must

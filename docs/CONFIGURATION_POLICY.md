@@ -36,12 +36,54 @@ so a new setting is one line and cannot be half-added.
 | `logging.min_severity` | `Severity` | `DEBUG` | The lowest severity a sink keeps. Records below it are discarded. |
 | `logging.rotation_max_bytes` | `int` | `1048576` | The size at which the runtime log file is rotated. Between 4096 and 67108864. |
 | `logging.rotation_backup_count` | `int` | `7` | How many rotated log files are kept beside the live one. Between 0 and 32. |
+| `diagnostics.minimum_free_bytes` | `int` | `268435456` | Free space on a runtime filesystem below which the disk check fails. Between 1 MiB and 1 TiB. |
+| `diagnostics.disk_warning_bytes` | `int` | `1073741824` | Free space below which it warns. Must be above the failure threshold. |
+| `diagnostics.minimum_available_memory_bytes` | `int` | `134217728` | Available host memory below which the memory check fails. |
+| `diagnostics.process_rss_warning_bytes` | `int` | `1073741824` | This process's resident set above which the process-memory check warns. Never a failure. |
+| `diagnostics.budget_millis` | `int` | `5000` | How long a whole health snapshot may take. Between 50 and 60000. |
+| `diagnostics.bundle_total_input_bytes` | `int` | `67108864` | How much may be read from disk into one support bundle. |
+| `diagnostics.bundle_archive_bytes` | `int` | `33554432` | How large the finished bundle may be. Between 4 KiB and 256 MiB. |
+| `diagnostics.bundle_member_bytes` | `int` | `8388608` | How large one member may be before it is truncated and marked truncated. |
+| `diagnostics.bundle_log_bytes` | `int` | `16777216` | How much log text a bundle may include in total. |
+| `diagnostics.bundle_member_count` | `int` | `64` | How many members a bundle may hold. Between 1 and 512. |
+| `diagnostics.tracemalloc_enabled` | `bool` | `false` | Whether the interpreter's allocator tracer runs. |
+| `diagnostics.tracemalloc_frame_depth` | `int` | `8` | How many frames each traced allocation retains. Between 1 and 64. |
+| `diagnostics.tracemalloc_top` | `int` | `10` | How many allocation sites a memory summary reports. Between 1 and 64. |
 
-Three settings, and all three are logging's. Of everything Phases 001-006 built,
-only logging held anything an operator may reasonably change: the project
-contract and the roadmap are immutable identity, the error taxonomy has nothing
-to tune, and the architecture review's paths are constants rather than settings.
-Phase 023 added the two rotation values when it gave GLOBIN somewhere to write.
+Sixteen settings in two sections. Of everything Phases 001-006 built, only
+logging held anything an operator may reasonably change: the project contract and
+the roadmap are immutable identity, the error taxonomy has nothing to tune, and
+the architecture review's paths are constants rather than settings. Phase 023
+added the two rotation values when it gave GLOBIN somewhere to write, and Phase
+024 added the `diagnostics` section — the first second section this register has
+had.
+
+**Thirteen at once is a lot, and the alternative was worse.** Each is a number a
+health check or a bundle limit compares a measurement against, and the only other
+home for such a number is a literal at the comparison — which is exactly the magic
+constant an operator cannot change and a reader cannot find. None is speculative:
+every one has a call site in the phase that added it, which is the test this
+document asks a new setting to pass.
+
+**`diagnostics.tracemalloc_enabled` defaults to `false`, and that default is
+load-bearing rather than cautious.** Tracing costs the whole process on every
+allocation, in every thread, until it is switched off. A runtime that enabled it
+because the setting existed would be paying a profiler's price to populate a
+diagnostic nobody asked for.
+
+**The first `bool` in the register is read more strictly than Python would.**
+`bool(value)` treats `"false"` as true, which is not a corner case: it is the
+single most likely thing an operator writes when they want tracing off, and it
+would silently turn the profiler on. Only `true` and `false` are accepted, in any
+case — not `1`, not `"yes"`, not `"on"`. A value with several spellings has
+several ways to be typed wrong, and each of them fails in the permissive
+direction.
+
+**Two of these are checked against each other rather than only against their own
+range.** `disk_warning_bytes` must be strictly above `minimum_free_bytes`, or the
+check can never warn: it fails first, and the warning band an operator configured
+has silently zero width. Every individual value would be in range, so nothing else
+would report it.
 
 **The two integers are bounded, and refused twice.** `as_config` refuses an
 out-of-range value with a message naming the document it came from, because that

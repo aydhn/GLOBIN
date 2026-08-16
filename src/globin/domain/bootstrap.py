@@ -97,6 +97,16 @@ class ExitCode(IntEnum):
 
     The two ranges cannot collide, which is why the second one starts at ten
     rather than at four.
+
+    **Phase 024 adds one value and reuses three, and the reuse is the decision.**
+    ``globin diagnostics snapshot`` answers ``0`` for a healthy runtime, ``1`` for
+    an unhealthy one and ``3`` for a degraded one — the same three words every gate
+    under ``tools/`` already speaks, so a script that branches on one command
+    branches on this one. What that leaves unsaid is the case where no snapshot
+    could be produced at all, which is not a health state but a failure to measure
+    one, and :attr:`DIAGNOSTICS_FAILED` is the value for it. Collapsing the two
+    would make *the process is unhealthy* and *nobody could tell* indistinguishable
+    to the one consumer that most needs them apart.
     """
 
     OK = 0
@@ -115,6 +125,7 @@ class ExitCode(IntEnum):
     RUNTIME_STATE_CORRUPT = 19
     INSTANCE_ALREADY_ACTIVE = 20
     RUNTIME_PERSISTENCE_FAILED = 21
+    DIAGNOSTICS_FAILED = 22
 
 
 class PathLocation(StrEnum):

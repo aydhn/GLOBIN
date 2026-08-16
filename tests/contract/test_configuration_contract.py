@@ -26,7 +26,9 @@ from typing import Final
 import pytest
 
 from globin.domain.configuration import (
+    DIAGNOSTICS_SECTION,
     LOGGING_SECTION,
+    DiagnosticsConfig,
     LoggingConfig,
     as_config,
     config_layer,
@@ -114,7 +116,10 @@ def test_the_documented_settings_are_exactly_the_settings_that_exist(
 def test_every_documented_type_is_the_type_the_default_actually_has(
     rows: tuple[Row, ...],
 ) -> None:
-    defaults = section_defaults(LOGGING_SECTION, LoggingConfig)
+    defaults = {
+        **section_defaults(LOGGING_SECTION, LoggingConfig),
+        **section_defaults(DIAGNOSTICS_SECTION, DiagnosticsConfig),
+    }
     for key, declared, _default in rows:
         assert type(defaults[key]).__name__ == declared, key
 

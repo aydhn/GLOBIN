@@ -50,6 +50,7 @@ from tools.quality.supply.inventory import (
     PYPI,
     PYPROJECT,
     RANGED,
+    RUNTIME,
     Dependency,
 )
 
@@ -784,6 +785,42 @@ def test_entries_from_other_registers_are_not_treated_as_declared_tools() -> Non
     """Only the project file's development extra is the toolchain."""
     assert (
         coverage_problems(lock(), (declared(scope=CONTINUOUS_INTEGRATION, source="ci.yml"),)) == ()
+    )
+
+
+def test_a_runtime_dependency_is_not_a_development_one() -> None:
+    """The default scope answers for the development lock and nothing else.
+
+    Without this the two locks would be checked against one register, and a
+    runtime dependency would be reported as missing from the toolchain lock that
+    was never supposed to contain it.
+    """
+    assert coverage_problems(lock(), (declared("psutil", ">=7.2.2", scope=RUNTIME),)) == ()
+
+
+def test_a_declared_runtime_dependency_the_runtime_lock_omits_is_reported() -> None:
+    """The check Phase 024 found missing, stated as the case that was passing.
+
+    ``psutil`` was added to ``project.dependencies`` and to the declaration's
+    ``[runtime] roots`` while ``pylock.toml`` was left alone, and the gate returned
+    a clean ``passed``: every runtime finding was about whether the lock was sound
+    in itself, and none asked whether it held what had been declared.
+    """
+    problems = coverage_problems(
+        lock(), (declared("psutil", ">=7.2.2", scope=RUNTIME),), scope=RUNTIME
+    )
+    assert any("psutil" in problem and "omits it" in problem for problem in problems)
+
+
+def test_a_runtime_lock_covering_its_declaration_passes() -> None:
+    """The other direction, so the check above is not merely always-failing."""
+    assert (
+        coverage_problems(
+            lock(package("psutil", "7.2.2")),
+            (declared("psutil", ">=7.2.2", scope=RUNTIME),),
+            scope=RUNTIME,
+        )
+        == ()
     )
 
 

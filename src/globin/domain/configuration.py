@@ -43,6 +43,7 @@ and the baseline is explicit that a secret never arrives through configuration
 at all, which is why this module needs no notion of one.
 """
 
+import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import MISSING, dataclass, fields
 from typing import Any, Final
@@ -53,7 +54,23 @@ from globin.domain.diagnostics import (
     MINIMUM_ROTATION_BYTES,
     RotationPolicy,
 )
-from globin.domain.observability import Severity
+from globin.domain.health import (
+    MAXIMUM_BUDGET_MILLIS,
+    MAXIMUM_FRAME_DEPTH,
+    MAXIMUM_THRESHOLD_BYTES,
+    MAXIMUM_TOP_SITES,
+    MINIMUM_BUDGET_MILLIS,
+    MINIMUM_FRAME_DEPTH,
+    MINIMUM_THRESHOLD_BYTES,
+    HealthThresholds,
+)
+from globin.domain.observability import Severity, redact
+from globin.domain.support import (
+    MAXIMUM_ARCHIVE_BYTES,
+    MAXIMUM_MEMBER_COUNT,
+    MINIMUM_ARCHIVE_BYTES,
+    BundleLimits,
+)
 from globin.errors import ConfigurationError, InternalError, ValidationError
 
 KEY_SEPARATOR: Final[str] = "."
@@ -61,6 +78,14 @@ KEY_SEPARATOR: Final[str] = "."
 
 LOGGING_SECTION: Final[str] = "logging"
 """The section name logging settings are filed under."""
+
+DIAGNOSTICS_SECTION: Final[str] = "diagnostics"
+"""The section name health and support-bundle settings are filed under.
+
+A second section, added in Phase 024. ``known_keys`` had until now been able to
+return one section's keys directly; it now unions two, which is the change a reader
+comparing this module against ``CONFIGURATION_POLICY.md`` should expect to find.
+"""
 
 DEFAULTS_ORIGIN: Final[str] = "defaults"
 """The origin recorded for values that came from the model's own declarations.
@@ -100,6 +125,127 @@ Seven, so that the live file plus its backups span roughly a working week of
 ordinary operation rather than a fixed number of hours. Nothing depends on that
 being exact; it is a default chosen to be useful, not a guarantee about time.
 """
+
+
+MINIMUM_FREE_BYTES: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}minimum_free_bytes"
+"""Free space on a runtime filesystem below which the disk check fails."""
+
+DISK_WARNING_BYTES: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}disk_warning_bytes"
+"""Free space below which the disk check warns."""
+
+MINIMUM_AVAILABLE_MEMORY_BYTES: Final[str] = (
+    f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}minimum_available_memory_bytes"
+)
+"""Available host memory below which the memory check fails."""
+
+PROCESS_RSS_WARNING_BYTES: Final[str] = (
+    f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}process_rss_warning_bytes"
+)
+"""This process's resident set above which the process-memory check warns."""
+
+BUDGET_MILLIS: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}budget_millis"
+"""How long a whole health snapshot may take."""
+
+BUNDLE_TOTAL_INPUT_BYTES: Final[str] = (
+    f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}bundle_total_input_bytes"
+)
+"""How much may be read from disk into one support bundle."""
+
+BUNDLE_ARCHIVE_BYTES: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}bundle_archive_bytes"
+"""How large a finished support bundle may be."""
+
+BUNDLE_MEMBER_BYTES: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}bundle_member_bytes"
+"""How large one bundle member may be before it is truncated."""
+
+BUNDLE_LOG_BYTES: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}bundle_log_bytes"
+"""How much log text a bundle may include in total."""
+
+BUNDLE_MEMBER_COUNT: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}bundle_member_count"
+"""How many members a bundle may hold."""
+
+TRACEMALLOC_ENABLED: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}tracemalloc_enabled"
+"""Whether the interpreter's allocator tracer runs."""
+
+TRACEMALLOC_FRAME_DEPTH: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}tracemalloc_frame_depth"
+"""How many frames each traced allocation retains."""
+
+TRACEMALLOC_TOP: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}tracemalloc_top"
+"""How many allocation sites a memory summary reports."""
+
+DEFAULT_MINIMUM_FREE_BYTES: Final[int] = 268_435_456
+"""256 MiB, below which the runtime filesystem check fails.
+
+Chosen against what GLOBIN actually needs rather than as a round number. The
+bounded logs area is eight mebibytes, a support bundle is capped at thirty-two, and
+the state documents are kilobytes; 256 MiB leaves room for all of that several
+times over while still firing long before a disk that is genuinely filling up
+stops the process from publishing its own shutdown record.
+"""
+
+DEFAULT_DISK_WARNING_BYTES: Final[int] = 1_073_741_824
+"""1 GiB, below which the runtime filesystem check warns.
+
+Four times the failure threshold, so the warning band has real width: an operator
+who sees amber has time to act before anything refuses.
+"""
+
+DEFAULT_MINIMUM_AVAILABLE_MEMORY_BYTES: Final[int] = 134_217_728
+"""128 MiB of available host memory, below which the memory check fails."""
+
+DEFAULT_PROCESS_RSS_WARNING_BYTES: Final[int] = 1_073_741_824
+"""1 GiB resident, above which the process-memory check warns.
+
+Deliberately a warning and never a failure. GLOBIN has no basis yet for saying what
+its own resident set *ought* to be — nothing here loads market data or a model —
+so a threshold that refused would be asserting a number nobody has measured.
+"""
+
+DEFAULT_BUDGET_MILLIS: Final[int] = 5_000
+"""Five seconds for a whole snapshot.
+
+Generous against what the checks cost, which is a handful of syscalls, and short
+enough that a command that has stopped responding is reported rather than waited
+on. ``ENGINEERING_CONTRACT.md`` invariant 2 wants a bounded failure, not a hang.
+"""
+
+DEFAULT_BUNDLE_TOTAL_INPUT_BYTES: Final[int] = 67_108_864
+"""64 MiB read from disk into one bundle."""
+
+DEFAULT_BUNDLE_ARCHIVE_BYTES: Final[int] = 33_554_432
+"""32 MiB for the finished archive.
+
+Small enough to attach to a message, which is what a support bundle is for. A
+bundle that cannot be sent is a bundle that does not do its job.
+"""
+
+DEFAULT_BUNDLE_MEMBER_BYTES: Final[int] = 8_388_608
+"""8 MiB for one member, above which it is truncated and marked as truncated."""
+
+DEFAULT_BUNDLE_LOG_BYTES: Final[int] = 16_777_216
+"""16 MiB of log text across every log member.
+
+Twice the bounded size of the whole logs area, so the ordinary case is never
+truncated and a logs area that has somehow grown past its own policy still cannot
+fill the archive.
+"""
+
+DEFAULT_BUNDLE_MEMBER_COUNT: Final[int] = 64
+"""How many members a bundle may hold.
+
+Comfortably above the live log plus its seven rotations plus the state documents,
+and far below anything that would suggest a directory was walked.
+"""
+
+DEFAULT_TRACEMALLOC_FRAME_DEPTH: Final[int] = 8
+"""How many frames each traced allocation retains.
+
+``tracemalloc``'s own default is one, which names the line that allocated and
+nothing about who asked it to. Eight is enough to see through a couple of layers of
+GLOBIN's own call stack, and the cost is paid per allocation rather than once.
+"""
+
+DEFAULT_TRACEMALLOC_TOP: Final[int] = 10
+"""How many allocation sites a memory summary reports."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,11 +299,102 @@ class LoggingConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class DiagnosticsConfig:
+    """The bounds a health snapshot and a support bundle are measured against.
+
+    Args:
+        minimum_free_bytes: Free space on a runtime filesystem below which the
+            disk check fails.
+        disk_warning_bytes: Free space below which it warns. Must be above the
+            failure threshold, or the warning band has no width.
+        minimum_available_memory_bytes: Available host memory below which the
+            memory check fails.
+        process_rss_warning_bytes: This process's resident set above which the
+            process-memory check warns.
+        budget_millis: How long a whole snapshot may take.
+        bundle_total_input_bytes: How much may be read from disk into one bundle.
+        bundle_archive_bytes: How large the finished archive may be.
+        bundle_member_bytes: How large one member may be before truncation.
+        bundle_log_bytes: How much log text may be included in total.
+        bundle_member_count: How many members a bundle may hold.
+        tracemalloc_enabled: Whether the allocator tracer runs.
+        tracemalloc_frame_depth: How many frames each traceback retains.
+        tracemalloc_top: How many allocation sites a summary reports.
+
+    **Thirteen settings arriving in one phase is a lot, and the alternative was
+    worse.** Each is a number a health check or a bundle limit compares against,
+    and the only other place for such a number is a literal at the comparison —
+    which is precisely the magic constant an operator cannot change and a reader
+    cannot find. ``CONFIGURATION_POLICY.md`` warns that a configuration model is
+    where speculative fields accumulate; none of these is speculative, because each
+    has exactly one call site in this phase's own code.
+
+    ``tracemalloc_enabled`` defaults to ``False`` and that default is load-bearing
+    rather than cautious. Tracing costs the whole process on every allocation, so a
+    runtime that enabled it because the setting existed would be paying a
+    profiler's price for a diagnostic nobody had asked for.
+    """
+
+    minimum_free_bytes: int = DEFAULT_MINIMUM_FREE_BYTES
+    disk_warning_bytes: int = DEFAULT_DISK_WARNING_BYTES
+    minimum_available_memory_bytes: int = DEFAULT_MINIMUM_AVAILABLE_MEMORY_BYTES
+    process_rss_warning_bytes: int = DEFAULT_PROCESS_RSS_WARNING_BYTES
+    budget_millis: int = DEFAULT_BUDGET_MILLIS
+    bundle_total_input_bytes: int = DEFAULT_BUNDLE_TOTAL_INPUT_BYTES
+    bundle_archive_bytes: int = DEFAULT_BUNDLE_ARCHIVE_BYTES
+    bundle_member_bytes: int = DEFAULT_BUNDLE_MEMBER_BYTES
+    bundle_log_bytes: int = DEFAULT_BUNDLE_LOG_BYTES
+    bundle_member_count: int = DEFAULT_BUNDLE_MEMBER_COUNT
+    tracemalloc_enabled: bool = False
+    tracemalloc_frame_depth: int = DEFAULT_TRACEMALLOC_FRAME_DEPTH
+    tracemalloc_top: int = DEFAULT_TRACEMALLOC_TOP
+
+    def thresholds(self) -> HealthThresholds:
+        """The validated health bounds these settings describe.
+
+        Returns:
+            The :class:`~globin.domain.health.HealthThresholds`.
+
+        Raises:
+            ValidationError: If the values are out of range or in the wrong order.
+                Unreachable through :func:`as_config`, which refuses first with a
+                message naming the document. Kept as the second gate for the
+                reason :meth:`LoggingConfig.rotation` keeps its own.
+        """
+        return HealthThresholds(
+            minimum_free_bytes=self.minimum_free_bytes,
+            disk_warning_bytes=self.disk_warning_bytes,
+            minimum_available_memory_bytes=self.minimum_available_memory_bytes,
+            process_rss_warning_bytes=self.process_rss_warning_bytes,
+            budget_millis=self.budget_millis,
+        )
+
+    def limits(self) -> BundleLimits:
+        """The validated bundle bounds these settings describe.
+
+        Returns:
+            The :class:`~globin.domain.support.BundleLimits`.
+
+        Raises:
+            ValidationError: If the values describe a bundle that could not be
+                built.
+        """
+        return BundleLimits(
+            total_input_bytes=self.bundle_total_input_bytes,
+            archive_bytes=self.bundle_archive_bytes,
+            member_bytes=self.bundle_member_bytes,
+            log_bytes=self.bundle_log_bytes,
+            member_count=self.bundle_member_count,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class GlobinConfig:
     """Everything an operator may vary, one field per subsystem that has any.
 
     Args:
         logging: Logging settings.
+        diagnostics: Health and support-bundle settings, added in Phase 024.
 
     One section is the honest width today. Of everything Phases 001-006 built,
     only logging has something an operator may reasonably change: the project
@@ -168,7 +405,7 @@ class GlobinConfig:
     directories — an entry named after a future capability is a claim that the
     capability is being worked on.
 
-    ``logging`` has no default. A nested dataclass default would have to be
+    Neither field has a default. A nested dataclass default would have to be
     written ``LoggingConfig()``, and a call in a class body is work performed at
     import, which ``tests/architecture/test_architecture_contract.py`` forbids in
     every layer package. :func:`default_config` is the supported way to obtain a
@@ -176,6 +413,7 @@ class GlobinConfig:
     """
 
     logging: LoggingConfig
+    diagnostics: DiagnosticsConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -373,9 +611,16 @@ def known_keys() -> tuple[str, ...]:
     """Return every setting an operator may set.
 
     Returns:
-        The dotted keys :func:`as_config` accepts, in declaration order.
+        The dotted keys :func:`as_config` accepts, in declaration order, section
+        by section.
+
+    Derived from the dataclasses rather than written out, which is what keeps a
+    new field from being half-added: declare it on the model and it is a known key,
+    a default and a documented row in the same commit or not at all.
     """
-    return section_keys(LOGGING_SECTION, LoggingConfig)
+    return section_keys(LOGGING_SECTION, LoggingConfig) + section_keys(
+        DIAGNOSTICS_SECTION, DiagnosticsConfig
+    )
 
 
 def default_layer() -> ConfigLayer:
@@ -391,7 +636,13 @@ def default_layer() -> ConfigLayer:
     Without it a document that omits a setting resolves to nothing for that key,
     and :func:`as_config` refuses.
     """
-    return config_layer(DEFAULTS_ORIGIN, section_defaults(LOGGING_SECTION, LoggingConfig))
+    return config_layer(
+        DEFAULTS_ORIGIN,
+        {
+            **section_defaults(LOGGING_SECTION, LoggingConfig),
+            **section_defaults(DIAGNOSTICS_SECTION, DiagnosticsConfig),
+        },
+    )
 
 
 def default_config() -> GlobinConfig:
@@ -404,7 +655,7 @@ def default_config() -> GlobinConfig:
     ``tests/property/test_configuration_properties.py`` can assert the two routes
     to "the defaults" agree. If they ever disagree, one of them is lying.
     """
-    return GlobinConfig(logging=LoggingConfig())
+    return GlobinConfig(logging=LoggingConfig(), diagnostics=DiagnosticsConfig())
 
 
 def resolve(layers: Sequence[ConfigLayer]) -> ResolvedConfig:
@@ -487,8 +738,137 @@ def as_config(resolved: ResolvedConfig) -> GlobinConfig:
             rotation_backup_count=_bounded(
                 resolved.setting(ROTATION_BACKUP_COUNT), low=0, high=MAXIMUM_BACKUP_COUNT
             ),
-        )
+        ),
+        diagnostics=DiagnosticsConfig(
+            minimum_free_bytes=_bounded(
+                resolved.setting(MINIMUM_FREE_BYTES),
+                low=MINIMUM_THRESHOLD_BYTES,
+                high=MAXIMUM_THRESHOLD_BYTES,
+            ),
+            disk_warning_bytes=_bounded(
+                resolved.setting(DISK_WARNING_BYTES),
+                low=MINIMUM_THRESHOLD_BYTES,
+                high=MAXIMUM_THRESHOLD_BYTES,
+            ),
+            minimum_available_memory_bytes=_bounded(
+                resolved.setting(MINIMUM_AVAILABLE_MEMORY_BYTES),
+                low=MINIMUM_THRESHOLD_BYTES,
+                high=MAXIMUM_THRESHOLD_BYTES,
+            ),
+            process_rss_warning_bytes=_bounded(
+                resolved.setting(PROCESS_RSS_WARNING_BYTES),
+                low=MINIMUM_THRESHOLD_BYTES,
+                high=MAXIMUM_THRESHOLD_BYTES,
+            ),
+            budget_millis=_bounded(
+                resolved.setting(BUDGET_MILLIS),
+                low=MINIMUM_BUDGET_MILLIS,
+                high=MAXIMUM_BUDGET_MILLIS,
+            ),
+            bundle_total_input_bytes=_bounded(
+                resolved.setting(BUNDLE_TOTAL_INPUT_BYTES),
+                low=MINIMUM_ARCHIVE_BYTES,
+                high=MAXIMUM_THRESHOLD_BYTES,
+            ),
+            bundle_archive_bytes=_bounded(
+                resolved.setting(BUNDLE_ARCHIVE_BYTES),
+                low=MINIMUM_ARCHIVE_BYTES,
+                high=MAXIMUM_ARCHIVE_BYTES,
+            ),
+            bundle_member_bytes=_bounded(
+                resolved.setting(BUNDLE_MEMBER_BYTES),
+                low=1,
+                high=MAXIMUM_ARCHIVE_BYTES,
+            ),
+            bundle_log_bytes=_bounded(
+                resolved.setting(BUNDLE_LOG_BYTES),
+                low=1,
+                high=MAXIMUM_THRESHOLD_BYTES,
+            ),
+            bundle_member_count=_bounded(
+                resolved.setting(BUNDLE_MEMBER_COUNT), low=1, high=MAXIMUM_MEMBER_COUNT
+            ),
+            tracemalloc_enabled=_flag(resolved.setting(TRACEMALLOC_ENABLED)),
+            tracemalloc_frame_depth=_bounded(
+                resolved.setting(TRACEMALLOC_FRAME_DEPTH),
+                low=MINIMUM_FRAME_DEPTH,
+                high=MAXIMUM_FRAME_DEPTH,
+            ),
+            tracemalloc_top=_bounded(
+                resolved.setting(TRACEMALLOC_TOP), low=1, high=MAXIMUM_TOP_SITES
+            ),
+        ),
     )
+
+
+def config_fingerprint(resolved: ResolvedConfig) -> str:
+    """A digest over what was configured, without publishing what was configured.
+
+    Args:
+        resolved: The output of :func:`resolve`.
+
+    Returns:
+        ``"sha256:"`` followed by 64 lowercase hexadecimal characters.
+
+    **The point is to be able to compare two runs without disclosing either.** A
+    health snapshot travels — into a support bundle, into a message an operator
+    sends somewhere — and "was this machine configured the same way as that one"
+    is a question worth answering without the answer carrying the configuration.
+    Two runs with identical settings produce identical fingerprints; a single
+    changed value changes it; and nothing about the values can be read back out.
+
+    **Values are redacted before they are folded in**, so that a setting whose
+    name looks credential-shaped contributes ``[redacted]`` rather than its
+    content. No setting today holds anything sensitive — ``SECURITY_BASELINE.md``
+    is explicit that a secret never arrives through configuration at all — and
+    that is a property of the current register rather than of this function, so
+    the redaction is applied anyway.
+
+    **The origin is deliberately excluded.** The same values loaded from a
+    different path are the same configuration, and folding the origin in would
+    make a fingerprint change when somebody moved a file, which is exactly the
+    false positive that trains people to ignore a comparison.
+    """
+    safe = redact({item.key: item.value for item in resolved.settings})
+    parts = tuple(f"{key}={safe[key]!r}" for key in sorted(safe))
+    digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
+
+
+def _flag(setting: Setting) -> bool:
+    """Read a boolean, refusing anything that is merely truthy.
+
+    Args:
+        setting: The resolved setting, carrying its origin for the message.
+
+    Returns:
+        The boolean.
+
+    Raises:
+        ConfigurationError: If the value is not a boolean or one of the two
+            spellings below.
+
+    The first boolean in the register, and it is stricter than Python would be.
+    ``bool(value)`` would accept ``"false"`` as ``True``, which is not a corner
+    case — it is the single most likely thing an operator writes when they want
+    tracing off, and it would silently turn the profiler on.
+
+    Two string spellings are accepted, ``"true"`` and ``"false"``, in any case.
+    They exist for the same two reasons :func:`_bounded` accepts a digit string:
+    ``CONFIGURATION_POLICY.md`` writes the documented default in a table that
+    ``tests/contract/test_configuration_contract.py`` feeds back through this
+    binder, and Phase 027's environment variables are strings and nothing else.
+    Nothing else is accepted — not ``1``, not ``"yes"``, not ``"on"`` — because a
+    value with several spellings has several ways to be typed wrong, and each of
+    them fails silently in the permissive direction.
+    """
+    value = setting.value
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.casefold() in {"true", "false"}:
+        return value.casefold() == "true"
+    msg = f"{setting.origin}: {setting.key} is {value!r}; expected true or false"
+    raise ConfigurationError(msg)
 
 
 def _bounded(setting: Setting, *, low: int, high: int) -> int:

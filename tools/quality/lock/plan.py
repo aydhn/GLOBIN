@@ -964,20 +964,34 @@ def declaration_problems(
     return tuple(problems)
 
 
-def coverage_problems(lock: Lock, declared: Sequence[Dependency]) -> tuple[str, ...]:
-    """Whether every declared development tool is locked, at a version clearing its bound.
+def coverage_problems(
+    lock: Lock, declared: Sequence[Dependency], *, scope: str = DEVELOPMENT
+) -> tuple[str, ...]:
+    """Whether every declared dependency in one scope is locked, at a version clearing its bound.
 
     Args:
         lock: The parsed lock.
         declared: The whole collected inventory.
+        scope: Which declared scope this lock is answerable for.
 
     Returns:
-        One sentence per problem, empty when the lock covers the toolchain.
+        One sentence per problem, empty when the lock covers that scope.
+
+    **The scope is a parameter because there are two locks, and Phase 024 found
+    out the hard way that only one of them was being asked this question.**
+    Until then this function read ``DEVELOPMENT`` as a literal, so ``pylock.toml``
+    was checked for internal soundness — hashes, HTTPS, tags, no source
+    distributions — and never once asked whether it contained the packages
+    ``pyproject.toml`` declares. Adding ``psutil`` to ``project.dependencies`` and
+    to the declaration's ``[runtime] roots`` while leaving the lock untouched
+    produced a clean ``passed``. A gate that reports success for something that did
+    not happen is the one failure the whole quality package exists to prevent, so
+    the literal became an argument and the runtime lock is now asked too.
     """
     locked = {package.normalised: package for package in lock.packages}
     problems: list[str] = []
     for entry in declared:
-        if entry.ecosystem != PYPI or entry.source != PYPROJECT or entry.scope != DEVELOPMENT:
+        if entry.ecosystem != PYPI or entry.source != PYPROJECT or entry.scope != scope:
             continue
         package = locked.get(normalise(entry.name))
         if package is None:

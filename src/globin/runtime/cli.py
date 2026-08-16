@@ -37,15 +37,42 @@ from pathlib import Path
 from typing import Final, TextIO
 
 from globin.adapters.bootstrap import build
+from globin.adapters.health import snapshot_document
+from globin.adapters.identifiers import new_run_id
+from globin.adapters.observability import new_correlation_id
 from globin.domain.bootstrap import BootstrapOutcome, CheckStatus, ExitCode
+from globin.domain.configuration import (
+    GlobinConfig,
+    config_fingerprint,
+    default_layer,
+    resolve,
+)
+from globin.domain.health import RuntimeHealthSnapshot, RuntimeHealthState
 from globin.errors import GlobinError
 from globin.project_contract import PROJECT_NAME
-from globin.runtime.composition import Bootstrap, build_bootstrap, project_identity
+from globin.runtime.composition import (
+    BUNDLE_MANIFEST_MEMBER,
+    BUNDLE_REPORT_MEMBER,
+    DEFAULT_PROFILE,
+    Bootstrap,
+    build_bootstrap,
+    build_bundle_builder,
+    build_configuration,
+    build_health_collector,
+    build_logger,
+    build_runtime_state,
+    bundle_candidates,
+    project_identity,
+)
 
 DOCTOR: Final[str] = "doctor"
 BOOTSTRAP: Final[str] = "bootstrap"
 CHECK: Final[str] = "check"
 EVIDENCE: Final[str] = "evidence"
+DIAGNOSTICS: Final[str] = "diagnostics"
+SNAPSHOT: Final[str] = "snapshot"
+BUNDLE: Final[str] = "bundle"
+MEMORY: Final[str] = "memory"
 VERSION: Final[str] = "--version"
 JSON_FLAG: Final[str] = "--json"
 HELP_WORDS: Final[tuple[str, ...]] = ("-h", "--help")
@@ -59,7 +86,18 @@ call, and a layer package performs none at import.
 BOOTSTRAP_SUBCOMMANDS: Final[tuple[str, ...]] = (CHECK, EVIDENCE)
 """What may follow ``bootstrap``. ``check`` is the default and changes nothing."""
 
-USAGE: Final[str] = """usage: globin [--version] [doctor|bootstrap] [check|evidence] [--json]
+DIAGNOSTICS_SUBCOMMANDS: Final[tuple[str, ...]] = (SNAPSHOT, BUNDLE, MEMORY)
+"""What may follow ``diagnostics``. ``snapshot`` is the default.
+
+``memory`` is a separate word rather than a flag on ``snapshot`` because it
+does something ``snapshot`` does not: it starts the interpreter's allocator
+tracer, which costs the whole process on every allocation while it runs. A flag
+invites somebody to add it to a script that runs every minute; a verb reads like
+the deliberate act it is.
+"""
+
+USAGE: Final[str] = """usage: globin [--version] [doctor|bootstrap|diagnostics]
+                     [subcommand] [--json]
 
 GLOBIN's local entry point. It performs no network access of any kind: no
 exchange is contacted, no credential is read and no order is placed. See
@@ -70,6 +108,9 @@ Commands:
   bootstrap check     Refuse to start unless every check passes. Stops at the
                       first refusal. This is the gate a launcher runs.
   bootstrap evidence  Run the gate and write .globin/bootstrap/bootstrap-manifest.json.
+  diagnostics snapshot  Measure this runtime once and report its health.
+  diagnostics bundle    Write a redacted support archive and print its digest.
+  diagnostics memory    Snapshot with the allocator tracer on, then off again.
 
 Options:
   --json              Write the machine-readable document to standard output,
@@ -94,6 +135,7 @@ Exit codes:
   19  the recorded runtime state could not be read
   20  another GLOBIN coordinator is already running on this machine
   21  the runtime state could not be written
+  22  a diagnostic could not be produced, which is not a health verdict
 """
 
 
@@ -149,6 +191,8 @@ def parse(argv: Sequence[str]) -> Invocation:
         return Invocation(command=DOCTOR, as_json=_json_only(words[1:], DOCTOR))
     if head == BOOTSTRAP:
         return _parse_bootstrap(words[1:])
+    if head == DIAGNOSTICS:
+        return _parse_diagnostics(words[1:])
     msg = f"unrecognised argument: {head!r}"
     raise UsageError(msg)
 
@@ -309,6 +353,13 @@ def main(
     if invocation.command == VERSION:
         return _version(out, err)
 
+    if invocation.command.startswith(DIAGNOSTICS):
+        try:
+            return _diagnostics(invocation, out=out, err=err)
+        except (GlobinError, OSError) as fault:
+            print(f"globin: the diagnostic could not be produced: {fault}", file=err)
+            return int(ExitCode.DIAGNOSTICS_FAILED)
+
     try:
         return _bootstrap(invocation, out=out, err=err, start=start)
     except (GlobinError, OSError) as fault:
@@ -401,3 +452,220 @@ def _record(
     written = bootstrap.record(outcome)
     where = written.path or "outside the project"
     print(f"evidence: {where}", file=err if as_json else out)
+
+
+def _parse_diagnostics(rest: Sequence[str]) -> Invocation:
+    """Read what follows ``diagnostics``.
+
+    Args:
+        rest: The remaining words.
+
+    Returns:
+        The invocation.
+
+    Raises:
+        UsageError: If the subcommand is unrecognised, or ``--json`` is asked of
+            ``bundle``, whose output is an archive rather than a stream.
+
+    ``snapshot`` is the default, for the reason ``check`` is ``bootstrap``'s: it
+    is the reading a person wants when they type the noun and nothing else, and it
+    changes nothing on disk.
+    """
+    words = list(rest)
+    subcommand = SNAPSHOT
+    if words and not words[0].startswith("-"):
+        subcommand = words.pop(0)
+        if subcommand not in DIAGNOSTICS_SUBCOMMANDS:
+            msg = f"unrecognised argument: {subcommand!r}"
+            raise UsageError(msg)
+    as_json = _json_only(words, f"{DIAGNOSTICS} {subcommand}")
+    if as_json and subcommand == BUNDLE:
+        msg = (
+            f"{JSON_FLAG} means nothing with {BUNDLE}, which writes an archive; "
+            f"use `{DIAGNOSTICS} {SNAPSHOT} {JSON_FLAG}` to read the same document"
+        )
+        raise UsageError(msg)
+    return Invocation(command=f"{DIAGNOSTICS} {subcommand}", as_json=as_json)
+
+
+def render_snapshot_json(snapshot: RuntimeHealthSnapshot) -> str:
+    """The snapshot as one line of canonical JSON.
+
+    Args:
+        snapshot: What was measured.
+
+    Returns:
+        The document, with sorted keys and no incidental whitespace.
+
+    The same renderer the bundle uses, so the file inside an archive and the bytes
+    on standard output are identical for the same snapshot. A second renderer
+    would be a second thing to keep true.
+    """
+    return json.dumps(
+        snapshot_document(snapshot), sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+
+
+def render_snapshot_human(snapshot: RuntimeHealthSnapshot) -> str:
+    """The snapshot as text a person reads.
+
+    Args:
+        snapshot: What was measured.
+
+    Returns:
+        One line per check, then the aggregate.
+
+    Severity first on every line, so the column an eye scans is the one that says
+    whether to keep reading. An unmeasured check is printed like any other rather
+    than hidden, because the count of things nobody could measure is exactly what
+    an operator needs when a state looks better than they expected.
+    """
+    lines = [
+        f"GLOBIN {snapshot.version} — {snapshot.platform.implementation} "
+        f"{snapshot.platform.python_version} on {snapshot.platform.system}",
+        f"profile {snapshot.profile}  pid {snapshot.process.pid}  "
+        f"uptime {snapshot.uptime.nanoseconds // 1_000_000_000}s",
+        "",
+    ]
+    for result in snapshot.results:
+        marker = str(result.severity).upper().ljust(7)
+        lines.append(f"  {marker} {result.identifier:<24} {result.summary}")
+    unmeasurable = snapshot.unmeasurable()
+    lines.append("")
+    lines.append(f"state: {snapshot.state}")
+    if unmeasurable:
+        lines.append(f"unmeasurable: {len(unmeasurable)} ({', '.join(unmeasurable)})")
+    return "\n".join(lines) + "\n"
+
+
+def exit_code_for_state(state: RuntimeHealthState) -> ExitCode:
+    """Which code one health state produces.
+
+    Args:
+        state: What the snapshot concluded.
+
+    Returns:
+        The exit code.
+
+    The three codes every gate under ``tools/`` already speaks, so a script that
+    branches on one command branches on this one. ``DIAGNOSTICS_FAILED`` is not
+    here on purpose: it means no snapshot could be produced, which is a failure to
+    measure a state rather than a state.
+    """
+    if state is RuntimeHealthState.UNHEALTHY:
+        return ExitCode.GATE_FAILED
+    if state is RuntimeHealthState.DEGRADED:
+        return ExitCode.UNMEASURED
+    return ExitCode.OK
+
+
+def _diagnostics(invocation: Invocation, *, out: TextIO, err: TextIO) -> int:
+    """Take a snapshot, or build a bundle from one.
+
+    Args:
+        invocation: What was asked for.
+        out: Where the answer goes.
+        err: Where human text goes under ``--json``.
+
+    Returns:
+        The exit code.
+
+    **This command starts no diagnostics subsystem and takes no lock.** It reads
+    the runtime tree, probes the lock by acquiring and releasing it, and exits.
+    A read-only command that took the production lock would refuse to run beside
+    a running GLOBIN, which is the trap ADR-0057 already declined for ``doctor``.
+    """
+    wants_memory = invocation.command.endswith(MEMORY)
+    state = build_runtime_state()
+    config = build_configuration()
+    # Standard error, always. Under `--json` standard output carries the
+    # document and nothing else, and a log record printed beside it would
+    # break the one contract the flag makes. Without `--json` the human table
+    # goes to standard output and a record interleaved with it would be noise.
+    collector = build_health_collector(
+        state, config=config, logger=build_logger(stream=err, config=config)
+    )
+    memory_probe = collector.memory_probe
+    if wants_memory:
+        memory_probe.start(config.diagnostics.tracemalloc_frame_depth)
+    try:
+        snapshot = collector.snapshot(
+            correlation_id=new_correlation_id(),
+            run_id=str(new_run_id()),
+            version=_version_string(),
+            profile=DEFAULT_PROFILE,
+            config_fingerprint=config_fingerprint(resolve((default_layer(),))),
+            context_fingerprint="",
+            include_memory=wants_memory,
+            memory_top=config.diagnostics.tracemalloc_top,
+        )
+    finally:
+        if wants_memory:
+            memory_probe.stop()
+
+    if invocation.command.endswith(BUNDLE):
+        return _bundle(state, config, snapshot, out=out, err=err)
+
+    if invocation.as_json:
+        print(render_snapshot_json(snapshot), file=out)
+        print(render_snapshot_human(snapshot), end="", file=err)
+    else:
+        print(render_snapshot_human(snapshot), end="", file=out)
+    return int(exit_code_for_state(snapshot.state))
+
+
+def _bundle(
+    state: object,
+    config: GlobinConfig,
+    snapshot: RuntimeHealthSnapshot,
+    *,
+    out: TextIO,
+    err: TextIO,
+) -> int:
+    """Build, validate and publish a support bundle.
+
+    Args:
+        state: The runtime tree.
+        config: Resolved configuration, for the limits.
+        snapshot: The snapshot to put inside it.
+        out: Where the path and digest go.
+        err: Where a refusal is reported.
+
+    Returns:
+        The exit code — ``0`` when published, ``22`` when it could not be.
+
+    The health *state* deliberately does not decide this code. A bundle built from
+    an unhealthy runtime is a successful bundle, and it is the one somebody most
+    needs; conflating the two would make the command fail exactly when it matters.
+    """
+    builder, destination = build_bundle_builder(
+        state,  # type: ignore[arg-type]
+        config=config,
+        logger=build_logger(stream=err, config=config),
+    )
+    payload = render_snapshot_json(snapshot).encode("utf-8")
+    try:
+        manifest, digest, size = builder.build(
+            bundle_candidates(state, payload),  # type: ignore[arg-type]
+            manifest_member=BUNDLE_MANIFEST_MEMBER,
+            report_member=BUNDLE_REPORT_MEMBER,
+        )
+    except (GlobinError, OSError) as fault:
+        print(f"globin: the support bundle was not published: {fault}", file=err)
+        return int(ExitCode.DIAGNOSTICS_FAILED)
+    print(f"bundle: {destination}", file=out)
+    print(f"digest: {digest}", file=out)
+    print(f"members: {len(manifest.entries)}  bytes: {size}", file=out)
+    if manifest.exclusions:
+        print(f"excluded: {len(manifest.exclusions)} (see report.txt inside)", file=out)
+    return int(ExitCode.OK)
+
+
+def _version_string() -> str:
+    """This GLOBIN's version, or an empty string when it cannot say.
+
+    Returns:
+        The version.
+    """
+    identity = project_identity()
+    return "" if identity is None else identity.version

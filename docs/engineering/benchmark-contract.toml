@@ -1,0 +1,143 @@
+# ---------------------------------------------------------------------------
+# GLOBIN workload benefit contract.
+#
+# This file declares WHICH WORKLOADS ARE WORTH ASKING ABOUT and what would have
+# to be true for a GPU to be worth using for each. `python -m tools.quality
+# benchmark` measures what it can on this host and recomputes every verdict from
+# the numbers beside the thresholds declared here.
+#
+# THIS IS BENEFIT, NOT DETECTION. Phase 023 owns "is there a device, which
+# driver, which compute capability" and records those as states in
+# `gpu-contract.toml`. This asks the question that one deliberately refused: for
+# a workload GLOBIN actually schedules, does moving it to the device pay?
+#
+# A TIMING IS NOT A REPRODUCIBLE FACT, AND THIS FILE DOES NOT PRETEND OTHERWISE.
+# Two runs on one host produce different nanoseconds. What is reproducible is the
+# METHOD — the warmup count, the repeat count, the reduction, and the threshold a
+# speedup is compared against — and the VERDICT DERIVATION, which is recomputed
+# from the recorded measurements every time the gate runs. The manifest therefore
+# separates `run.observed` (measurements, which move) from `findings` (verdicts,
+# which are a function of the contract and those measurements).
+#
+# NOTHING HERE INSTALLS OR ADOPTS A LIBRARY. `docs/engineering/wheel-survey.toml`
+# files no library under phase 24, and `torch` is Phase 183. Every CUDA-backed
+# workload below is therefore expected to record `UNAVAILABLE` on every host
+# today, which is a measured absence rather than a gap: the harness exists so
+# that Phase 183 has somewhere to put its answer, and so that the answer is a
+# measurement rather than an assumption.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# The host this contract was written against. A tripwire copied from
+# `runtime-contract.toml`, exactly as `gpu-contract.toml` carries one: if the two
+# disagree, the gate refuses rather than measuring the wrong machine.
+# ---------------------------------------------------------------------------
+[target]
+system = "Windows"
+architecture = "AMD64"
+
+# ---------------------------------------------------------------------------
+# How a measurement is taken. One method for every workload, so two workloads'
+# numbers are comparable with each other and not only with themselves.
+# ---------------------------------------------------------------------------
+[method]
+# Iterations run and discarded before anything is recorded. The first call into a
+# numerical library allocates buffers, resolves dispatch tables and warms the
+# instruction cache; timing it measures start-up rather than the workload.
+warmup = 2
+
+# How many timed iterations are run.
+repeats = 5
+
+# Which of the repeats becomes the recorded figure. `minimum` rather than `mean`:
+# every source of noise on a general-purpose machine ADDS time, so the minimum is
+# the closest thing to the workload's own cost, and a mean on a laptop mostly
+# measures what else the laptop was doing.
+reduction = "minimum"
+
+# The clock. `perf_counter_ns` is the standard library's highest-resolution
+# monotonic clock and reports integer nanoseconds, so no float rounding enters a
+# recorded figure.
+clock = "time.perf_counter_ns"
+
+# ---------------------------------------------------------------------------
+# The workloads.
+#
+#   id                  stable identifier a consumer switches on
+#   question            what measuring it would answer
+#   backend             `cpu` or `cuda`
+#   library             the distribution the backend needs
+#   phase               who owns adopting that library, when it is not adopted
+#   speedup_threshold   the ratio against the CPU baseline at which the contract
+#                       says the backend is worth using. Only meaningful for a
+#                       non-cpu backend.
+#   size                the problem size, so a figure means something
+# ---------------------------------------------------------------------------
+
+[[workload]]
+id = "elementwise.cpu"
+question = "What does a large elementwise float64 pass cost on this CPU?"
+backend = "cpu"
+library = "numpy"
+phase = 22
+speedup_threshold = 1.0
+size = 4194304
+
+[[workload]]
+id = "matmul.cpu"
+question = "What does a dense 512x512 float64 matrix multiply cost on this CPU?"
+backend = "cpu"
+library = "numpy"
+phase = 22
+speedup_threshold = 1.0
+size = 512
+
+[[workload]]
+id = "reduction.cpu"
+question = "What does a full-array sum over float64 cost on this CPU?"
+backend = "cpu"
+library = "numpy"
+phase = 22
+speedup_threshold = 1.0
+size = 4194304
+
+# ---------------------------------------------------------------------------
+# The CUDA half. Every entry below is expected to record `UNAVAILABLE` today,
+# and the `phase` column is what makes that acceptable rather than a silent gap:
+# each names the phase that would adopt the library able to answer it.
+#
+# The threshold is 2.0 rather than 1.0 throughout, and that is a decision rather
+# than a round number. A device transfer costs real time in both directions, so a
+# workload that is 1.1x faster on the GPU is slower in any pipeline that has to
+# get the data there and back. Two is the point at which the move is worth the
+# round trip for the array sizes above.
+# ---------------------------------------------------------------------------
+
+[[workload]]
+id = "elementwise.cuda"
+question = "Does moving a large elementwise pass to the device pay on this host?"
+backend = "cuda"
+library = "torch"
+phase = 183
+speedup_threshold = 2.0
+size = 4194304
+
+[[workload]]
+id = "matmul.cuda"
+question = "Does moving a dense matrix multiply to the device pay on this host?"
+backend = "cuda"
+library = "torch"
+phase = 183
+speedup_threshold = 2.0
+size = 512
+
+[[workload]]
+id = "reduction.cuda"
+question = "Does moving a full-array reduction to the device pay on this host?"
+backend = "cuda"
+library = "torch"
+phase = 183
+speedup_threshold = 2.0
+size = 4194304

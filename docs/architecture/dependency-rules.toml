@@ -95,9 +95,22 @@ capable_modules = [
     # tests/architecture/test_clock_discipline.py rather than by this list.
     "time",
     "tomllib",
+    # `tracemalloc` joined this table in Phase 024; see ADR-0063. It is the one
+    # entry here that reaches *inward* rather than outward, and it earns its place
+    # for a different reason from the rest: starting it mutates interpreter-global
+    # state that changes the cost of every allocation in the process, for every
+    # thread, until somebody stops it. `ENGINEERING_CONTRACT.md` invariant 5
+    # forbids hidden global state, and an inner layer able to switch a profiler on
+    # would be exactly that.
+    "tracemalloc",
     "urllib",
     "webbrowser",
     "xmlrpc",
+    # `zipfile` joined this table in Phase 024; see ADR-0063. It opens a path and
+    # writes to it, which is I/O by any reading — it merely happens to be spelled
+    # as a container format rather than as a file operation, which is precisely how
+    # it would have got past a reviewer looking for `open`.
+    "zipfile",
 ]
 
 # ---------------------------------------------------------------------------

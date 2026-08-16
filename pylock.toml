@@ -24,6 +24,17 @@ url = "https://files.pythonhosted.org/packages/96/58/ad979ae617615576e8aafd569c9
 sha256 = "cd8f7c6dc98527058ee6264219343f5392240a6f1bfa654fc5d79023020d0c92"
 
 [[packages]]
+name = "psutil"
+version = "7.2.2"
+
+[[packages.wheels]]
+name = "psutil-7.2.2-cp37-abi3-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/b4/90/e2159492b5426be0c1fef7acba807a03511f97c5f86b3caeda6ad92351a7/psutil-7.2.2-cp37-abi3-win_amd64.whl"
+
+[packages.wheels.hashes]
+sha256 = "eb7e81434c8d223ec4a219b5fc1c47d0417b12be7ea866e24fb5ad6e84b3d988"
+
+[[packages]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 

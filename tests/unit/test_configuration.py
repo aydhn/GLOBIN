@@ -23,12 +23,25 @@ import pytest
 
 from globin.adapters.configuration import TomlConfigurationSource, flatten
 from globin.domain.configuration import (
+    BUDGET_MILLIS,
+    BUNDLE_ARCHIVE_BYTES,
+    BUNDLE_LOG_BYTES,
+    BUNDLE_MEMBER_BYTES,
+    BUNDLE_MEMBER_COUNT,
+    BUNDLE_TOTAL_INPUT_BYTES,
     DEFAULTS_ORIGIN,
+    DISK_WARNING_BYTES,
     KEY_SEPARATOR,
     LOGGING_SECTION,
     MIN_SEVERITY,
+    MINIMUM_AVAILABLE_MEMORY_BYTES,
+    MINIMUM_FREE_BYTES,
+    PROCESS_RSS_WARNING_BYTES,
     ROTATION_BACKUP_COUNT,
     ROTATION_MAX_BYTES,
+    TRACEMALLOC_ENABLED,
+    TRACEMALLOC_FRAME_DEPTH,
+    TRACEMALLOC_TOP,
     ConfigLayer,
     LoggingConfig,
     ResolvedConfig,
@@ -170,7 +183,24 @@ def test_the_known_keys_are_exactly_what_as_config_binds() -> None:
     section would otherwise fail here for a reason that is not about correctness —
     the ordering is not a promise this module makes to anybody.
     """
-    assert set(known_keys()) == {MIN_SEVERITY, ROTATION_MAX_BYTES, ROTATION_BACKUP_COUNT}
+    assert set(known_keys()) == {
+        MIN_SEVERITY,
+        ROTATION_MAX_BYTES,
+        ROTATION_BACKUP_COUNT,
+        MINIMUM_FREE_BYTES,
+        DISK_WARNING_BYTES,
+        MINIMUM_AVAILABLE_MEMORY_BYTES,
+        PROCESS_RSS_WARNING_BYTES,
+        BUDGET_MILLIS,
+        BUNDLE_TOTAL_INPUT_BYTES,
+        BUNDLE_ARCHIVE_BYTES,
+        BUNDLE_MEMBER_BYTES,
+        BUNDLE_LOG_BYTES,
+        BUNDLE_MEMBER_COUNT,
+        TRACEMALLOC_ENABLED,
+        TRACEMALLOC_FRAME_DEPTH,
+        TRACEMALLOC_TOP,
+    }
 
 
 def test_the_defaults_layer_records_where_its_values_came_from() -> None:

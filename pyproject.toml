@@ -56,13 +56,27 @@ classifiers = [
 # unlocked, so these two lines and `pylock.toml` arrived in one commit and cannot
 # be separated afterwards.
 #
-# Phase 022 installs and verifies them. Nothing in `src/globin` imports either
-# yet, and this phase makes no claim about their correctness — declaring,
-# reviewing and locking is one job, and confirming a library computes what it
-# says is another.
+# Phase 022 installs and verifies numpy and pandas. Nothing in `src/globin`
+# imports either, and `tests/architecture/test_stack_discipline.py` fails if that
+# changes — declaring, reviewing and locking is one job, and confirming a library
+# computes what it says is another.
+#
+# psutil is DIFFERENT IN KIND from the two above, and the difference is worth
+# stating rather than leaving a reader to infer it from the list. numpy and pandas
+# are declared, locked and deliberately NOT imported. psutil is declared, locked
+# and imported — by `globin.adapters.health` and by nothing else, which
+# `tests/architecture/test_probe_discipline.py` enforces. It is the first library
+# this repository actually depends on at run time.
+#
+# It is also the first that must be ABSENT WITHOUT BREAKING ANYTHING. The CI
+# `quality` job installs the toolchain with plain `pip` and never builds `.venv`,
+# so psutil is not there; `system_process_probe()` therefore records
+# `Availability.UNAVAILABLE` rather than raising, which is ADR-0045's rule applied
+# to a library instead of a device. See ADR-0063.
 dependencies = [
     "numpy>=2.5.2",
     "pandas>=3.0.5",
+    "psutil>=7.2.2",
 ]
 
 # The one console entry point, introduced in Phase 021.
@@ -396,6 +410,53 @@ ignore_missing_imports = true
 # than one this line should silently cover.
 [[tool.mypy.overrides]]
 module = ["numpy"]
+ignore_missing_imports = true
+
+# `psutil` is a THIRD override, and its reason overlaps numpy's only halfway.
+#
+# The half it shares: the CI `quality` job has no psutil either, so without this
+# line mypy reports `import-not-found` there and passes locally, which is the
+# worst of both answers.
+#
+# The half it does NOT share: psutil ships no `py.typed`, so even on a machine
+# that HAS it installed mypy sees an untyped package. There is a `types-psutil`
+# stub distribution on typeshed and it was considered and declined — adding a
+# fourth declared distribution, with its own review and its own lock entry, to
+# type a surface this repository touches in exactly one adapter is not a trade
+# worth making at this size. `globin.adapters.health` therefore states the shapes
+# it needs at its own boundary: every value psutil returns is converted into a
+# GLOBIN type before it leaves that module, and mypy checks THAT conversion
+# strictly. The untyped region is one function wide and it is named here.
+#
+# This exemption belongs to `src/globin/adapters/health.py` and nothing else,
+# which `tests/architecture/test_probe_discipline.py` enforces on the real import
+# graph rather than trusting this comment.
+[[tool.mypy.overrides]]
+module = ["psutil"]
+ignore_missing_imports = true
+
+# `torch` is the fourth override and the only one for a library this repository
+# has NOT adopted and does not install anywhere.
+#
+# Phase 024's benchmark harness names a CUDA backend so that the question "does
+# moving this workload to the device pay" has somewhere to be answered. Answering
+# it needs a CUDA-capable library, and `docs/engineering/wheel-survey.toml` files
+# `torch` under phase 183. So `tools/quality/benchmark/probes.py` imports it
+# inside a function, catches the `ImportError` that always happens today, and
+# records `UNAVAILABLE` naming the phase that would change that.
+#
+# mypy still has to typecheck the branch that never runs, and without this line it
+# reports `import-not-found` on every host including the ones with a GPU. The
+# alternative — suppressing at the call site — would hide the import from a reader
+# grepping for what this repository can reach, which is the opposite of what an
+# unadopted dependency needs.
+#
+# WHEN PHASE 183 ADOPTS IT, this override does not simply stay: torch ships
+# `py.typed`, so an installed torch is genuinely checkable and this line would
+# start hiding real errors. It is removed then, and the benchmark harness gets a
+# real measurement instead of a recorded absence.
+[[tool.mypy.overrides]]
+module = ["torch"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------

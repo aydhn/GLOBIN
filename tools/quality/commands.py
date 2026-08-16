@@ -411,6 +411,17 @@ _STACK = Step("stack", (), ("-m", "tools.quality.stack"))
 # No modules are declared. It starts a child, but not a Python one.
 _GPU = Step("gpu", (), ("-m", "tools.quality.gpu"))
 
+# Which workloads actually benefit from GPU execution on this host. Phase 024,
+# and the question `gpu` deliberately refused: that one records whether a device
+# is there, this one records whether using it pays for work GLOBIN schedules.
+#
+# `numpy` is declared because the CPU baselines need it and a run without it
+# would record three UNAVAILABLE workloads and call that a pass. `torch` is NOT
+# declared: it is Phase 183's to adopt, its absence is the expected state, and a
+# declared module that is expected to be missing would make the runner refuse to
+# start rather than record why it could not measure.
+_BENCHMARK = Step("benchmark", ("numpy",), ("-m", "tools.quality.benchmark"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -504,6 +515,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "gpu",
         "Whether this host has an NVIDIA device, and what it reports about itself.",
         (_GPU,),
+    ),
+    Command(
+        "benchmark",
+        "Which workloads actually benefit from GPU execution on this host.",
+        (_BENCHMARK,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

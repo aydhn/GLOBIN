@@ -19,6 +19,69 @@ can be opened and read.
 
 ## [Unreleased]
 
+### Which workloads benefit from a GPU, measured rather than assumed
+
+- **`python -m tools.quality benchmark`** reads
+  [`docs/engineering/benchmark-contract.toml`](docs/engineering/benchmark-contract.toml),
+  measures every workload it can with the declared warmup, repeat count and
+  reduction, and recomputes each verdict from the recorded nanoseconds against the
+  declared speedup threshold. Evidence lands in
+  `.globin/benchmark/benchmark-manifest.json`.
+- **This is the one manifest in the repository that is not byte-stable between
+  runs, and it says so rather than hoping nobody notices.** `run.observed` holds
+  timings, which move; `findings` holds verdicts, which are a pure function of the
+  contract and those timings. The determinism check every other gate applies to its
+  whole document is applied here to the findings half only, which is the honest
+  form of the check rather than a weakening of it.
+- **Every CUDA workload records `unavailable` today**, naming `torch` and Phase
+  183. That is a measurement, not a hole: nothing here is stubbed or simulated,
+  because a harness inventing a figure for an unavailable backend would be the
+  failure ADR-0045 exists to prevent, dressed as a measurement.
+- Two traps are handled rather than remembered. A CUDA timing that does not
+  synchronise measures submission and reports a speedup of several hundred; a
+  threshold of `1.0` would recommend moves that lose once the device transfer is
+  paid for. See [`GPU_BENEFIT.md`](docs/engineering/GPU_BENEFIT.md).
+- Four capabilities in `gpu-contract.toml` moved from phase 24 to **phase 31**.
+  Phase 024 consumes them; Phase 031 owns what GLOBIN does when they are absent.
+
+### A running GLOBIN can say how it is doing
+
+- **`globin diagnostics snapshot`** measures this runtime once and reports one of
+  `healthy`, `degraded` or `unhealthy` through the three exit codes every gate
+  already speaks. `--json` puts the canonical document on standard output and
+  nothing else.
+- **A measurement that was not taken is never zero.** Every numeric field carries
+  an `Availability` — `measured`, `unavailable`, `unsupported` or `denied` — so
+  "psutil is not installed", "Windows has no such counter" and "the operating
+  system refused" are three different facts rather than one number and three
+  zeroes. No instantaneous CPU percentage is reported at all, because the first
+  `cpu_percent` call on a process is documented as meaningless.
+- **An unmeasurability that was predicted does not make a system amber.** The CI
+  job has no psutil on any run, so a strict rule would report `degraded` forever —
+  and a signal that is always amber is one nobody reads.
+- **`globin diagnostics bundle`** writes a redacted support archive, validates it
+  against its own SHA-256 manifest by reopening the finished file, and publishes it
+  atomically. The allowlist is a table with no directory walk anywhere; the
+  manifest describes every member except itself; and a `.partial` file never
+  appears under the name an operator would look for. See
+  [`SUPPORT_BUNDLE.md`](docs/engineering/SUPPORT_BUNDLE.md).
+- **`globin diagnostics memory`** runs the allocator tracer for one snapshot and
+  switches it off again. A separate verb rather than a flag, because it costs the
+  whole process on every allocation while it runs.
+- `psutil` is the third runtime dependency and the **first this repository
+  imports**, reached through one factory in one adapter so its absence is a
+  recorded state rather than an import error.
+
+### Fixed
+
+- **`python -m tools.quality.lock relock` could not regenerate the runtime lock,
+  and the gate could not see that it had not.** Both were written in Phase 020,
+  when `project.dependencies` was empty; Phase 021 created `pylock.toml` and
+  nothing in the tooling learned about it. Declaring a runtime dependency and
+  leaving the lock untouched produced a clean `passed`. `relock` and `upgrade` now
+  regenerate both locks, and a new `runtime_coverage` finding asks whether the
+  runtime lock holds what has been declared.
+
 ### GPU capability, measured rather than assumed
 
 - **`python -m tools.quality gpu`** reads

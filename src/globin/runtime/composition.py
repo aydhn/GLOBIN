@@ -57,6 +57,16 @@ from globin.adapters.diagnostics import (
     StandardLibraryCapture,
     system_hooks,
 )
+from globin.adapters.health import (
+    DiagnosticsStateProbe,
+    FilesystemTreeProbe,
+    StateLifecycleProbe,
+    SystemPlatformProbe,
+    SystemThreadProbe,
+    TracemallocProbe,
+    system_host_probe,
+    system_process_probe,
+)
 from globin.adapters.observability import StreamLogSink, ThresholdLogSink, new_correlation_id
 from globin.adapters.runtime_state import (
     AtomicStateStore,
@@ -68,12 +78,16 @@ from globin.adapters.runtime_state import (
     system_environment,
 )
 from globin.adapters.runtime_state import ProjectRuntimeTree as UserRuntimeTree
+from globin.adapters.runtime_state import render as render_state_document
 from globin.adapters.serialization import JsonCodec
+from globin.adapters.support import ZipArchiveWriter, digest_of
 from globin.application.architecture_review import ArchitectureReview
 from globin.application.bootstrap import BootstrapPipeline
 from globin.application.configuration import ConfigurationResolution
+from globin.application.health import HealthCollector
 from globin.application.lifecycle import Lifecycle
 from globin.application.observability import Logger
+from globin.application.support import BundleBuilder, Candidate
 from globin.domain.bootstrap import (
     BootstrapOutcome,
     ProjectIdentity,
@@ -81,8 +95,17 @@ from globin.domain.bootstrap import (
     RuntimeContext,
     RuntimePaths,
 )
+from globin.domain.clock import MonotonicReading
 from globin.domain.configuration import GlobinConfig, default_config
-from globin.domain.runtime_state import LOCK_FILE, RuntimeArea, RuntimeLayout
+from globin.domain.diagnostics import MAXIMUM_BACKUP_COUNT
+from globin.domain.runtime_state import (
+    INSTANCE_FILE,
+    LIFECYCLE_FILE,
+    LOCK_FILE,
+    RuntimeArea,
+    RuntimeLayout,
+)
+from globin.domain.support import ArtifactKind, safe_member_name
 from globin.errors import ConfigurationError
 from globin.ports.clock import Clock, MonotonicClock
 from globin.ports.configuration import ConfigurationSource
@@ -583,3 +606,233 @@ def project_identity() -> ProjectIdentity | None:
         started_from=Path(),
         version_from_package=globin.__version__,
     ).identity()
+
+
+HEALTH_SNAPSHOT_FILE: Final[str] = "health-snapshot.json"
+"""Where a published health snapshot is written inside the state area."""
+
+BUNDLE_DIRECTORY: Final[str] = "support"
+"""Where support bundles are published, inside the cache area.
+
+``cache`` rather than ``state``, and the choice is argued in
+``docs/engineering/SUPPORT_BUNDLE.md``: a bundle is a bounded, reproducible
+artefact an operator may delete without breaking anything, whereas ``state`` holds
+the small documents a run publishes atomically about itself. No sixth
+:class:`~globin.domain.runtime_state.RuntimeArea` is added.
+"""
+
+BUNDLE_MANIFEST_MEMBER: Final[str] = "manifest.json"
+"""What the manifest is called inside a bundle."""
+
+BUNDLE_REPORT_MEMBER: Final[str] = "report.txt"
+"""What the generation report is called inside a bundle."""
+
+BUNDLE_SNAPSHOT_MEMBER: Final[str] = "snapshot.json"
+"""What the health snapshot is called inside a bundle."""
+
+
+def build_health_collector(
+    state: RuntimeState,
+    *,
+    config: GlobinConfig | None = None,
+    logger: Logger | None = None,
+    clock: Clock | None = None,
+    monotonic: MonotonicClock | None = None,
+    started: MonotonicReading | None = None,
+    logging_state: DiagnosticsStateProbe | None = None,
+) -> HealthCollector:
+    """Assemble the collector that takes one health snapshot.
+
+    Args:
+        state: The runtime tree, store and lock.
+        config: Resolved configuration, defaulting to the declared defaults.
+        logger: Where a contained check failure is reported.
+        clock: The wall clock.
+        monotonic: The monotonic clock.
+        started: When the process started, defaulting to now — which makes a
+            snapshot taken by a short-lived command report a near-zero uptime
+            rather than a wrong one.
+        logging_state: What the diagnostics subsystem will say about itself.
+
+    Returns:
+        The collector.
+
+    Every probe is chosen here and nowhere else, which is what makes the
+    psutil-shaped hole invisible to everything above: the collector is handed a
+    :class:`~globin.ports.health.ProcessProbe` and never learns whether the one it
+    got reads a process table or records that it could not.
+    """
+    settings = default_config() if config is None else config
+    reader = SystemMonotonicClock() if monotonic is None else monotonic
+    return HealthCollector(
+        clock=SystemClock() if clock is None else clock,
+        monotonic=reader,
+        thresholds=settings.diagnostics.thresholds(),
+        platform_probe=SystemPlatformProbe(),
+        process_probe=system_process_probe(),
+        host_probe=system_host_probe(),
+        tree_probe=FilesystemTreeProbe(root=state.root, layout=state.layout),
+        lifecycle_probe=StateLifecycleProbe(
+            store=state.store,
+            lock=state.lock,
+            area=RuntimeArea.STATE,
+            lifecycle_file=LIFECYCLE_FILE,
+            instance_file=INSTANCE_FILE,
+        ),
+        logging_probe=DiagnosticsStateProbe() if logging_state is None else logging_state,
+        thread_probe=SystemThreadProbe(),
+        memory_probe=TracemallocProbe(),
+        logger=build_logger(config=settings) if logger is None else logger,
+        started=reader.reading() if started is None else started,
+        anchors=runtime_anchors(state),
+    )
+
+
+def runtime_anchors(state: RuntimeState) -> tuple[str, ...]:
+    """Every distinct filesystem behind the runtime tree.
+
+    Args:
+        state: The runtime tree.
+
+    Returns:
+        One anchor per filesystem, deduplicated and sorted.
+
+    Deduplicated because the five areas normally sit on one drive: asking each
+    separately would run five identical syscalls and publish five identical
+    answers, inviting a reader to believe five filesystems had been checked.
+    """
+    anchors = {
+        (state.root / state.layout.segment_for(area)).anchor or str(state.root)
+        for area in state.layout.areas()
+    }
+    return tuple(sorted(anchor for anchor in anchors if anchor))
+
+
+def build_bundle_builder(
+    state: RuntimeState,
+    *,
+    config: GlobinConfig | None = None,
+    logger: Logger | None = None,
+    name: str = "globin-support.zip",
+) -> tuple[BundleBuilder, Path]:
+    """Assemble the builder that publishes one support bundle.
+
+    Args:
+        state: The runtime tree, for where the bundle lands and what goes in it.
+        config: Resolved configuration, for the limits.
+        logger: Where the outcome is reported.
+        name: The archive's filename.
+
+    Returns:
+        The builder and the path it will publish to.
+    """
+    settings = default_config() if config is None else config
+    destination = state.root / state.layout.segment_for(RuntimeArea.CACHE) / BUNDLE_DIRECTORY / name
+    writer = ZipArchiveWriter(path=destination, operations=FileOperations())
+    return (
+        BundleBuilder(
+            writer=writer,
+            limits=settings.diagnostics.limits(),
+            logger=build_logger(config=settings) if logger is None else logger,
+            render=render_state_document,
+            digest=digest_of,
+        ),
+        destination,
+    )
+
+
+def bundle_candidates(state: RuntimeState, snapshot_bytes: bytes) -> tuple[Candidate, ...]:
+    """Every file the allowlist permits in a bundle, in budget order.
+
+    Args:
+        state: The runtime tree the files live under.
+        snapshot_bytes: The canonical health snapshot, already rendered.
+
+    Returns:
+        The candidates, smallest and most valuable first.
+
+    **This table is the allowlist**, and there is no directory walk anywhere. The
+    rotated logs are the one group not written out name by name, and they are still
+    bounded — by the rotation policy's own backup count — and every member name is
+    built through :func:`~globin.domain.support.safe_member_name` rather than taken
+    from a directory listing.
+    """
+    state_area = state.root / state.layout.segment_for(RuntimeArea.STATE)
+    logs_area = state.root / state.layout.segment_for(RuntimeArea.LOGS)
+    candidates: list[Candidate] = [
+        Candidate(
+            member=BUNDLE_SNAPSHOT_MEMBER,
+            kind=ArtifactKind.SNAPSHOT,
+            read=_constant(snapshot_bytes),
+        ),
+        Candidate(
+            member=safe_member_name("state", LIFECYCLE_FILE),
+            kind=ArtifactKind.LIFECYCLE,
+            read=_reader(state_area / LIFECYCLE_FILE),
+        ),
+        Candidate(
+            member=safe_member_name("state", DIAGNOSTICS_FILE),
+            kind=ArtifactKind.DIAGNOSTICS,
+            read=_reader(state_area / DIAGNOSTICS_FILE),
+        ),
+        Candidate(
+            member=safe_member_name("logs", FAULT_FILE_NAME),
+            kind=ArtifactKind.FAULT,
+            read=_reader(logs_area / FAULT_FILE_NAME),
+        ),
+        Candidate(
+            member=safe_member_name("logs", LOG_FILE_NAME),
+            kind=ArtifactKind.LOG,
+            read=_reader(logs_area / LOG_FILE_NAME),
+            redactable=True,
+        ),
+    ]
+    for index in range(1, MAXIMUM_BACKUP_COUNT + 1):
+        rotated = logs_area / f"{LOG_FILE_NAME}.{index}"
+        if not rotated.exists():
+            break
+        candidates.append(
+            Candidate(
+                member=safe_member_name("logs", f"{LOG_FILE_NAME}.{index}"),
+                kind=ArtifactKind.ROTATED_LOG,
+                read=_reader(rotated),
+                redactable=True,
+            )
+        )
+    return tuple(candidates)
+
+
+def _constant(payload: bytes) -> Callable[[], bytes]:
+    """A reader for content already in hand.
+
+    Args:
+        payload: The bytes.
+
+    Returns:
+        A callable returning them.
+    """
+
+    def read() -> bytes:
+        return payload
+
+    return read
+
+
+def _reader(path: Path) -> Callable[[], bytes]:
+    """A reader for one file, which raises rather than inventing content.
+
+    Args:
+        path: What to read.
+
+    Returns:
+        A callable returning the bytes.
+
+    The collector catches the failure and records an exclusion reason, so a file
+    that is absent, locked or not a regular file is reported rather than silently
+    replaced with nothing.
+    """
+
+    def read() -> bytes:
+        return path.read_bytes()
+
+    return read

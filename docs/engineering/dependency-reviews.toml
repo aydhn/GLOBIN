@@ -271,3 +271,66 @@ WHAT BREAKS IF IT DISAPPEARS? Data handling from Phase 022 onwards. More \
 reversible than numpy — the container could be replaced with a narrower one \
 written here — but not cheaply, and not without re-answering the semantics \
 questions above."""
+
+# ---------------------------------------------------------------------------
+# Adopted in Phase 024 — the first runtime dependency this repository IMPORTS.
+#
+# The two entries above are declared, locked and deliberately never imported;
+# `tests/architecture/test_stack_discipline.py` fails if that changes. This one is
+# imported, by exactly one adapter, and that difference is the reason it gets its
+# own section rather than being appended to theirs.
+# ---------------------------------------------------------------------------
+
+[[review]]
+name = "psutil"
+ecosystem = "pypi"
+scope = "runtime"
+licence = "BSD-3-Clause"
+licence_source = "https://github.com/giampaolo/psutil/blob/master/LICENSE"
+adopted = "phase-024"
+reviewed = 2026-08-16
+verdict = "adopted"
+reason = """The process and host resource half of the Phase 024 health snapshot. \
+GLOBIN must be able to say what it is consuming — resident memory, cumulative \
+CPU time, thread and handle counts, and how much of the host's memory is left — \
+without leaving the machine.
+
+WHAT IT COSTS TRANSITIVELY: NOTHING, AND THAT IS MEASURED RATHER THAN CLAIMED. \
+Every entry in psutil's `requires_dist` sits behind `extra == "dev"` or `extra \
+== "test"`; the installed set is one distribution. This is the cheapest answer \
+question 1 has had in this register, and it is the answer that decided the \
+review — the alternative below is not obviously worse on any other axis.
+
+LICENCE. BSD-3-Clause, read from the project's own LICENSE file rather than from \
+a summary site, and corroborated by the `license_expression` PyPI serves. A \
+single identifier, like pandas and unlike numpy.
+
+MAINTAINED. Fifteen years old, and the release record is the evidence rather \
+than the reputation: 7.0.0 in February 2025, then 7.1.0, 7.1.1, 7.1.2, 7.1.3, \
+7.2.0, 7.2.1 and 7.2.2 through January 2026. Question 3's real test — could one \
+person stop and nobody notice — is the uncomfortable one here, because this \
+project has had a single dominant maintainer for most of its life. The mitigation \
+is not that the risk is absent; it is that the surface GLOBIN uses is small, \
+stable and replaceable, which is what the next answer is about.
+
+RUNTIME, AND FREE. No paid tier, no account, no service. ADR-0003 is satisfied.
+
+COULD IT BE WRITTEN INSTEAD? YES, AND THIS IS THE CLOSEST CALL IN THE REGISTER. \
+The fields Phase 024 reads are available from three documented Win32 entry \
+points — `GlobalMemoryStatusEx`, `K32GetProcessMemoryInfo` and \
+`GetProcessHandleCount` — reachable through `ctypes`, which is already in \
+`docs/architecture/dependency-rules.toml`'s I/O-capable list. That route was \
+costed and put to the owner as an explicit choice against this one, and the owner \
+chose the dependency. What it buys is that the structure-layout and error \
+handling for those calls is somebody else's tested problem rather than this \
+repository's untested one, and a wrong `ctypes.Structure` field width does not \
+raise — it returns a plausible number, which is the failure mode \
+`docs/ARCHITECTURE_PRINCIPLES.md` treats as worse than a crash.
+
+WHAT BREAKS IF IT DISAPPEARS? Less than any other runtime entry here, and that \
+was designed in rather than discovered. `globin.adapters.health` reaches psutil \
+through one factory, `system_process_probe()`, behind the `ProcessProbe` port. \
+With psutil absent the probe records `Availability.UNAVAILABLE` and the snapshot \
+is still produced — which is not a hypothetical: it is what happens in the CI \
+`quality` job on every run. Replacing the library means replacing one adapter \
+against a port that already has a second implementation."""

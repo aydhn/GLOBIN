@@ -12,6 +12,7 @@ past the guard rather than be caught by it.
 """
 
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -44,6 +45,7 @@ from tools.quality.lock.gate import (
     _tail as tail,
 )
 from tools.quality.lock.manifest import (
+    REASON_DECLARATION_INCOMPLETE,
     REASON_DECLARATION_UNREADABLE,
     REASON_FILE_UNREADABLE,
     REASON_MANIFEST_LEAKAGE,
@@ -166,8 +168,49 @@ repos:
 """
 
 
+RUNTIME_LOCK = f"""\
+lock-version = "1.0"
+created-by = "pip"
+
+[[packages]]
+name = "psutil"
+version = "7.2.2"
+
+[[packages.wheels]]
+name = "psutil-7.2.2-cp37-abi3-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/b4/psutil-7.2.2-cp37-abi3-win_amd64.whl"
+
+[packages.wheels.hashes]
+sha256 = "{DIGEST}"
+"""
+
+RUNTIME_DECLARATION = DECLARATION.replace(
+    """\
+[runtime]
+path = "pylock.toml"
+locked = false
+reason = "there are no runtime dependencies yet"
+""",
+    """\
+[runtime]
+path = "pylock.toml"
+locked = true
+extra = ""
+reason = "one runtime dependency, locked beside it"
+roots = ["psutil>=7.2.2"]
+""",
+)
+
+RUNTIME_PYPROJECT = PYPROJECT.replace("dependencies = []", 'dependencies = ["psutil>=7.2.2"]')
+
+
 def build_tree(
-    root: Path, *, lock: str | None = LOCK, declaration: str | None = DECLARATION
+    root: Path,
+    *,
+    lock: str | None = LOCK,
+    declaration: str | None = DECLARATION,
+    pyproject: str = PYPROJECT,
+    runtime_lock: str | None = None,
 ) -> None:
     """Write a tree the lock gate can judge.
 
@@ -175,6 +218,8 @@ def build_tree(
         root: Where to write it.
         lock: The development lock, or ``None`` to omit it.
         declaration: The lock declaration, or ``None`` to omit it.
+        pyproject: The project file, so a tree can declare runtime dependencies.
+        runtime_lock: The runtime lock, or ``None`` to omit it.
     """
     engineering = root / "docs" / "engineering"
     engineering.mkdir(parents=True, exist_ok=True)
@@ -182,7 +227,7 @@ def build_tree(
     if declaration is not None:
         (engineering / "lock-policy.toml").write_text(declaration, encoding="utf-8", newline="\n")
 
-    (root / "pyproject.toml").write_text(PYPROJECT, encoding="utf-8", newline="\n")
+    (root / "pyproject.toml").write_text(pyproject, encoding="utf-8", newline="\n")
     workflows = root / ".github" / "workflows"
     workflows.mkdir(parents=True, exist_ok=True)
     (workflows / "quality.yml").write_text(WORKFLOW, encoding="utf-8", newline="\n")
@@ -190,6 +235,8 @@ def build_tree(
 
     if lock is not None:
         (root / "pylock.dev.toml").write_text(lock, encoding="utf-8", newline="\n")
+    if runtime_lock is not None:
+        (root / "pylock.toml").write_text(runtime_lock, encoding="utf-8", newline="\n")
 
 
 def run(root: Path, **options: object) -> int:
@@ -485,6 +532,117 @@ def test_an_upgrade_needs_a_committed_lock_to_hold_the_others_at(tmp_path: Path)
     """There is nothing to constrain against."""
     build_tree(tmp_path, lock=None)
     assert run(tmp_path, mode=UPGRADE, only=("ruff",), runner=_writer(LOCK)) == EXIT_GATE_FAILED
+
+
+# ---------------------------------------------------------------------------
+# The runtime lock, which until Phase 024 this package could neither regenerate
+# nor check against what had been declared
+# ---------------------------------------------------------------------------
+
+
+def _runtime_tree(root: Path, runtime_lock: str | None = RUNTIME_LOCK) -> None:
+    """A tree that declares one runtime dependency and locks it."""
+    build_tree(
+        root,
+        declaration=RUNTIME_DECLARATION,
+        pyproject=RUNTIME_PYPROJECT,
+        runtime_lock=runtime_lock,
+    )
+
+
+def _sequence_writer(texts: Sequence[str]) -> Runner:
+    """An injected pip that writes a different lock on each successive call.
+
+    One run now resolves twice — the development roots, then the runtime ones —
+    so a writer that answers with the same text both times cannot tell the two
+    apart, and a test using it would pass whichever lock the gate wrote.
+    """
+    remaining = list(texts)
+
+    def write(argv: list[str], **_kwargs: object) -> "subprocess.CompletedProcess[str]":
+        output = Path(argv[argv.index("--output") + 1])
+        output.write_text(remaining.pop(0), encoding="utf-8", newline="\n")
+        return completed()
+
+    return write
+
+
+def test_a_declared_runtime_dependency_the_runtime_lock_omits_fails_the_gate(
+    tmp_path: Path,
+) -> None:
+    """The hole Phase 024 fell into, pinned as a test rather than as a comment.
+
+    Every other runtime finding asks whether `pylock.toml` is sound in itself.
+    None of them notices a package `pyproject.toml` declares and the lock does
+    not, which is the exact state that returned a clean `passed` when `psutil`
+    was declared and the lock was left alone.
+    """
+    build_tree(
+        tmp_path,
+        declaration=RUNTIME_DECLARATION,
+        pyproject=RUNTIME_PYPROJECT,
+        runtime_lock=LOCK,
+    )
+    assert run(tmp_path) == EXIT_GATE_FAILED
+    assert REASON_DECLARATION_INCOMPLETE in reasons_of(manifest_of(tmp_path))
+
+
+def test_a_runtime_lock_that_covers_its_declaration_passes(tmp_path: Path) -> None:
+    """The other direction, so the check above is not merely always-failing."""
+    _runtime_tree(tmp_path)
+    assert run(tmp_path) == EXIT_OK
+
+
+def test_a_relock_regenerates_the_runtime_lock_as_well(tmp_path: Path) -> None:
+    """Both locks, one command.
+
+    Until Phase 024 `relock` resolved only the development roots, so a repository
+    with runtime dependencies had no supported way to move them at all — and
+    `DEPENDENCY_LOCKING.md` is explicit that a lock is never edited by hand.
+    """
+    _runtime_tree(tmp_path)
+    moved = RUNTIME_LOCK.replace("7.2.2", "7.2.3")
+    assert run(tmp_path, mode=RELOCK, runner=_sequence_writer([LOCK, moved])) != EXIT_UNMEASURED
+    assert (tmp_path / "pylock.dev.toml").read_text(encoding="utf-8") == LOCK
+    assert (tmp_path / "pylock.toml").read_text(encoding="utf-8") == moved
+
+
+def test_a_refused_runtime_candidate_leaves_the_committed_runtime_lock_alone(
+    tmp_path: Path,
+) -> None:
+    """And is set aside under its own name, not the development one's."""
+    _runtime_tree(tmp_path)
+    unhashed = RUNTIME_LOCK.replace(f'\n[packages.wheels.hashes]\nsha256 = "{DIGEST}"\n', "\n")
+    assert run(tmp_path, mode=RELOCK, runner=_sequence_writer([LOCK, unhashed])) == EXIT_GATE_FAILED
+    assert (tmp_path / "pylock.toml").read_text(encoding="utf-8") == RUNTIME_LOCK
+    rejected = tmp_path / "out" / gate.REJECTED_RUNTIME_NAME
+    assert rejected.read_text(encoding="utf-8") == unhashed
+
+
+def test_the_runtime_resolution_is_not_constrained_by_the_workflow_pins(tmp_path: Path) -> None:
+    """The registers have no opinion about `project.dependencies`.
+
+    `.github/workflows/` pins the tools a job installs and names nothing in the
+    runtime set, so holding those pins over a runtime resolution would constrain
+    it with a register that is not about it. The producer is dropped for the same
+    reason: pip writes the lock and appears in no runtime one.
+    """
+    _runtime_tree(tmp_path)
+    seen: list[str] = []
+    writer = _sequence_writer([LOCK, RUNTIME_LOCK])
+
+    def record(argv: list[str], **kwargs: object) -> "subprocess.CompletedProcess[str]":
+        if "--constraint" in argv:
+            seen.append(Path(argv[argv.index("--constraint") + 1]).read_text(encoding="utf-8"))
+        else:
+            seen.append("")
+        return writer(argv, **kwargs)
+
+    run(tmp_path, mode=RELOCK, runner=record)
+    assert len(seen) == 2
+    assert "ruff==0.15.14" in seen[0]
+    assert "ruff" not in seen[1]
+    assert "pip==" not in seen[1]
 
 
 def test_the_resolution_holds_the_workflow_pins_and_the_producer(tmp_path: Path) -> None:

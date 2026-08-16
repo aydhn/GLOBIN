@@ -102,6 +102,7 @@ from tools.quality.supply.inventory import (
     DEVELOPMENT,
     PYPI,
     PYPROJECT,
+    RUNTIME,
     SupplyChainError,
     collect,
     from_pyproject,
@@ -123,6 +124,14 @@ MANIFEST_NAME: Final[str] = "lock-manifest.json"
 
 REJECTED_NAME: Final[str] = "rejected-lock.toml"
 """Where a regenerated lock the gate refused is left, for a person to read."""
+
+REJECTED_RUNTIME_NAME: Final[str] = "rejected-runtime-lock.toml"
+"""The same, for the runtime lock.
+
+A separate name rather than a shared one because a single run regenerates both,
+and one refused candidate overwriting the other would leave a reader looking at
+the wrong file while the message named the right one.
+"""
 
 RUNTIME_CONTRACT: Final[str] = "docs/engineering/runtime-contract.toml"
 """The contract the declared target is compared against."""
@@ -451,12 +460,13 @@ def _environment_finding(
     return _finding(diverged), REASON_ENVIRONMENT_DIVERGED if diverged else None
 
 
-def _requirements_text(root: Path, declaration: Declaration) -> str:
+def _requirements_text(root: Path, declaration: Declaration, scope: str = DEVELOPMENT) -> str:
     """The roots to resolve from, as a requirements file.
 
     Args:
         root: The repository root.
         declaration: The lock declaration, for the extra it covers.
+        scope: Which declared scope to resolve — ``development`` or ``runtime``.
 
     Returns:
         One requirement per line.
@@ -472,6 +482,14 @@ def _requirements_text(root: Path, declaration: Declaration) -> str:
     Deliberately not ``pip lock ".[dev]"``: that resolves the project itself and
     emits a ``directory`` entry with no version, which this gate refuses and which
     ``pip-audit`` reports as skipped.
+
+    **The scope is a parameter as of Phase 024.** This package was written in Phase
+    020, when ``project.dependencies`` was empty and a contract test kept it that
+    way, so ``development`` was the only answer there could be. Phase 021 created
+    ``pylock.toml`` and nothing here learned about it: ``relock`` and ``upgrade``
+    regenerated the development lock and silently left the runtime one alone. The
+    documented rule is that a lock is never edited by hand, which meant adding a
+    runtime dependency had no supported route at all.
     """
     try:
         declared = from_pyproject(root)
@@ -482,10 +500,11 @@ def _requirements_text(root: Path, declaration: Declaration) -> str:
     lines = [
         f"{entry.name}{'' if entry.version == '*' else entry.version}"
         for entry in declared
-        if entry.ecosystem == PYPI and entry.scope == DEVELOPMENT
+        if entry.ecosystem == PYPI and entry.scope == scope
     ]
     if not lines:
-        msg = f"{PYPROJECT} declares no {declaration.dev_extra!r} requirements to resolve"
+        named = declaration.dev_extra if scope == DEVELOPMENT else "project.dependencies"
+        msg = f"{PYPROJECT} declares no {named!r} requirements to resolve"
         raise LockError(msg)
     return "\n".join(sorted(lines)) + "\n"
 
@@ -559,6 +578,7 @@ def _relock(
     only: Sequence[str],
     runner: Runner | None,
     timeout: float,
+    scope: str = DEVELOPMENT,
 ) -> tuple[str | None, tuple[str, ...]]:
     """Re-resolve the declared roots and return the lock that came back.
 
@@ -569,6 +589,7 @@ def _relock(
         only: The distributions to allow to move, empty for a wholesale relock.
         runner: How to start ``pip``.
         timeout: How long the resolution may take.
+        scope: Which declared scope to resolve — ``development`` or ``runtime``.
 
     Returns:
         The candidate lock's text with line endings normalised, and any problems.
@@ -578,17 +599,27 @@ def _relock(
     failure is caught and reported rather than allowed to escape: pip raises
     ``NotImplementedError`` from its own lock writer when an index entry carries no
     hash, and a traceback out of a gate is a gate that produced no evidence.
+
+    **The workflow pins are held for the development scope and not for the
+    runtime one**, and the asymmetry is a fact about the registers rather than a
+    preference. ``.github/workflows/`` pins the seven tools a job installs; it
+    names nothing in ``project.dependencies``, so holding those pins over a runtime
+    resolution would constrain it with a register that has no opinion about it. The
+    producer is held for the same reason and dropped for the same reason: ``pip``
+    writes both locks and appears in neither runtime one.
     """
     if only and committed is None:
         return None, ("an upgrade needs the committed lock to hold the other versions at",)
     try:
-        requirements = _requirements_text(root, declaration)
+        requirements = _requirements_text(root, declaration, scope)
     except LockError as fault:
         return None, (str(fault),)
-    try:
-        pinned = workflow_pins(root)
-    except (SupplyChainError, OSError) as fault:
-        return None, (f"the workflow register could not be read: {fault}",)
+    pinned: Mapping[str, str] = {}
+    if scope == DEVELOPMENT:
+        try:
+            pinned = workflow_pins(root)
+        except (SupplyChainError, OSError) as fault:
+            return None, (f"the workflow register could not be read: {fault}",)
 
     with tempfile.TemporaryDirectory(prefix="globin-lock-") as workspace:
         area = Path(workspace)
@@ -602,7 +633,9 @@ def _relock(
             committed,
             pinned,
             only,
-            (declaration.producer.tool, declaration.producer.version),
+            (declaration.producer.tool, declaration.producer.version)
+            if scope == DEVELOPMENT
+            else None,
         )
         if constraints.strip():
             constraint_file = area / "constraints.txt"
@@ -689,7 +722,18 @@ def run_lock(
         except LockError:
             committed = None
 
+    runtime_committed_text = (
+        _read(base, declaration.runtime_path) if declaration.runtime_locked else None
+    )
+    runtime_committed: Lock | None = None
+    if runtime_committed_text is not None:
+        try:
+            runtime_committed = parse_lock(runtime_committed_text, path=declaration.runtime_path)
+        except LockError:
+            runtime_committed = None
+
     candidate: str | None = None
+    runtime_candidate: str | None = None
     if mode in {RELOCK, UPGRADE}:
         candidate, refresh = _relock(base, declaration, committed, only, runner, timeout)
         findings["refresh"] = _finding(refresh)
@@ -703,6 +747,31 @@ def run_lock(
                 REASON_REFRESH_FAILED,
                 mode,
             )
+        # Both locks are regenerated, and this half was missing until Phase 024.
+        # A repository with runtime dependencies and no supported way to relock
+        # them has only unsupported ways left, and the documented rule is that a
+        # lock is never edited by hand.
+        if declaration.runtime_locked:
+            runtime_candidate, runtime_refresh = _relock(
+                base,
+                declaration,
+                runtime_committed,
+                only,
+                runner,
+                timeout,
+                scope=RUNTIME,
+            )
+            findings["runtime_refresh"] = _finding(runtime_refresh)
+            if runtime_refresh:
+                reasons.append(REASON_REFRESH_FAILED)
+            if runtime_candidate is None:
+                return _fail_early(
+                    directory,
+                    base,
+                    "; ".join(runtime_refresh) or "no runtime lock was produced",
+                    REASON_REFRESH_FAILED,
+                    mode,
+                )
 
     lock_text = candidate if candidate is not None else committed_text
     if lock_text is None:
@@ -742,7 +811,9 @@ def run_lock(
 
     runtime_lock: Lock | None = None
     if declaration.runtime_locked:
-        runtime_text = _read(base, declaration.runtime_path)
+        runtime_text = (
+            runtime_candidate if runtime_candidate is not None else runtime_committed_text
+        )
         if runtime_text is None:
             problem = f"{declaration.runtime_path} could not be read"
             return _fail_early(directory, base, problem, REASON_FILE_UNREADABLE, mode)
@@ -781,6 +852,19 @@ def run_lock(
     findings["declaration"] = _finding(incomplete)
     if incomplete:
         reasons.append(REASON_DECLARATION_INCOMPLETE)
+
+    # The runtime lock is asked the same question the development one has always
+    # been asked, and until Phase 024 nobody asked it. Everything above about
+    # `pylock.toml` is about whether the lock is sound IN ITSELF — the right
+    # format, hashes present, HTTPS, tags that serve the pinned interpreter, no
+    # source distributions. None of that notices a package `pyproject.toml`
+    # declares and the lock omits, which is exactly what adding `psutil` produced:
+    # a clean `passed` over a runtime lock that did not contain it.
+    if runtime_lock is not None:
+        uncovered = coverage_problems(runtime_lock, inventory, scope=RUNTIME)
+        findings["runtime_coverage"] = _finding(uncovered)
+        if uncovered:
+            reasons.append(REASON_DECLARATION_INCOMPLETE)
 
     registers = register_problems(lock, inventory)
     findings["registers"] = _finding(registers)
@@ -823,6 +907,18 @@ def run_lock(
     if candidate is not None:
         sound = not set(reasons) & INTRINSIC_REASONS
         _keep_or_reject(base, directory, declaration, candidate, committed_text, sound=sound)
+    if runtime_candidate is not None:
+        sound = not set(reasons) & INTRINSIC_REASONS
+        _keep_or_reject(
+            base,
+            directory,
+            declaration,
+            runtime_candidate,
+            runtime_committed_text,
+            sound=sound,
+            path=declaration.runtime_path,
+            rejected_name=REJECTED_RUNTIME_NAME,
+        )
 
     _report(findings, overall, reasons)
     return _exit_code(overall)
@@ -836,6 +932,8 @@ def _keep_or_reject(
     committed: str | None,
     *,
     sound: bool,
+    path: str | None = None,
+    rejected_name: str = REJECTED_NAME,
 ) -> None:
     """Write a regenerated lock, or set it aside with the committed one untouched.
 
@@ -847,6 +945,9 @@ def _keep_or_reject(
         committed: The committed lock's text, if there was one.
         sound: Whether the candidate passed every check that is about the lock
             itself, as opposed to about the rest of the repository.
+        path: Which lock to write, defaulting to the development one.
+        rejected_name: Where a refused candidate is left, so two refusals in one
+            run do not overwrite each other.
 
     **Soundness rather than the overall verdict decides this, and the distinction
     is what makes the upgrade procedure possible at all.** A fresh resolution moves
@@ -865,17 +966,18 @@ def _keep_or_reject(
     because the fastest way to understand why a resolution was refused is to read
     the thing that was refused.
     """
+    written = path or declaration.dev_path
     if not sound:
-        (directory / REJECTED_NAME).write_text(candidate, encoding="utf-8", newline="\n")
-        where = f"{OUTPUT_DIRECTORY}/{REJECTED_NAME}"
+        (directory / rejected_name).write_text(candidate, encoding="utf-8", newline="\n")
+        where = f"{OUTPUT_DIRECTORY}/{rejected_name}"
         print(f"lock: the regenerated lock was refused and is at {where}")
-        print(f"lock: {declaration.dev_path} is unchanged")
+        print(f"lock: {written} is unchanged")
         return
     if candidate == committed:
-        print(f"lock: {declaration.dev_path} is unchanged")
+        print(f"lock: {written} is unchanged")
         return
-    (root / declaration.dev_path).write_text(candidate, encoding="utf-8", newline="\n")
-    print(f"lock: {declaration.dev_path} was rewritten")
+    (root / written).write_text(candidate, encoding="utf-8", newline="\n")
+    print(f"lock: {written} was rewritten")
     print(f"lock: update [target] locked in {CONFIGURATION_FILE} to today's date")
     print("lock: run `python -m tools.quality lock` to see which pins must now change")
 

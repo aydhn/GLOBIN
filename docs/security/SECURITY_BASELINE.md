@@ -155,6 +155,34 @@ Three consequences of the principle bind any future component:
 - **A finding about a secret is reported as a fingerprint.** A scanner that prints what it found has
   published it a second time, into a log, an artifact and a summary, all of which outlive the file.
 
+### What a support bundle may never contain
+
+Phase 024 gave GLOBIN a way to produce an archive **intended to leave the
+machine**. Everything written before it was for GLOBIN or for CI, which makes this
+the first place redaction is a shipping property rather than a hygiene one.
+
+The bundle is **allowlist-first**: `ArtifactKind` enumerates what may be included
+and there is no directory walk anywhere, so the guarantee is reviewable rather than
+inferred. The following are refused rather than redacted, because a field that is
+never collected cannot leak through a redactor that missed it:
+
+- `.env` files and any configuration document
+- credential store exports, secret plaintext, private keys
+- the process environment, and the command line
+- the user name, the home directory, and any absolute path beneath it
+- the hostname
+- market data, ledgers, model artefacts, databases
+- raw memory dumps, heap dumps and Python object representations
+- `.git`, `.venv`, caches, and the repository source tree
+
+Log excerpts pass through the redactor defined above — **that one, and no second
+copy** — line by line, and a line that cannot be parsed is dropped rather than
+included unredacted. The limit is the same one stated for the live log:
+redaction matches field *names*, so a credential inside a free-text message or
+inside a third-party exception string survives, and `faults.txt` is native
+traceback text that nothing parses. The full contract is in
+[`../engineering/SUPPORT_BUNDLE.md`](../engineering/SUPPORT_BUNDLE.md).
+
 ---
 
 ## 4. Least-privilege API keys
