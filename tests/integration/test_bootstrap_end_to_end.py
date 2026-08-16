@@ -51,9 +51,16 @@ version = "0.1.0"
 dependencies = {dependencies}
 """
 
-#: A dependency this repository really declares, so the "declared but unlocked"
-#: case is the one Phase 021 actually had to satisfy.
-DECLARED_ONLY = '["numpy>=2.5.2"]'
+#: A distribution every environment that can run this suite certainly has.
+#:
+#: `dependency_outcome` reports a MISSING dependency before an unlocked one, so
+#: reaching the unlocked branch needs something actually installed. Naming a
+#: runtime dependency of this project would not do: the continuous-integration
+#: `quality` job installs the toolchain and nothing else, so `numpy` is absent
+#: there and present here — and a fixture whose branch depends on which machine
+#: runs it is a fixture that passes locally and fails in CI, which is exactly
+#: what it did.
+DECLARED_PRESENT = '["pytest"]'
 
 #: A distribution no index has, so "locked and still not installed" is reachable
 #: without installing anything.
@@ -254,7 +261,7 @@ def test_a_tree_this_host_does_not_satisfy_refuses_with_its_own_code(
     ("overrides", "fragment"),
     [
         pytest.param(
-            {"dependencies": DECLARED_ONLY}, "no runtime lock", id="declared-but-unlocked"
+            {"dependencies": DECLARED_PRESENT}, "no runtime lock", id="declared-but-unlocked"
         ),
         pytest.param(
             {"dependencies": DECLARED_ABSENT, "lock": True},

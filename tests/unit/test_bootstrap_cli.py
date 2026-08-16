@@ -9,6 +9,7 @@ twice.
 
 import io
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -180,9 +181,17 @@ def test_the_version_is_the_one_the_package_declares() -> None:
 
 
 def test_doctor_writes_its_table_to_standard_output() -> None:
-    """The ordinary diagnostic."""
+    """The ordinary diagnostic, and its code is the pipeline's rather than a guess.
+
+    Asserting a set of acceptable codes would be asserting something about the
+    machine this happens to run on: from `.venv` the answer is 0, and from the
+    interpreter continuous integration installs it is 12, because that interpreter
+    is genuinely not the project's environment. What must hold either way is that
+    the command reports what the pipeline concluded.
+    """
+    expected = build_bootstrap(REPO_ROOT).run(stop_at_first_refusal=False).exit_code
     code, out, _ = run(["doctor"])
-    assert code in {ExitCode.OK, ExitCode.GATE_FAILED}
+    assert code == int(expected)
     assert "bootstrap.ready" in out
 
 
@@ -201,11 +210,15 @@ def test_the_two_renderings_describe_one_run() -> None:
         assert check["id"] in err
 
 
-def test_evidence_writes_the_manifest_and_says_where(tmp_path: Path) -> None:
-    """Into the declared evidence root, and nowhere else."""
-    del tmp_path
+def test_evidence_writes_the_manifest_and_says_where() -> None:
+    """Into the declared evidence root, and nowhere else.
+
+    Written whatever the verdict was: a gate that failed silently and left no
+    artefact is indistinguishable from one that never ran.
+    """
+    expected = build_bootstrap(REPO_ROOT).run(stop_at_first_refusal=True).exit_code
     code, out, _ = run(["bootstrap", "evidence"])
-    assert code in {ExitCode.OK, ExitCode.GATE_FAILED}
+    assert code == int(expected)
     assert "evidence: .globin/bootstrap/bootstrap-manifest.json" in out
     assert (REPO_ROOT / ".globin" / "bootstrap" / "bootstrap-manifest.json").is_file()
 
@@ -261,6 +274,12 @@ def test_the_module_starts_as_a_process_and_reports_its_usage() -> None:
     pragma, on the reasoning `docs/engineering/QUALITY_GATES.md` gives about the
     other module guards: a line excluded from measurement is a line nobody is
     measuring.
+
+    `PYTHONPATH` is set because the child is a fresh interpreter and this test is
+    about the module guard rather than about the install. Where GLOBIN is
+    installed it changes nothing; where it is not — the continuous-integration
+    `quality` job, and any checkout nobody has bootstrapped — it is the difference
+    between measuring the guard and measuring the install.
     """
     completed = subprocess.run(
         [sys.executable, "-m", "globin", "nonsense"],
@@ -269,6 +288,7 @@ def test_the_module_starts_as_a_process_and_reports_its_usage() -> None:
         check=False,
         cwd=REPO_ROOT,
         timeout=120,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")},
     )
     assert completed.returncode == ExitCode.USAGE
     assert "usage: globin" in completed.stderr
