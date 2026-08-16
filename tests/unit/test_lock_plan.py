@@ -112,6 +112,10 @@ path = "pylock.toml"
 locked = false
 reason = "there are no runtime dependencies yet"
 
+[project]
+distribution = "globin"
+installed = false
+
 [environment]
 seeded = ["pip"]
 """
@@ -191,6 +195,9 @@ def declaration(**overrides: object) -> Declaration:
         "roots": ("ruff>=0.6",),
         "runtime_locked": False,
         "runtime_path": "pylock.toml",
+        "runtime_roots": (),
+        "project_distribution": "globin",
+        "project_installed": False,
         "seeded": ("pip",),
         "gaps": (),
     }
@@ -859,9 +866,83 @@ def test_a_runtime_dependency_without_a_runtime_lock_fails() -> None:
 
 
 def test_a_runtime_dependency_with_a_runtime_lock_passes() -> None:
-    """The obligation is discharged by producing the lock, which is the point."""
+    """The obligation is discharged by producing the lock, which is the point.
+
+    The roots must agree too, which is Phase 021's addition: once a runtime lock
+    exists, `[runtime] roots` and `project.dependencies` are compared in both
+    directions exactly as the development pair already was.
+    """
     runtime = declared("httpx", ">=0.27", scope="runtime")
-    assert runtime_problems(declaration(runtime_locked=True), (declared(), runtime)) == ()
+    agreed = declaration(runtime_locked=True, runtime_roots=("httpx>=0.27",))
+    assert runtime_problems(agreed, (declared(), runtime)) == ()
+
+
+def test_a_runtime_root_the_project_no_longer_declares_is_reported() -> None:
+    """The direction that earns its keep, for the runtime pair as for the dev one.
+
+    pip records no dependency edges, so a root removed from `project.dependencies`
+    and left in the declaration is undetectable offline by any other means.
+    """
+    runtime = declared("httpx", ">=0.27", scope="runtime")
+    stale = declaration(runtime_locked=True, runtime_roots=("httpx>=0.27", "orjson>=3.10"))
+    problems = runtime_problems(stale, (declared(), runtime))
+    assert any("orjson" in problem and "no longer declares" in problem for problem in problems)
+
+
+def test_a_runtime_dependency_missing_from_the_declared_roots_is_reported() -> None:
+    """And the forward direction, which catches a dependency added without a relock."""
+    runtime = declared("httpx", ">=0.27", scope="runtime")
+    incomplete = declaration(runtime_locked=True, runtime_roots=())
+    problems = runtime_problems(incomplete, (declared(), runtime))
+    assert any("httpx" in problem and "does not record it" in problem for problem in problems)
+
+
+def test_the_project_itself_is_exempt_from_the_unexpected_check_when_installed() -> None:
+    """Since Phase 021 `bootstrap.ps1` installs GLOBIN, and no lock resolved it.
+
+    Declared rather than inferred: passing `project=""` means the project is not
+    expected to be installed, and finding it then IS a difference worth reporting.
+    """
+    present = {"ruff": "0.15.14", "globin": "0.1.0"}
+    assert environment_problems([lock()], present, ("pip",), project="globin") == ()
+    assert environment_problems([lock()], present, ("pip",), project="") != ()
+
+
+def test_two_locks_are_compared_as_one_expectation() -> None:
+    """Comparing against one lock alone would report the other's packages as unexpected.
+
+    This is what Phase 021 changed: the environment now holds the union of the
+    development and the runtime lock, and either one on its own describes a
+    machine that does not exist.
+    """
+    runtime = Lock(
+        path="pylock.toml",
+        lock_version="1.0",
+        created_by="pip",
+        packages=(package("numpy", "2.5.2"),),
+    )
+    installed = {"ruff": "0.15.14", "numpy": "2.5.2"}
+    assert environment_problems([lock(), runtime], installed, ("pip",)) == ()
+
+
+def test_two_locks_disagreeing_about_one_version_is_reported_as_a_declaration_defect() -> None:
+    """The first lock to name a distribution owns the expectation, and the clash is named.
+
+    A package locked twice at two versions cannot be satisfied by any environment,
+    so reporting it as an environment difference would send a reader to fix the
+    wrong file.
+    """
+    runtime = Lock(
+        path="pylock.toml",
+        lock_version="1.0",
+        created_by="pip",
+        packages=(package("ruff", "0.16.0"),),
+    )
+    problems = environment_problems([lock(), runtime], {"ruff": "0.15.14"}, ("pip",))
+    assert any(
+        "pylock.dev.toml locks 0.15.14 and pylock.toml locks 0.16.0" in problem
+        for problem in problems
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -871,7 +952,7 @@ def test_a_runtime_dependency_with_a_runtime_lock_passes() -> None:
 
 def test_an_environment_matching_the_lock_passes() -> None:
     """The control."""
-    assert environment_problems(lock(), {"ruff": "0.15.14"}, ("pip",)) == ()
+    assert environment_problems([lock()], {"ruff": "0.15.14"}, ("pip",)) == ()
 
 
 @pytest.mark.parametrize(
@@ -886,7 +967,7 @@ def test_an_environment_differing_from_the_lock_is_reported(
     installed: dict[str, str], expected: str
 ) -> None:
     """Three differences, each with its own sentence, because each needs a different fix."""
-    problems = environment_problems(lock(), installed, ("pip",))
+    problems = environment_problems([lock()], installed, ("pip",))
     assert any(expected in problem for problem in problems)
 
 
@@ -897,14 +978,14 @@ def test_a_seeded_distribution_is_exempt_from_the_unexpected_check() -> None:
     unexpected package" alongside the forty-eight that are genuinely missing,
     which buries the real finding.
     """
-    assert environment_problems(lock(), {"ruff": "0.15.14", "pip": "26.1.1"}, ("pip",)) == ()
-    assert environment_problems(lock(), {"ruff": "0.15.14", "pip": "26.1.1"}, ())
+    assert environment_problems([lock()], {"ruff": "0.15.14", "pip": "26.1.1"}, ("pip",)) == ()
+    assert environment_problems([lock()], {"ruff": "0.15.14", "pip": "26.1.1"}, ())
 
 
 def test_the_environment_comparison_normalises_both_sides() -> None:
     """`importlib.metadata` reports a name as the distribution spells it."""
     parsed = lock(package("pip-audit", "2.9.0"))
-    assert environment_problems(parsed, {"pip_audit": "2.9.0"}, ()) == ()
+    assert environment_problems([parsed], {"pip_audit": "2.9.0"}, ()) == ()
 
 
 # ---------------------------------------------------------------------------

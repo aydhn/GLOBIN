@@ -1,12 +1,27 @@
 <#
 .SYNOPSIS
-    Create the project virtual environment and install the locked toolchain.
+    Create the project virtual environment and install everything it needs.
 
 .DESCRIPTION
     Builds `.venv` at the repository root from a verified interpreter, installs
-    the development toolchain recorded in `pylock.dev.toml`, and then re-runs the
-    read-only check through the new environment so that the manifest it leaves
-    behind describes the environment rather than the interpreter that built it.
+    the development toolchain recorded in `pylock.dev.toml`, then the runtime
+    dependencies recorded in `pylock.toml`, then GLOBIN itself, and finally
+    re-runs the read-only check through the new environment so that the manifest
+    it leaves behind describes the environment rather than the interpreter that
+    built it.
+
+    The three installs are in that order for a reason. GLOBIN is installed with
+    `--no-deps`, so everything `project.dependencies` names must already be
+    present at the version the lock records; installing it first would let pip
+    resolve those against an index and quietly install something else, which is
+    the lock being bypassed by the one command whose job is to honour it. It is
+    installed editable, so that `globin` and `python -m globin` read one source
+    tree rather than a copy taken at install time.
+
+    Installing GLOBIN is what creates the `globin` command. Before Phase 021 this
+    script installed only the toolchain and the package was reachable through
+    `pythonpath` alone, which is enough for the test suite and not enough for a
+    console entry point.
 
     Idempotent. Run it twice and the second run creates nothing, because the
     environment already satisfies the contract.

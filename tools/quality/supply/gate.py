@@ -39,6 +39,7 @@ from tools.quality.supply.inventory import (
     drift,
     render,
 )
+from tools.quality.supply.locked import from_locks
 from tools.quality.supply.manifest import (
     REASON_ACTION_UNDOCUMENTED,
     REASON_ACTION_UNPINNED,
@@ -301,13 +302,22 @@ def run_supply(
     )
 
     # --- the SBOM, built twice so determinism is checked rather than claimed -
+    # Wider than the inventory since Phase 021: the declared set plus everything
+    # the committed locks resolve to. The inventory finding above stays about the
+    # declared set alone, because `drift` compares registers and a transitive
+    # component appears in none of them.
+    # An inventory that could not be collected stays unmeasured: widening must not
+    # rescue it. A document built from locks alone would describe what is installed
+    # while claiming to describe what is declared, which is a different report.
+    described = tuple(sorted((*dependencies, *from_locks(REPO_ROOT)))) if dependencies else ()
     sbom_problems, digest_value = _write_sbom(
-        directory, dependencies, repository, commit, timestamp, reasons
+        directory, described, repository, commit, timestamp, reasons
     )
     sbom_verdict = _verdict(sbom_problems, measured=bool(dependencies))
     findings["sbom"] = {
         "verdict": sbom_verdict.value,
         "path": f"{OUTPUT_DIRECTORY}/{SBOM_NAME}",
+        "components": len(described),
         "spec_version": SPEC_VERSION,
         "digest": digest_value,
         "problems": list(sbom_problems),

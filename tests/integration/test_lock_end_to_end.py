@@ -122,6 +122,10 @@ path = "pylock.toml"
 locked = {runtime_locked}
 reason = "there are no runtime dependencies yet"
 
+[project]
+distribution = "globin"
+installed = false
+
 [environment]
 seeded = ["pip"]
 {gaps}"""

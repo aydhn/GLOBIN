@@ -39,8 +39,45 @@ classifiers = [
     "Private :: Do Not Upload",
     "Topic :: Office/Business :: Financial :: Investment",
 ]
-# No runtime dependencies. This is an invariant, not a stub. See note above.
-dependencies = []
+# The first runtime dependencies, introduced in Phase 021.
+#
+# `dependencies = []` was an invariant from Phase 001 to Phase 020, and ending it
+# is the work this phase was created to do rather than a convenience taken along
+# the way. Each entry carries a written six-question review in
+# `docs/engineering/dependency-reviews.toml`; neither was adopted on judgement.
+#
+# LOWER BOUNDS, NOT PINS. The bound is the version `docs/engineering/wheel-survey.toml`
+# actually surveyed, and `pylock.toml` beside this file pins what gets installed.
+# Declaring an exact version here would put the pin in two places and give the
+# lock nothing to be the source of.
+#
+# THE LOCK IS NOT OPTIONAL. `LOCK_RUNTIME_UNLOCKED` fails the moment this list is
+# non-empty while `docs/engineering/lock-policy.toml` says the runtime is
+# unlocked, so these two lines and `pylock.toml` arrived in one commit and cannot
+# be separated afterwards.
+#
+# Phase 022 installs and verifies them. Nothing in `src/globin` imports either
+# yet, and this phase makes no claim about their correctness — declaring,
+# reviewing and locking is one job, and confirming a library computes what it
+# says is another.
+dependencies = [
+    "numpy>=2.5.2",
+    "pandas>=3.0.5",
+]
+
+# The one console entry point, introduced in Phase 021.
+#
+# It delegates and holds nothing: the wrapper a build backend generates calls
+# `main()` and exits on what it returns, so `globin` and `python -m globin` reach
+# the same function and cannot answer differently. A contract test asserts that
+# rather than trusting it.
+#
+# It exists only once the project is INSTALLED, which is what `scripts/bootstrap.ps1`
+# now does. Running from the source tree with `python -m globin` works without an
+# install; the console script does not, and `globin doctor` says so rather than
+# leaving a reader to guess why the command is not found.
+[project.scripts]
+globin = "globin.runtime.cli:main"
 
 [project.optional-dependencies]
 # Free/open-source development toolchain only (ADR-0003).

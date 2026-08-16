@@ -22,6 +22,7 @@ import importlib.util
 import shutil
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -456,7 +457,11 @@ def test_a_toolchain_install_that_cannot_be_started_is_reported(tmp_path: Path) 
 
 
 def test_a_toolchain_install_that_exits_non_zero_is_reported(tmp_path: Path) -> None:
-    """A recorded digest that does not match what was served is the case here now."""
+    """A recorded digest that does not match what was served is the case here now.
+
+    The message names which of the three installs failed, which it did not need to
+    when there was only one.
+    """
     lock_at(tmp_path)
 
     problems = _install_toolchain(
@@ -464,7 +469,61 @@ def test_a_toolchain_install_that_exits_non_zero_is_reported(tmp_path: Path) -> 
         tmp_path / ".venv",
         lambda *_a, **_k: completed(returncode=1, stderr="THESE PACKAGES DO NOT MATCH"),
     )
-    assert any("pip install exited 1" in problem for problem in problems)
+    assert any("pip install of the toolchain exited 1" in problem for problem in problems)
+
+
+def test_bootstrap_installs_the_toolchain_the_runtime_lock_and_the_project(
+    tmp_path: Path,
+) -> None:
+    """Three installs since Phase 021, and the order is what makes --no-deps safe.
+
+    Installing the project before its dependencies, or without --no-deps, would let
+    pip resolve `numpy>=2.5.2` against an index and install whatever it found —
+    the lock bypassed by the one command whose job is to honour it.
+    """
+    lock_at(tmp_path)
+    (tmp_path / "pylock.toml").write_text('lock-version = "1.0"\n', encoding="utf-8")
+    seen: list[tuple[str, ...]] = []
+
+    def record(args: Sequence[str], **_kwargs: object) -> "subprocess.CompletedProcess[str]":
+        seen.append(tuple(str(item) for item in args))
+        return completed()
+
+    assert _install_toolchain(tmp_path, tmp_path / ".venv", record) == ()
+    assert len(seen) == 3, seen
+    assert seen[0][-1].endswith("pylock.dev.toml")
+    assert seen[1][-1].endswith("pylock.toml")
+    assert "--no-deps" in seen[2]
+    assert "--editable" in seen[2]
+
+
+def test_a_tree_with_no_runtime_lock_installs_only_two_things(tmp_path: Path) -> None:
+    """A tree without pylock.toml is not broken, it is older than Phase 021."""
+    lock_at(tmp_path)
+    seen: list[tuple[str, ...]] = []
+
+    def record(args: Sequence[str], **_kwargs: object) -> "subprocess.CompletedProcess[str]":
+        seen.append(tuple(str(item) for item in args))
+        return completed()
+
+    assert _install_toolchain(tmp_path, tmp_path / ".venv", record) == ()
+    assert len(seen) == 2, seen
+    assert not any("pylock.toml" in argument for call in seen for argument in call)
+
+
+def test_a_project_install_that_fails_is_reported_as_the_project(tmp_path: Path) -> None:
+    """Naming which install failed is the whole reason the message carries a subject."""
+    lock_at(tmp_path)
+    calls: list[int] = []
+
+    def record(*_args: object, **_kwargs: object) -> "subprocess.CompletedProcess[str]":
+        calls.append(1)
+        if len(calls) == 1:
+            return completed()
+        return completed(returncode=1, stderr="no matching distribution")
+
+    problems = _install_toolchain(tmp_path, tmp_path / ".venv", record)
+    assert any("pip install of the project exited 1" in problem for problem in problems)
 
 
 def test_a_tree_with_no_workflow_register_cannot_install_from_pins(tmp_path: Path) -> None:

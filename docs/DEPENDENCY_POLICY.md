@@ -98,10 +98,35 @@ it under the nine-step procedure in
 
 | Verdict | Licences | Why |
 |---|---|---|
-| **Allowed** | MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, PSF-2.0 | Permissive. No obligation beyond attribution. |
+| **Allowed** | MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, PSF-2.0, 0BSD, Zlib, CC0-1.0 | Permissive. No obligation beyond attribution, and the last three not even that. |
 | **Allowed with a note** | MPL-2.0, LGPL-3.0 | File-scoped or link-scoped copyleft. Permitted where GLOBIN neither vendors nor modifies the source — `hypothesis` is the standing example, and its record says so. |
 | **Refused** | GPL-2.0, GPL-3.0, AGPL-3.0, SSPL, BUSL, any source-available or "fair use" licence | Either obliges more than a personal project should take on, or is not open source at all. |
 | **`UNKNOWN`** | Anything unstated, unreadable, or contradicted by its own metadata | **Not safe by default.** Refused until a human reads the project's own text and records it. An unknown licence is an unanswered question, not a permissive one. |
+
+`0BSD`, `Zlib` and `CC0-1.0` joined the allow list in **Phase 021**, and the
+reason is worth recording because it is the first time this table was extended.
+The first runtime dependency turned out not to publish a single licence
+identifier at all, and a policy that only classifies single identifiers would
+have forced a choice between recording something untrue and refusing a library
+nobody objects to. Each of the three is permissive and two of them are more
+permissive than MIT; none was added speculatively, and none is in the table
+because it was convenient.
+
+### Compound expressions
+
+A project may publish an SPDX **expression** rather than one identifier. A
+compound joined by `AND` is allowed exactly when **every** component is allowed,
+because `AND` means all of them apply at once; the expression is recorded whole
+in `dependency-reviews.toml` rather than reduced to its most prominent part.
+Reducing it would make the register say something the project does not.
+
+The standing example is `numpy`, which publishes
+`BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` — its own code under
+BSD-3-Clause and four vendored components under the rest.
+
+An expression joined by `OR` is **not** covered here. `OR` is a choice, and
+choosing is a decision somebody has to make and record rather than a lookup; the
+first one that appears gets its own paragraph in this section.
 
 This is an engineering governance control. It records what a project publishes
 about itself so that decisions are reviewable. **Nothing here is a legal
@@ -127,11 +152,31 @@ something. `tools/quality/supply/audit.py` gives each its own outcome, and only
 version is the review above. A tool performing that review while running a check
 is the process deleting itself.
 
-**Severity threshold.** Any open finding fails the gate, at any severity. That is
-deliberately blunt and it is affordable *because the toolchain is small*: seven
-declared packages, development-only, none shipped. When Phase 021 introduces
-runtime dependencies the threshold will need to become severity-aware, and this
-paragraph is where that argument should happen.
+**Severity threshold.** Any open finding fails the gate, at any severity.
+
+That paragraph used to end by saying the threshold "will need to become
+severity-aware" once Phase 021 introduced runtime dependencies, and this is that
+argument. **The threshold stays blunt, and the reason it is affordable has
+changed.** It used to be that nothing was shipped; now two runtime distributions
+are declared and installed, so that reason is gone and a new one has to hold or
+the rule has to.
+
+It holds. A severity threshold is a standing decision to ignore a class of
+finding **nobody has looked at yet** — it is written before the advisory exists
+and applied without anybody reading it. What this repository already has instead
+is `docs/engineering/vulnerability-waivers.toml`: a finding that cannot be fixed
+today is waived *by name*, with a reason, an owner and a date, and the waiver is
+a diff somebody reviewed. That is strictly better information than "low, so it
+passed", and it costs an afternoon per occurrence rather than an afternoon per
+release.
+
+The blunt rule becomes wrong when the cost of one waiver per finding exceeds the
+value of reading each one — which is a function of how many findings arrive, not
+of how severe they are. Phase 022 installs the scientific stack and Phases 045
+onwards add the exchange SDKs; if the register starts collecting waivers faster
+than they can be read, that is the evidence this decision was wrong, and
+**Phase 032** — the environment band's consolidation and gate review — is where
+it should be revisited with the numbers rather than with a prediction.
 
 ### Waivers
 

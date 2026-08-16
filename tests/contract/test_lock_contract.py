@@ -240,10 +240,19 @@ def test_every_pin_and_hook_revision_agrees_with_the_lock(repo_root: Path, lock:
 def test_the_runtime_lock_statement_matches_the_project_file(
     repo_root: Path, declaration: plan.Declaration
 ) -> None:
-    """The forward hook, checked against the state it describes."""
+    """The forward hook, checked against the state it describes.
+
+    Phase 020 wrote this against an empty `project.dependencies` and a declaration
+    saying `locked = false`. Phase 021 declared numpy and pandas, and the hook
+    fired exactly as ADR-0054 said it would — so what is checked now is the other
+    side of the same rule: the two are non-empty, the declaration says the runtime
+    is locked, the lock is on disk, and the recorded roots agree with the project
+    file in both directions.
+    """
     pyproject = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
-    assert pyproject["project"]["dependencies"] == []
-    assert declaration.runtime_locked is False
+    assert pyproject["project"]["dependencies"]
+    assert declaration.runtime_locked is True
+    assert (repo_root / declaration.runtime_path).is_file()
     assert plan.runtime_problems(declaration, collect(repo_root)) == ()
 
 

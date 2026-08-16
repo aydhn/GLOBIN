@@ -172,3 +172,102 @@ a correctness risk in the one place correctness matters most.
 
 It audits a requirements file generated from the inventory rather than the \
 ambient environment. See ADR-0044."""
+
+# ---------------------------------------------------------------------------
+# Adopted in Phase 021 — the first RUNTIME dependencies this repository has had.
+#
+# Every entry above is `scope = "development"` or `"build"`, and ADR-0003 exempts
+# both. These two are neither. `dependencies = []` was an invariant from Phase
+# 001 to Phase 020 and a contract test enforced it; ending that is the work this
+# phase was created to do, which is why both records are longer than the ones
+# above and why question 4 is answered explicitly rather than by category.
+#
+# NEITHER IS IMPORTED YET. Phase 022 installs and verifies them. A review is a
+# decision to permit, not a claim that something is used, and recording the
+# decision in the phase that takes it is what makes it reviewable at all.
+# ---------------------------------------------------------------------------
+
+[[review]]
+name = "numpy"
+ecosystem = "pypi"
+scope = "runtime"
+licence = "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0"
+licence_source = "https://pypi.org/pypi/numpy/json"
+adopted = "phase-021"
+reviewed = 2026-08-16
+verdict = "adopted"
+reason = """The numerical foundation of everything Phases 022 onwards schedule, \
+and a transitive requirement of four other entries in \
+`docs/engineering/wheel-survey.toml` — pandas, xgboost, lightgbm and torch. A \
+survey that omitted it would be surveying a stack that cannot be installed.
+
+LICENCE. It publishes an SPDX EXPRESSION rather than an identifier, and the \
+expression is recorded whole: its own code is BSD-3-Clause and four vendored \
+components carry 0BSD, MIT, Zlib and CC0-1.0. `docs/DEPENDENCY_POLICY.md` gained \
+the last three and a rule for compound expressions in this phase, because the \
+alternative was to record `BSD-3-Clause` and have the register say something the \
+project does not. Read from the JSON API rather than from a summary site, and \
+the field is `license_expression` rather than the deprecated `license`.
+
+MAINTAINED. NumFOCUS-sponsored, with a published release cadence and a steering \
+council rather than a single maintainer. It is the least likely dependency in \
+the entire planned stack to be abandoned.
+
+RUNTIME, AND THAT IS THE POINT. This is the first time question 4 has had a \
+non-obvious answer here. It runs in the runtime, ADR-0003's zero-budget rule \
+binds absolutely, and it is satisfied: BSD-3-Clause is free, there is no paid \
+tier, no account, no telemetry and no service behind it.
+
+COULD IT BE WRITTEN INSTEAD? No, and this is the clearest `no` the six questions \
+have produced. Numerical correctness at array scale is decades of accumulated \
+edge cases in floating-point behaviour, and ADR-0033's argument for writing a \
+mutation harness by hand does not transfer: a hand-written array library that is \
+subtly wrong produces plausible numbers, which is the failure mode this project \
+can least afford.
+
+WHAT BREAKS IF IT DISAPPEARS? Everything from Phase 022 onwards. It is the least \
+reversible dependency GLOBIN will take, which is exactly why it is reviewed \
+before anything imports it rather than after."""
+
+[[review]]
+name = "pandas"
+ecosystem = "pypi"
+scope = "runtime"
+licence = "BSD-3-Clause"
+licence_source = "https://github.com/pandas-dev/pandas/blob/main/LICENSE"
+adopted = "phase-021"
+reviewed = 2026-08-16
+verdict = "adopted"
+reason = """The dataframe half of the stack Phase 022 installs. Market data \
+arrives as labelled, time-indexed, heterogeneously-typed tables, and that is the \
+one shape this library exists for.
+
+LICENCE. A single identifier, unlike numpy: BSD-3-Clause, stated in the \
+project's own LICENSE file and corroborated by its `License :: OSI Approved :: \
+BSD License` classifier. Read from the repository text rather than from the \
+classifier, because a classifier names a family and the file names the licence.
+
+MAINTAINED. NumFOCUS-sponsored, with a large contributor base and a published \
+release cadence. Question 3's real test — could one person stop and nobody \
+notice — is answered no.
+
+RUNTIME, AND FREE. As above: no paid tier, no account, no service. ADR-0003 is \
+satisfied.
+
+COULD IT BE WRITTEN INSTEAD? Partly, and that is why this record is shorter than \
+numpy's rather than longer. A narrow time-series container over `Decimal` is a \
+few hundred lines, and Phases 010-012 already built exact arithmetic and \
+serialization by hand for precisely that reason. What is NOT reasonable to write \
+is the rest of it: timezone-aware resampling, joins on non-unique indexes, and \
+the missing-data semantics that decide whether a gap in a candle series \
+propagates or is silently filled. Getting those subtly wrong produces backtests \
+that look right, which `docs/ARCHITECTURE_PRINCIPLES.md` treats as worse than a \
+crash.
+
+THE PRICE IS THAT IT PULLS numpy, AND numpy WAS ADOPTED ANYWAY. It would have \
+been the deciding cost otherwise; it is not one here.
+
+WHAT BREAKS IF IT DISAPPEARS? Data handling from Phase 022 onwards. More \
+reversible than numpy — the container could be replaced with a narrower one \
+written here — but not cheaply, and not without re-answering the semantics \
+questions above."""

@@ -19,6 +19,82 @@ can be opened and read.
 
 ## [Unreleased]
 
+### Runtime dependencies and the installed application
+
+- **`project.dependencies` is no longer empty.** `numpy` and `pandas` are
+  declared, each with the six-question review from `docs/DEPENDENCY_POLICY.md`
+  recorded in `docs/engineering/dependency-reviews.toml` at `scope = "runtime"`.
+  The invariant that held from Phase 001 to Phase 020 ended deliberately, and the
+  contract test that asserted it now compares the declared set against the
+  reviewed set **in both directions** rather than asserting emptiness — which
+  catches a dependency added without a review, and a review left behind for
+  something no longer declared.
+- **`pylock.toml` arrived in the same commit**, which is the pairing
+  `LOCK_RUNTIME_UNLOCKED` had been enforcing since Phase 020. It records five
+  distributions with digests, and `tools/quality/lock` recomputes every claim it
+  makes about itself exactly as it does for `pylock.dev.toml` — a committed lock
+  nobody validated would make ADR-0054 true of one file and false of the other.
+- `[runtime] roots` is compared against `project.dependencies` in both
+  directions, as `[dev] roots` already was against the `dev` extra.
+- **`scripts/bootstrap.ps1` installs three things now**: the toolchain, the
+  runtime lock, and GLOBIN itself with `--no-deps --editable`. The order is what
+  makes `--no-deps` safe, and installing the project is what creates the `globin`
+  command.
+- `lock installed` compares the environment against **both** locks, and knows
+  that the project's own distribution is expected to be installed —
+  declared in a `[project]` table rather than filed under `[environment] seeded`,
+  which means something else.
+- The SBOM describes the locked transitive set as well as the declared set:
+  seventy-nine components against twenty-five. The dependency graph stays
+  narrower on purpose, because PEP 751 records no edges.
+- **PEP 735 was decided and not adopted**, and the vulnerability threshold stays
+  blunt with the waiver register as its pressure valve. Both were deferred into
+  this phase by name; both are now answered in ADR-0055.
+- `docs/DEPENDENCY_POLICY.md` gained `0BSD`, `Zlib` and `CC0-1.0`, and a rule for
+  compound SPDX expressions. `numpy` publishes an expression rather than an
+  identifier, and recording only its most prominent part would have made the
+  register say something the project does not.
+- **Nothing imports either package.** Phase 022 installs and verifies the
+  scientific stack; this phase declared, reviewed and locked it, and makes no
+  claim about whether it computes correctly.
+
+### Application bootstrap
+
+- **GLOBIN has an entry point.** `globin` is a console script and
+  `python -m globin` reaches the same `main`; neither wrapper holds logic, and a
+  contract test asserts that rather than trusting it.
+- `globin doctor` reports on this host and keeps going past a problem;
+  `globin bootstrap check` refuses at the first one; `globin bootstrap evidence`
+  writes `.globin/bootstrap/bootstrap-manifest.json`. One pipeline, one report
+  type, one set of judgements — only the stopping rule differs.
+- **Twelve checks**, from finding the project root to the aggregate, each with a
+  stable identifier, a category, an exit code and a remediation sentence.
+- **Fail-closed is a property of a type.** `BootstrapOutcome` refuses to hold a
+  `RuntimeContext` unless every check passed, so a run that failed cannot hand
+  anything downstream — there is no flag to read and no convention to remember.
+- **A stable exit-code contract.** `0`, `1`, `2` and `3` keep the meanings every
+  gate under `tools/` gives them; `10` upwards name the failure class, one code
+  per class, pinned to literals by a contract test. The earliest failing check
+  decides, and unmeasured outranks failed.
+- **No absolute path can reach the evidence**, structurally rather than by
+  filtering: a path becomes a three-outcome `RecordedPath` at the moment it is
+  observed, and the domain cannot hold a `Path` at all because it may import no
+  I/O-capable module. The runtime tree is therefore declared *relative to the
+  project root*, and only two of its six roots are ever created.
+- **Working-directory independent.** The root is found by a bounded upward search
+  for a `pyproject.toml` that names this project, so a checkout nested inside an
+  unrelated repository does not borrow its parent.
+- No secret value reaches any output. Every observed field is redacted where the
+  record is built, and `tests/contract/test_bootstrap_contract.py` applies the
+  verifier's own scanner to what was produced — two mechanisms, neither importing
+  the other, with five sentinel values asserted absent by their own text.
+- **Phases 026 to 030 keep their work.** `checks()` is a registry rather than a
+  fixed list, and the checks whose subject does not exist yet are absent from it
+  rather than present as placeholders: a check reporting `unmeasured` claims a
+  measurement somebody attempted.
+- This is the programme's **fifth scope amendment**, and ADR-0056 records it
+  against ADR-0021's four criteria one by one, including the two it fails.
+
 ### Dependency locking
 
 - The development toolchain is locked. `pylock.dev.toml` records all forty-nine

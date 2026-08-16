@@ -50,6 +50,7 @@ that certifies — and the one criterion it could not — is in
 | Does the library I need have a wheel for that Python? | [`docs/engineering/WHEEL_AVAILABILITY.md`](docs/engineering/WHEEL_AVAILABILITY.md), [`docs/engineering/wheel-survey.toml`](docs/engineering/wheel-survey.toml) |
 | Is this machine still the one the gates were measured on? | [`docs/engineering/ENVIRONMENT_DRIFT.md`](docs/engineering/ENVIRONMENT_DRIFT.md), [`docs/engineering/drift-policy.toml`](docs/engineering/drift-policy.toml) |
 | What version of a dependency will actually be installed? | [`docs/engineering/DEPENDENCY_LOCKING.md`](docs/engineering/DEPENDENCY_LOCKING.md), [`docs/engineering/lock-policy.toml`](docs/engineering/lock-policy.toml) |
+| How does a GLOBIN process decide it may start? | [`docs/engineering/BOOTSTRAP.md`](docs/engineering/BOOTSTRAP.md), [ADR-0056](docs/adr/0056-phase-021-widens-to-deliver-the-application-bootstrap.md) |
 | What must a secret store satisfy, and what does Windows actually offer? | [`docs/security/SECRET_STORE_CONTRACT.md`](docs/security/SECRET_STORE_CONTRACT.md) |
 | How do I test, and where does a test go? | [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md) |
 | Which error do I raise? | [`src/globin/errors.py`](src/globin/errors.py), [ADR-0022](docs/adr/0022-error-taxonomy-rooted-in-one-type.md) |
@@ -391,6 +392,27 @@ installs from the lock and refuses rather than falling back; `-FromPins` is the
 documented hand-crank. Reasoning:
 [`docs/engineering/DEPENDENCY_LOCKING.md`](docs/engineering/DEPENDENCY_LOCKING.md)
 and [ADR-0054](docs/adr/0054-the-toolchain-is-locked-with-pep-751-and-the-verdict-is-recomputed.md).
+
+Since Phase 021 there is also an **application** command, which is not a gate and
+does not live in that table. It exists once GLOBIN is installed, which
+`scripts/bootstrap.ps1` now does:
+
+```bash
+.venv\Scripts\globin.exe doctor
+```
+
+```bash
+.venv\Scripts\python.exe -m globin bootstrap check
+```
+
+Both reach one `main`; `doctor` reports and keeps going, `bootstrap check` refuses
+at the first problem, and `bootstrap evidence` writes
+`.globin/bootstrap/bootstrap-manifest.json`. Under `--json` standard output
+carries JSON and nothing else. **It reaches no network**, and the exit code names
+the failure class — `12` is the wrong environment, `13` a missing dependency, `14`
+an invalid configuration. The full table, the remediation for each, and what is
+deliberately *not* checked yet are in
+[`docs/engineering/BOOTSTRAP.md`](docs/engineering/BOOTSTRAP.md).
 
 One gate sits outside `full`, because it takes minutes rather than seconds:
 

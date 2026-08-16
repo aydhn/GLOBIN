@@ -321,6 +321,14 @@ class Declaration:
         roots: The requirement strings the lock was resolved from.
         runtime_locked: Whether a runtime lock is declared to exist.
         runtime_path: Where it would live.
+        runtime_roots: The requirement strings the runtime lock was resolved
+            from. Empty while no runtime lock exists, which is why the key is
+            optional rather than required — a declaration written before
+            Phase 021 is still a valid one.
+        project_distribution: The distribution this repository itself builds.
+        project_installed: Whether it is expected to be installed into the
+            environment. Since Phase 021 it is, because the console entry point
+            only exists once something is installed.
         seeded: Distributions the environment creates itself, exempt from the
             unexpected-package check by name rather than by a silent allowance.
         gaps: Every recorded source-only gap, each owned by a phase.
@@ -334,8 +342,11 @@ class Declaration:
     roots: tuple[str, ...]
     runtime_locked: bool
     runtime_path: str
+    project_distribution: str
+    project_installed: bool
     seeded: tuple[str, ...]
     gaps: tuple[Gap, ...]
+    runtime_roots: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -1052,36 +1063,97 @@ def runtime_problems(declaration: Declaration, declared: Sequence[Dependency]) -
     Returns:
         One sentence per problem, empty when the two agree.
 
-    This is the forward hook ADR-0054 Decision 2 describes. Today
-    ``project.dependencies`` is empty and no runtime lock exists, so it passes
-    silently. The moment Phase 021 declares the first runtime dependency it fails,
-    and the only way to satisfy it is to produce the lock — which is the obligation
-    being enforced rather than remembered.
+    This is the forward hook ADR-0054 Decision 2 describes, and Phase 021 is where
+    it fired. Until then ``project.dependencies`` was empty and no runtime lock
+    existed, so it passed silently; the moment the first runtime dependency was
+    declared it failed, and the only way to satisfy it was to produce the lock.
+
+    Since that lock exists, the check has a second half. The declared roots and
+    ``project.dependencies`` are compared **in both directions**, exactly as
+    :func:`declaration_problems` compares the development roots against the ``dev``
+    extra — because pip records no dependency edges, so a root removed from the
+    project and left in the declaration is otherwise undetectable offline.
     """
     runtime = sorted(
         {entry.name for entry in declared if entry.ecosystem == PYPI and entry.scope == "runtime"}
     )
     if not runtime:
         return ()
-    if declaration.runtime_locked:
-        return ()
-    names = ", ".join(runtime)
-    return (
-        f"{PYPROJECT} declares runtime dependencies ({names}) while {CONFIGURATION_FILE} "
-        f"records [runtime] locked = false. A runtime dependency and {declaration.runtime_path} "
-        f"arrive together, or what ships is unlocked",
+    if not declaration.runtime_locked:
+        names = ", ".join(runtime)
+        return (
+            f"{PYPROJECT} declares runtime dependencies ({names}) while {CONFIGURATION_FILE} "
+            f"records [runtime] locked = false. A runtime dependency and "
+            f"{declaration.runtime_path} arrive together, or what ships is unlocked",
+        )
+    return _root_problems(
+        declared=frozenset(runtime),
+        recorded=frozenset(normalise(_name_of(root)) for root in declaration.runtime_roots),
+        table="runtime",
     )
 
 
-def environment_problems(
-    lock: Lock, installed: Mapping[str, str], seeded: Sequence[str]
-) -> tuple[str, ...]:
-    """Compare an environment against the lock.
+def _name_of(requirement: str) -> str:
+    """The distribution a requirement string names.
 
     Args:
-        lock: The parsed lock.
+        requirement: A requirement such as ``numpy>=2.5.2``.
+
+    Returns:
+        The name, with any specifier, extras or marker removed.
+    """
+    head = requirement.strip()
+    for separator in ("[", "(", ";", "@", "<", ">", "=", "!", "~", " "):
+        head = head.split(separator, 1)[0]
+    return head
+
+
+def _root_problems(
+    *, declared: frozenset[str], recorded: frozenset[str], table: str
+) -> tuple[str, ...]:
+    """Compare a declaration's recorded roots against what the project declares.
+
+    Args:
+        declared: What ``pyproject.toml`` names, normalised.
+        recorded: What the declaration's ``roots`` names, normalised.
+        table: Which table this is, for the message.
+
+    Returns:
+        One sentence per disagreement, in each direction.
+    """
+    problems: list[str] = []
+    for name in sorted(declared - recorded):
+        problems.append(
+            f"{PYPROJECT} declares {name} and {CONFIGURATION_FILE} does not record it "
+            f"among [{table}] roots"
+        )
+    for name in sorted(recorded - declared):
+        problems.append(
+            f"{CONFIGURATION_FILE} records {name} among [{table}] roots and {PYPROJECT} "
+            f"no longer declares it"
+        )
+    return tuple(problems)
+
+
+def environment_problems(
+    locks: Sequence[Lock],
+    installed: Mapping[str, str],
+    seeded: Sequence[str],
+    *,
+    project: str = "",
+) -> tuple[str, ...]:
+    """Compare an environment against every committed lock.
+
+    Args:
+        locks: Every parsed lock the declaration names. Since Phase 021 there are
+            two, and the environment holds the union of them — comparing against
+            one alone would report the other's packages as unexpected.
         installed: Distribution name to version, as observed.
         seeded: Distributions the environment creates itself.
+        project: The distribution this repository itself builds, exempt because
+            it is installed rather than locked. Empty when it is not expected to
+            be installed, in which case finding it *is* a difference worth
+            reporting.
 
     Returns:
         One sentence per difference, empty when the environment matches.
@@ -1089,24 +1161,44 @@ def environment_problems(
     Pure: the caller observes the environment and passes the result in, so every
     branch here is reachable from literals without building a virtual environment
     to produce one.
+
+    A package locked twice at two versions is a defect in the declaration rather
+    than in the environment, and it is reported as one: the first lock to name a
+    distribution owns the expectation, and a second one disagreeing is named
+    explicitly instead of silently losing.
     """
-    expected = {
-        package.normalised: package.version
-        for package in lock.packages
-        if package.version is not None
-    }
+    expected: dict[str, str] = {}
+    owner: dict[str, str] = {}
+    conflicts: list[str] = []
+    for lock in locks:
+        for package in lock.packages:
+            if package.version is None:
+                continue
+            previous = expected.get(package.normalised)
+            if previous is None:
+                expected[package.normalised] = package.version
+                owner[package.normalised] = lock.path
+            elif previous != package.version:
+                conflicts.append(
+                    f"{package.normalised}: {owner[package.normalised]} locks {previous} and "
+                    f"{lock.path} locks {package.version}"
+                )
+
     present = {normalise(name): version for name, version in installed.items()}
     exempt = {normalise(name) for name in seeded}
+    if project:
+        exempt.add(normalise(project))
+    where = ", ".join(lock.path for lock in locks) or "any lock"
 
-    problems: list[str] = []
+    problems: list[str] = [*conflicts]
     for name in sorted(set(expected) - set(present)):
         problems.append(f"{name} {expected[name]} is locked and is not installed")
     for name in sorted(set(present) - set(expected) - exempt):
-        problems.append(f"{name} {present[name]} is installed and {lock.path} does not lock it")
+        problems.append(f"{name} {present[name]} is installed and {where} does not lock it")
     for name in sorted(set(expected) & set(present)):
         if expected[name] != present[name]:
             problems.append(
-                f"{name}: {lock.path} locks {expected[name]} and {present[name]} is installed"
+                f"{name}: {owner[name]} locks {expected[name]} and {present[name]} is installed"
             )
     return tuple(problems)
 
@@ -1173,6 +1265,7 @@ def read_declaration(document: Mapping[str, object]) -> Declaration:
 
     dev_table = _table(document, "dev")
     runtime_table = _table(document, "runtime")
+    project_table = _table(document, "project")
     environment_table = _table(document, "environment")
 
     return Declaration(
@@ -1184,6 +1277,11 @@ def read_declaration(document: Mapping[str, object]) -> Declaration:
         roots=_strings(dev_table, "roots", "dev"),
         runtime_locked=_flag(runtime_table, "locked", "runtime"),
         runtime_path=_text(runtime_table, "path", "runtime"),
+        runtime_roots=_strings(runtime_table, "roots", "runtime")
+        if "roots" in runtime_table
+        else (),
+        project_distribution=_text(project_table, "distribution", "project"),
+        project_installed=_flag(project_table, "installed", "project"),
         seeded=_strings(environment_table, "seeded", "environment"),
         gaps=tuple(
             Gap(

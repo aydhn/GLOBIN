@@ -16,6 +16,7 @@ nothing more — see ``docs/TESTING_STRATEGY.md`` on why the suite tests
 
 import re
 import subprocess
+import sys
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +29,36 @@ from globin.domain.clock import Duration, Instant, MonotonicReading, instant_fro
 from globin.domain.configuration import ResolvedConfig, config_layer, default_layer, resolve
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
+
+ENVIRONMENT_DIRECTORY: Final[str] = ".venv"
+"""The project's own virtual environment, as `runtime-contract.toml` declares it.
+
+Spelled here as well as there for the reason `verify.ps1` spells it twice: this
+module may not read TOML at import, and the duplication is a tripwire rather than
+a second source — `tests/contract/test_runtime_contract.py` compares them.
+"""
+
+
+def running_from_the_project_environment() -> bool:
+    """Whether this interpreter is the one `scripts/bootstrap.ps1` built.
+
+    Returns:
+        ``True`` when :data:`sys.prefix` is the project's own ``.venv``.
+
+    A handful of assertions are about *this development host* rather than about
+    GLOBIN — that the project is installed, that the console entry point exists,
+    that the repository bootstraps end to end. None of them can hold in the
+    continuous-integration `quality` job, which installs the toolchain with plain
+    `pip` and never builds an environment; the `runtime` job is the one that does,
+    and it exercises the command line directly.
+
+    Guarding on the real condition rather than on a CI variable is deliberate: a
+    developer who has not run the bootstrap gets the same skip and the same
+    reason, which is a true statement about their machine rather than a guess
+    about where the code is running.
+    """
+    return Path(sys.prefix).resolve() == (REPO_ROOT / ENVIRONMENT_DIRECTORY).resolve()
+
 
 #: The taxonomy levels, one directory each under ``tests/``. Mutually exclusive:
 #: a test has exactly one, decided by where it lives rather than by what someone

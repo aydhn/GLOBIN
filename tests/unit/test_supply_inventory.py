@@ -94,10 +94,21 @@ def test_the_repository_inventory_is_collected_and_ordered(repo_root: Path) -> N
     }
 
 
-def test_the_repository_has_no_runtime_dependency(repo_root: Path) -> None:
-    """``dependencies = []`` is an invariant, and the inventory must show it as one."""
+def test_every_runtime_dependency_is_declared_by_the_project_file(repo_root: Path) -> None:
+    """The inventory must find the runtime set where the project declares it.
+
+    This asserted `dependencies == []` from Phase 014 until Phase 021, when the
+    first runtime dependencies were introduced. What replaces it is not weaker:
+    the inventory is a generated view, and the failure worth catching is it
+    reporting a runtime dependency from somewhere other than `pyproject.toml` —
+    which would mean something is entering the runtime through a register nobody
+    reviews.
+    """
     found = inventory.collect(repo_root)
-    assert not [entry for entry in found if entry.scope == inventory.RUNTIME]
+    runtime = [entry for entry in found if entry.scope == inventory.RUNTIME]
+    assert runtime, "Phase 021 declared the first runtime dependencies; the inventory sees none"
+    assert {entry.source for entry in runtime} == {"pyproject.toml"}
+    assert {entry.ecosystem for entry in runtime} == {inventory.PYPI}
 
 
 def test_the_three_registers_agree_in_this_repository(repo_root: Path) -> None:

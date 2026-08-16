@@ -22,12 +22,20 @@ rather than when somebody happened to ask about it.
 
 Everything else follows from the inventory, which is already totally ordered.
 
-**What the document claims, and what it does not.** Every component is something
-a manifest in this repository names. There is no transitive closure, because
-nothing here resolves one — see :mod:`tools.quality.supply.inventory`. The
-``dependencies`` graph therefore states that the root component depends on each
-declared component and stops there, which is true. Inventing edges between
-components to make the graph look complete would be inventing facts.
+**What the document claims, and what it does not.** Since Phase 021 the
+components array holds two kinds of entry: everything a manifest in this
+repository *names*, and everything the committed locks *resolve to*. The second
+kind carries ``globin:scope = "locked"`` and is read by
+:mod:`tools.quality.supply.locked`; before there was a lock to read, this
+document described only the first kind and said so.
+
+The ``dependencies`` graph is narrower than the components array, deliberately.
+The root depends on each **direct** component — the ones something wrote down —
+and every component depends on nothing. That is the whole of what is known: PEP
+751 records what a resolution produced and not why, so a lock carries no edges,
+and drawing one between two locked components to make the graph look complete
+would be inventing a fact. A transitive component therefore appears with nothing
+pointing at it, which is honest rather than incomplete.
 
 Specification: CycloneDX 1.7, published 2025-10-21 and standardised as ECMA-424.
 Schema: ``https://cyclonedx.org/schema/bom-1.7.schema.json``.
@@ -181,6 +189,7 @@ def build(
     # whose ordering the type system cannot check.
     ordered = sorted(dependencies, key=bom_ref)
     components = [_component(entry) for entry in ordered]
+    direct = [_component(entry) for entry in ordered if entry.direct]
     return {
         "$schema": SCHEMA_URL,
         "bomFormat": BOM_FORMAT,
@@ -208,7 +217,7 @@ def build(
         },
         "components": components,
         "dependencies": [
-            {"ref": root_ref, "dependsOn": [component["bom-ref"] for component in components]},
+            {"ref": root_ref, "dependsOn": [component["bom-ref"] for component in direct]},
             *({"ref": component["bom-ref"], "dependsOn": []} for component in components),
         ],
     }

@@ -331,14 +331,92 @@ def workflow_pins(root: Path) -> dict[str, str]:
     }
 
 
-def _environment_finding(
-    lock: Lock, declaration: Declaration, root: Path
-) -> tuple[dict[str, object], str | None]:
-    """Compare this environment against the lock, or record that it could not be.
+def _contents_findings(
+    lock: Lock,
+    declaration: Declaration,
+    findings: dict[str, object],
+    reasons: list[str],
+    *,
+    prefix: str,
+) -> None:
+    """Recompute every claim one lock makes about its own contents.
 
     Args:
         lock: The parsed lock.
-        declaration: The declaration, which names the seeded distributions.
+        declaration: The declaration, for the policy and the target.
+        findings: The manifest's findings, added to in place.
+        reasons: The reason codes, appended to in place.
+        prefix: What to prepend to each finding key, so that two locks in one
+            manifest do not overwrite each other's answers.
+
+    Extracted in Phase 021, when a second lock appeared. The alternative was to
+    write these four checks twice, and a check that exists twice is a check that
+    will eventually be strengthened once.
+
+    The reason codes are deliberately **not** prefixed. A code names the kind of
+    problem, and every problem sentence already begins with the path of the lock
+    it is about, so prefixing would give one fault two names for no gain.
+    """
+    malformed = (
+        *(problem for package in lock.packages for problem in package_problems(package, lock.path)),
+        *(
+            f"{lock.path}: {name} is locked more than once"
+            for name in duplicate_packages(lock.packages)
+        ),
+    )
+    findings[f"{prefix}packages"] = _finding(malformed)
+    if malformed:
+        reasons.append(REASON_PACKAGE_MALFORMED)
+
+    unhashed = tuple(
+        problem
+        for package in lock.packages
+        for problem in hash_problems(package, declaration.policy, lock.path)
+    )
+    findings[f"{prefix}hashes"] = _finding(unhashed)
+    if unhashed:
+        reasons.append(REASON_HASH_MISSING)
+
+    untrusted = tuple(
+        problem
+        for package in lock.packages
+        for problem in artefact_problems(package, declaration.target, lock.path)
+    )
+    findings[f"{prefix}artefacts"] = _finding(untrusted)
+    if untrusted:
+        reasons.append(REASON_ARTEFACT_UNTRUSTED)
+
+    incompatible = tuple(
+        problem
+        for package in lock.packages
+        for problem in compatibility_problems(package, declaration.target, lock.path)
+    )
+    findings[f"{prefix}compatibility"] = _finding(incompatible)
+    if incompatible:
+        reasons.append(REASON_WHEEL_INCOMPATIBLE)
+
+    unowned = source_problems(
+        lock.packages,
+        declaration.target,
+        declaration.policy,
+        declaration.gaps,
+        delivered=DELIVERED_PHASE,
+        total=ROADMAP_TOTAL_PHASES,
+    )
+    findings[f"{prefix}source"] = _finding(unowned)
+    if unowned:
+        reasons.append(REASON_SOURCE_ONLY)
+
+
+def _environment_finding(
+    locks: Sequence[Lock], declaration: Declaration, root: Path
+) -> tuple[dict[str, object], str | None]:
+    """Compare this environment against every lock, or record that it could not be.
+
+    Args:
+        locks: Every parsed lock the declaration names.
+        declaration: The declaration, which names the seeded distributions and
+            this repository's own.
         root: The repository root.
 
     Returns:
@@ -356,14 +434,20 @@ def _environment_finding(
     except OSError:
         running = Path(sys.prefix)
     if running != expected:
+        where = ", ".join(lock.path for lock in locks)
         problem = (
             f"this gate is running under {running.name!r} rather than the project "
             f"environment at {ENVIRONMENT_DIRECTORY}, so what is installed cannot be "
-            f"compared against {lock.path}"
+            f"compared against {where}"
         )
         return _finding((problem,), measured=False), REASON_ENVIRONMENT_UNMEASURED
 
-    diverged = environment_problems(lock, installed_distributions(), declaration.seeded)
+    diverged = environment_problems(
+        locks,
+        installed_distributions(),
+        declaration.seeded,
+        project=declaration.project_distribution if declaration.project_installed else "",
+    )
     return _finding(diverged), REASON_ENVIRONMENT_DIVERGED if diverged else None
 
 
@@ -654,55 +738,30 @@ def run_lock(
     if diverged:
         reasons.append(REASON_TARGET_DIVERGED)
 
-    malformed = (
-        *(problem for package in lock.packages for problem in package_problems(package, lock.path)),
-        *(
-            f"{lock.path}: {name} is locked more than once"
-            for name in duplicate_packages(lock.packages)
-        ),
-    )
-    findings["packages"] = _finding(malformed)
-    if malformed:
-        reasons.append(REASON_PACKAGE_MALFORMED)
+    _contents_findings(lock, declaration, findings, reasons, prefix="")
 
-    unhashed = tuple(
-        problem
-        for package in lock.packages
-        for problem in hash_problems(package, declaration.policy, lock.path)
-    )
-    findings["hashes"] = _finding(unhashed)
-    if unhashed:
-        reasons.append(REASON_HASH_MISSING)
+    runtime_lock: Lock | None = None
+    if declaration.runtime_locked:
+        runtime_text = _read(base, declaration.runtime_path)
+        if runtime_text is None:
+            problem = f"{declaration.runtime_path} could not be read"
+            return _fail_early(directory, base, problem, REASON_FILE_UNREADABLE, mode)
+        try:
+            runtime_lock = parse_lock(runtime_text, path=declaration.runtime_path)
+        except LockError as fault:
+            return _fail_early(directory, base, str(fault), REASON_FILE_UNREADABLE, mode)
 
-    untrusted = tuple(
-        problem
-        for package in lock.packages
-        for problem in artefact_problems(package, declaration.target, lock.path)
-    )
-    findings["artefacts"] = _finding(untrusted)
-    if untrusted:
-        reasons.append(REASON_ARTEFACT_UNTRUSTED)
+        runtime_unsupported = version_problems(runtime_lock)
+        findings["runtime_format"] = _finding(runtime_unsupported)
+        if runtime_unsupported:
+            reasons.append(REASON_VERSION_UNSUPPORTED)
 
-    incompatible = tuple(
-        problem
-        for package in lock.packages
-        for problem in compatibility_problems(package, declaration.target, lock.path)
-    )
-    findings["compatibility"] = _finding(incompatible)
-    if incompatible:
-        reasons.append(REASON_WHEEL_INCOMPATIBLE)
+        runtime_unexpected = producer_problems(runtime_lock, declaration)
+        findings["runtime_producer"] = _finding(runtime_unexpected)
+        if runtime_unexpected:
+            reasons.append(REASON_PRODUCER_UNEXPECTED)
 
-    unowned = source_problems(
-        lock.packages,
-        declaration.target,
-        declaration.policy,
-        declaration.gaps,
-        delivered=DELIVERED_PHASE,
-        total=ROADMAP_TOTAL_PHASES,
-    )
-    findings["source"] = _finding(unowned)
-    if unowned:
-        reasons.append(REASON_SOURCE_ONLY)
+        _contents_findings(runtime_lock, declaration, findings, reasons, prefix="runtime_")
 
     try:
         inventory = collect(base)
@@ -734,7 +793,8 @@ def run_lock(
         reasons.append(REASON_RUNTIME_UNLOCKED)
 
     if mode == INSTALLED:
-        entry, reason = _environment_finding(lock, declaration, base)
+        every = [lock] if runtime_lock is None else [lock, runtime_lock]
+        entry, reason = _environment_finding(every, declaration, base)
         findings["environment"] = entry
         if reason is not None:
             reasons.append(reason)

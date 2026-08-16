@@ -106,24 +106,58 @@ roots = [
 ]
 
 # ---------------------------------------------------------------------------
-# The runtime lock, which does not exist yet
+# The runtime lock, which Phase 021 created
 # ---------------------------------------------------------------------------
+#
+# This table said `locked = false` from Phase 020 until Phase 021, and its reason
+# said the pairing would be enforced rather than remembered. It was: the moment
+# `project.dependencies` stopped being empty, LOCK_RUNTIME_UNLOCKED failed until
+# this file and `pylock.toml` caught up.
+#
+# THE RUNTIME LOCK IS CHECKED THE SAME WAY THE DEVELOPMENT ONE IS. Every claim it
+# makes about itself — a digest in a permitted algorithm, HTTPS from the declared
+# host, PEP 425 tags that serve the pinned interpreter, no unowned source-only
+# package — is recomputed from the evidence inside it. A committed lock nobody
+# validated would make ADR-0054's title true of one file and false of the other.
 
 [runtime]
 path = "pylock.toml"
-locked = false
+locked = true
+extra = ""
 reason = """
-project.dependencies is empty, and tests/contract/test_packaging_contract.py
-enforces that. A lock of an empty set carries no evidence, restates a contract
-test by being empty, and is refused outright by `pip-audit --locked`, which
-raises rather than auditing when a lock records no packages (ledger S-06). So
-creating one here would break the vulnerability gate this phase strengthens.
+Phase 021 declared numpy and pandas in project.dependencies, each with a written
+six-question review in dependency-reviews.toml, and produced this lock beside
+them in the same commit.
 
-Phase 021 introduces the first runtime dependency and the pylock.toml that must
-accompany it. LOCK_RUNTIME_UNLOCKED enforces the pairing: the gate fails the
-moment project.dependencies is non-empty while this says false, so the
-obligation is checked rather than remembered.
+`extra` is empty because runtime dependencies are not an extra: they are
+`project.dependencies` itself. The development lock names `dev` because that is
+the extra it covers; this one names nothing because there is nothing to name, and
+an empty string says that more honestly than omitting the key would.
 """
+
+# Every root the runtime lock was resolved from. Compared against
+# `project.dependencies` in both directions, exactly as [dev] roots is compared
+# against the dev extra.
+roots = [
+    "numpy>=2.5.2",
+    "pandas>=3.0.5",
+]
+
+# ---------------------------------------------------------------------------
+# GLOBIN itself
+# ---------------------------------------------------------------------------
+
+[project]
+# The distribution this repository builds. Since Phase 021 `scripts/bootstrap.ps1`
+# INSTALLS it into `.venv`, because `[project.scripts] globin` only exists once
+# something is installed — so `lock installed` now finds a distribution that no
+# lock resolved and that is not seeded by `venv` either.
+#
+# Declared here rather than added to `seeded` below. `seeded` means "the
+# environment created this by itself", which is true of `pip` and false of this;
+# filing GLOBIN under it would make that sentence wrong in order to save a table.
+distribution = "globin"
+installed = true
 
 # ---------------------------------------------------------------------------
 # What the environment holds that the lock does not

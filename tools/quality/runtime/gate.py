@@ -120,6 +120,15 @@ ENVIRONMENT_INTERPRETER: Final[str] = "python.exe"
 ACTIVATE_SCRIPT: Final[str] = "activate.bat"
 PYVENV_CONFIG: Final[str] = "pyvenv.cfg"
 
+RUNTIME_LOCK: Final[str] = "pylock.toml"
+"""The runtime lock, since Phase 021.
+
+Installed after the toolchain and before the project, so that the project's own
+dependencies are already present at the exact versions the lock records. Absent
+before Phase 021, which is why its presence is checked rather than assumed — a
+tree without one is not broken, it is older.
+"""
+
 DEVELOPMENT_LOCK: Final[str] = "pylock.dev.toml"
 """What `bootstrap` installs from, since Phase 020.
 
@@ -920,7 +929,9 @@ def _create(location: Path, runner: Runner | None) -> tuple[str, ...]:
 def _install_toolchain(
     root: Path, location: Path, runner: Runner | None, *, from_pins: bool = False
 ) -> tuple[str, ...]:
-    """Install the development toolchain into an environment.
+    """Install the toolchain, the runtime dependencies and the project itself.
+
+    Three installs since Phase 021, in that order and for that reason.
 
     Args:
         root: The repository root.
@@ -949,6 +960,19 @@ def _install_toolchain(
     for the reason ADR-0054 gives: ``pip install -r pylock.toml`` is labelled
     experimental upstream, and the one command a person runs before they have a
     working tree must have a hand-crank.
+
+    **The runtime lock is installed second, and the project third.** The order is
+    what makes ``--no-deps`` on the project safe: everything ``project.dependencies``
+    names is already present at the version ``pylock.toml`` records, so pip has
+    nothing left to resolve. Installing the project first, or without
+    ``--no-deps``, would let pip resolve ``numpy>=2.5.2`` against an index and
+    quietly install whatever it found — which is the lock being bypassed by the
+    one command whose job is to honour it.
+
+    **The project is installed editable**, so ``globin`` and ``python -m globin``
+    read the same source tree. A non-editable install would make the console
+    script answer about a copy taken at install time, and a developer changing a
+    file would be told about the version they no longer have.
     """
     interpreter = location / SCRIPTS_DIRECTORY / ENVIRONMENT_INTERPRETER
 
@@ -976,6 +1000,47 @@ def _install_toolchain(
             )
         target = ["--requirement", str(lock)]
 
+    problems = _pip_install(interpreter, target, runner, what="the toolchain")
+    if problems:
+        return problems
+
+    runtime_lock = root / RUNTIME_LOCK
+    if runtime_lock.is_file():
+        problems = _pip_install(
+            interpreter,
+            ["--requirement", str(runtime_lock)],
+            runner,
+            what="the runtime dependencies",
+        )
+        if problems:
+            return problems
+
+    return _pip_install(
+        interpreter,
+        ["--no-deps", "--editable", str(root)],
+        runner,
+        what="the project",
+    )
+
+
+def _pip_install(
+    interpreter: Path, target: Sequence[str], runner: Runner | None, *, what: str
+) -> tuple[str, ...]:
+    """Run one pip install into an environment.
+
+    Args:
+        interpreter: The environment's own interpreter.
+        target: What to install, as arguments after ``pip install``.
+        runner: How to start the child.
+        what: What is being installed, for the failure message.
+
+    Returns:
+        One sentence per problem, empty on success.
+
+    Always an argument list and never a command string: `shell=False` is the
+    default and nothing here is composed by concatenation, so no value can be
+    read as shell syntax.
+    """
     try:
         completed = (runner or subprocess.run)(
             [
@@ -991,9 +1056,9 @@ def _install_toolchain(
             check=False,
         )
     except (OSError, subprocess.SubprocessError) as fault:
-        return (f"the toolchain could not be installed: {fault}",)
+        return (f"{what} could not be installed: {fault}",)
     if completed.returncode != 0:
-        return (f"pip install exited {completed.returncode}: {_tail(completed.stderr)}",)
+        return (f"pip install of {what} exited {completed.returncode}: {_tail(completed.stderr)}",)
     return ()
 
 

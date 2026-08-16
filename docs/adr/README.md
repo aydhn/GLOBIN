@@ -119,6 +119,8 @@ a future reader can judge whether the reason still holds.
 | [0052](0052-wheel-availability-is-a-recorded-survey-whose-verdict-is-recomputed.md) | Wheel availability is a recorded survey whose verdict is recomputed, and a gap is owned rather than fixed | Accepted |
 | [0053](0053-drift-is-measured-against-an-accepted-baseline-and-repair-is-a-classification.md) | Drift is measured against an accepted baseline, and repair is a declared classification rather than an inferred one | Accepted |
 | [0054](0054-the-toolchain-is-locked-with-pep-751-and-the-verdict-is-recomputed.md) | The toolchain is locked with PEP 751, the runtime lock is Phase 021's, and the lock's verdict is recomputed | Accepted |
+| [0055](0055-the-first-runtime-dependencies-are-introduced-and-globin-becomes-installed.md) | The first runtime dependencies are introduced, and GLOBIN becomes an installed application | Accepted |
+| [0056](0056-phase-021-widens-to-deliver-the-application-bootstrap.md) | Phase 021 widens to deliver the application bootstrap, and this is the fifth amendment | Accepted |
 
 ## Relationship to other documents
 

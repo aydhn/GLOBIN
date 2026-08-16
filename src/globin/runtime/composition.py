@@ -19,17 +19,41 @@ ADR-0015 names in its own risk section.
 
 import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TextIO
 
+import globin
 from globin.adapters.architecture import AstModuleImportSource, TomlArchitectureContractSource
+from globin.adapters.bootstrap import PROJECT_FILE as PROJECT_MANIFEST
+from globin.adapters.bootstrap import (
+    RUNTIME_CONTRACT_PATH,
+    RUNTIME_LOCK,
+    DeclaredDependencyProbe,
+    FilesystemProjectProbe,
+    NoSecretsRequired,
+    ProjectRuntimeTree,
+    SystemHostProbe,
+    TomlRuntimeBaselineSource,
+    find_project_root,
+    installed_distributions,
+    write,
+)
 from globin.adapters.clock import SystemClock, SystemMonotonicClock
 from globin.adapters.observability import StreamLogSink, ThresholdLogSink, new_correlation_id
 from globin.adapters.serialization import JsonCodec
 from globin.application.architecture_review import ArchitectureReview
+from globin.application.bootstrap import BootstrapPipeline
 from globin.application.configuration import ConfigurationResolution
 from globin.application.observability import Logger
+from globin.domain.bootstrap import (
+    BootstrapOutcome,
+    ProjectIdentity,
+    RecordedPath,
+    RuntimePaths,
+)
 from globin.domain.configuration import GlobinConfig, default_config
+from globin.errors import ConfigurationError
 from globin.ports.clock import Clock, MonotonicClock
 from globin.ports.configuration import ConfigurationSource
 from globin.ports.serialization import Codec
@@ -183,3 +207,128 @@ def build_logger(
         ),
         correlation_id=new_correlation_id() if correlation_id is None else correlation_id,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class Bootstrap:
+    """A wired bootstrap, and the location it was wired against.
+
+    Args:
+        pipeline: The checks, in order.
+        root: Where the project was found, or ``None`` when it was not. Carried
+            because the caller needs a real path to write evidence to, and
+            :class:`~globin.domain.bootstrap.RecordedPath` deliberately cannot
+            supply one.
+        paths: The declared runtime tree.
+
+    The two halves are returned together rather than separately because a
+    pipeline wired against one root and evidence written under another would be a
+    report about one project filed under a different one.
+    """
+
+    pipeline: BootstrapPipeline
+    root: Path | None
+    paths: RuntimePaths
+
+    def run(self, *, stop_at_first_refusal: bool) -> BootstrapOutcome:
+        """Perform the checks.
+
+        Args:
+            stop_at_first_refusal: ``True`` for a gate, ``False`` for a
+                diagnostic.
+
+        Returns:
+            What the run concluded.
+        """
+        return self.pipeline.run(stop_at_first_refusal=stop_at_first_refusal)
+
+    def record(self, outcome: BootstrapOutcome) -> RecordedPath:
+        """Write one run's evidence.
+
+        Args:
+            outcome: What the run concluded.
+
+        Returns:
+            Where the manifest was written, recorded.
+
+        Raises:
+            BootstrapManifestError: If the run does not render deterministically.
+            OSError: If the file could not be written.
+            ConfigurationError: If there is no project root, and therefore
+                nowhere inside the project that evidence may go. Nothing is
+                written outside it, ever.
+        """
+        if self.root is None:
+            msg = "there is no project root, so there is nowhere to write evidence"
+            raise ConfigurationError(msg)
+        return write(outcome, root=self.root, paths=self.paths)
+
+
+def build_bootstrap(
+    start: Path,
+    sources: Sequence[ConfigurationSource] | None = None,
+) -> Bootstrap:
+    """Wire the bootstrap against wherever the project turns out to be.
+
+    Args:
+        start: Where to begin the search for the project root — normally the
+            working directory. Passed in rather than read from :func:`os.getcwd`
+            so that the search is testable and so that this function keeps the
+            property every builder here has: it is told what it cannot know.
+        sources: Configuration sources, weakest first. Until Phase 027 decides
+            which of them exist, the honest answer is none, which resolves to the
+            declared defaults.
+
+    Returns:
+        The wired :class:`Bootstrap`.
+
+    **Unlike every other builder in this module, this one reads the filesystem.**
+    The others open nothing because their adapters record a path and read it when
+    the use case runs; this one cannot, because *where the project is* is the
+    thing every probe below has to be told, and deferring the search would only
+    move the same read one call later while leaving each probe to answer it
+    separately. The read is one bounded upward walk, and it is the first thing
+    the bootstrap is for.
+    """
+    root = find_project_root(start.resolve())
+    return Bootstrap(
+        pipeline=BootstrapPipeline(
+            baseline=TomlRuntimeBaselineSource(
+                path=(root or start) / RUNTIME_CONTRACT_PATH,
+            ),
+            host=SystemHostProbe(root=root),
+            project=FilesystemProjectProbe(
+                location=root,
+                started_from=start.resolve(),
+                version_from_package=globin.__version__,
+            ),
+            dependencies=DeclaredDependencyProbe(
+                project_file=(root or start) / PROJECT_MANIFEST,
+                lock_file=(root or start) / RUNTIME_LOCK,
+                installed=installed_distributions,
+            ),
+            secrets=NoSecretsRequired(),
+            tree=ProjectRuntimeTree(root=root or start),
+            configuration_sources=() if sources is None else tuple(sources),
+        ),
+        root=root,
+        paths=RuntimePaths(),
+    )
+
+
+def project_identity() -> ProjectIdentity | None:
+    """Which GLOBIN this is, without needing to find the project first.
+
+    Returns:
+        The name, version and where the version came from, or ``None`` when
+        neither installed metadata nor the imported package could supply one.
+
+    ``globin --version`` must work from anywhere, including from an installed
+    distribution with no checkout in sight, so it deliberately does not depend on
+    the root search succeeding.
+    """
+    return FilesystemProjectProbe(
+        location=None,
+        started_from=Path(),
+        version_from_package=globin.__version__,
+    ).identity()
