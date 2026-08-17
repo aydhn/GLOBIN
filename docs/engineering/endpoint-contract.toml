@@ -1,0 +1,233 @@
+# ---------------------------------------------------------------------------
+# The diagnostics endpoint's contract, declared so it can be recomputed.
+#
+# Phase 027 built the surface; this file is the second, independent statement of
+# what it promises, and `python -m tools.quality endpoint` recomputes every claim
+# below against `src/globin` rather than believing it. A row here that the source
+# does not support fails the gate, and so does source the rows do not describe.
+#
+# THE GATE REACHES NOTHING. It opens no socket, starts no server and asks no
+# question of this host. Every verdict is a comparison between this file and the
+# tree beside it, which is why it is safe to run anywhere and why it can be run on
+# a machine where the surface has never been enabled.
+#
+# WHY A FILE RATHER THAN AN IMPORT. `tools/` cannot import `globin` -- a verifier
+# that imported the thing it verifies could not report on one too broken to
+# import, which is the rule `tools/quality/supply/workflows.py` states about
+# itself. So the values below are declared here and recovered from the source by
+# inspection, exactly as `gpu-contract.toml` and `wheel-survey.toml` are.
+#
+# Reasoning: docs/engineering/DIAGNOSTICS_ENDPOINT.md and ADR-0072.
+# ---------------------------------------------------------------------------
+
+[meta]
+schema_version = 1
+introduced_in_phase = 27
+
+# ---------------------------------------------------------------------------
+# Where the surface may bind.
+#
+# Two addresses and nothing else. The mechanism that enforces this is a value
+# type -- `LoopbackAddress` refuses anything `ipaddress` does not call loopback --
+# so this table is not the enforcement. What the gate checks is the *absence* the
+# type cannot see: that the module which binds spells no address at all, and that
+# no spelling of "every interface" appears anywhere in the package.
+# ---------------------------------------------------------------------------
+[loopback]
+addresses = ["127.0.0.1", "::1"]
+default = "127.0.0.1"
+
+# The module that may open a socket, and the module that owns the value type.
+# `binding_module` must contain no IP address literal of any kind, loopback
+# included: an address it cannot spell is an address it cannot bind.
+binding_module = "src/globin/adapters/diagnostics_http.py"
+value_type_module = "src/globin/domain/diagnostics_http.py"
+value_type = "LoopbackAddress"
+
+# Spellings of "every interface" that must appear nowhere under `src/globin`.
+forbidden_tokens = ["0.0.0.0", "[::]"]
+
+# ---------------------------------------------------------------------------
+# Every route, and the switch that decides whether it answers.
+#
+# The paths are exact strings with no pattern anywhere, which is what makes a
+# traversal attempt a non-question rather than a defended one. `route` is the
+# label value recorded in metrics; it is deliberately `liveness` rather than
+# `live`, because `live` is a profile name and a dashboard reading
+# `route="live"` could not tell liveness from live trading.
+# ---------------------------------------------------------------------------
+[[route]]
+path = "/health/live"
+route = "liveness"
+switch = "health_enabled"
+answers_by_default = true
+
+[[route]]
+path = "/health/ready"
+route = "ready"
+switch = "health_enabled"
+answers_by_default = true
+
+[[route]]
+path = "/health/runtime"
+route = "runtime"
+switch = "health_enabled"
+answers_by_default = true
+
+[[route]]
+path = "/metrics"
+route = "metrics"
+switch = "metrics_enabled"
+answers_by_default = true
+
+# Off even when the surface is on, which is why it is the one route an operator
+# must opt into twice. It is the most detailed thing the surface can say.
+[[route]]
+path = "/diagnostics/snapshot"
+route = "snapshot"
+switch = "diagnostics_snapshot_enabled"
+answers_by_default = false
+
+# ---------------------------------------------------------------------------
+# The exposition formats, and the exact content type each is served under.
+#
+# Both are quoted from their specifications rather than assembled; see
+# `docs/research/phase_027_sources.md` entries S-02 and S-03. Two formats that
+# GLOBIN could plausibly claim are deliberately absent -- PrometheusText1.0.0 and
+# OpenMetricsText0.0.1 -- because it does not encode either, and answering a
+# request for one with the other's bytes would be a lie told in a header.
+# ---------------------------------------------------------------------------
+[[exposition]]
+format = "prometheus_text_0_0_4"
+content_type = "text/plain; version=0.0.4; charset=utf-8"
+
+[[exposition]]
+format = "openmetrics_text_1_0_0"
+content_type = "application/openmetrics-text; version=1.0.0; charset=utf-8"
+
+# ---------------------------------------------------------------------------
+# Every bound, with the range it must sit inside and the value it defaults to.
+#
+# `constant` names the pair of `Final` constants in
+# `src/globin/domain/diagnostics_http.py`; `default_field` names the field on
+# `DiagnosticsHttpConfig`. The gate reads all four numbers out of the source and
+# refuses a default outside its own declared range -- which is the one arithmetic
+# error a reader of either file alone could not catch.
+# ---------------------------------------------------------------------------
+[[bound]]
+name = "port"
+constant = "PORT"
+default_field = "port"
+minimum = 1024
+maximum = 65535
+default = 9464
+
+[[bound]]
+name = "request_timeout_seconds"
+constant = "TIMEOUT_SECONDS"
+default_field = "request_timeout_seconds"
+minimum = 1
+maximum = 60
+default = 5
+
+[[bound]]
+name = "shutdown_timeout_seconds"
+constant = "TIMEOUT_SECONDS"
+default_field = "shutdown_timeout_seconds"
+minimum = 1
+maximum = 60
+default = 5
+
+[[bound]]
+name = "max_concurrent_requests"
+constant = "CONCURRENT_REQUESTS"
+default_field = "max_concurrent_requests"
+minimum = 1
+maximum = 64
+default = 4
+
+[[bound]]
+name = "max_response_bytes"
+constant = "RESPONSE_BYTES"
+default_field = "max_response_bytes"
+minimum = 1024
+maximum = 8388608
+default = 1048576
+
+# ---------------------------------------------------------------------------
+# The five metric families this surface records, and the arithmetic behind each
+# budget.
+#
+# `series` is the product of the sizes of the family's attribute domains, and it
+# must equal `budget` exactly. Every other family in the registry carries a
+# budget that is a *ceiling* above its product; these five are the first whose
+# dimensions a remote party could try to influence, so the ceiling is set to the
+# product -- a family that cannot exceed its own declaration cannot surprise
+# anybody.
+#
+# The gate recomputes the product from the attribute domains in
+# `src/globin/domain/diagnostics_http.py` rather than trusting these numbers.
+# ---------------------------------------------------------------------------
+[[family]]
+name = "globin.diagnostics.http.requests.total"
+kind = "counter"
+attributes = ["route", "status_class"]
+series = 18
+budget = 18
+
+[[family]]
+name = "globin.diagnostics.http.request.nanoseconds"
+kind = "histogram"
+attributes = ["route"]
+series = 6
+budget = 6
+
+[[family]]
+name = "globin.diagnostics.http.inflight"
+kind = "gauge"
+attributes = []
+series = 1
+budget = 1
+
+[[family]]
+name = "globin.diagnostics.http.rejected.total"
+kind = "counter"
+attributes = ["reason"]
+series = 6
+budget = 6
+
+[[family]]
+name = "globin.diagnostics.http.response.bytes.total"
+kind = "counter"
+attributes = ["route"]
+series = 6
+budget = 6
+
+# The bounded value set behind each attribute key, from which the products above
+# are recomputed. A key whose vocabulary grows changes both a size here and a
+# budget above, in one edit -- which is the property that makes the arithmetic a
+# computation rather than a claim.
+[vocabulary]
+route = ["liveness", "ready", "runtime", "metrics", "snapshot", "unknown"]
+status_class = ["2xx", "4xx", "5xx"]
+reason = [
+    "admission",
+    "method",
+    "unknown_route",
+    "route_disabled",
+    "body_present",
+    "oversize",
+]
+
+# ---------------------------------------------------------------------------
+# The tests that hold each of the claims above.
+#
+# Named so the gate can record that they exist. Their *passing* is the suite's
+# business; what this catches is a claim whose test was deleted, which would leave
+# the claim asserted here and enforced nowhere.
+# ---------------------------------------------------------------------------
+[tests]
+unit = "tests/unit/test_diagnostics_http.py"
+property = "tests/property/test_diagnostics_http_properties.py"
+integration = "tests/integration/test_diagnostics_endpoint_end_to_end.py"
+architecture = "tests/architecture/test_library_discipline.py"

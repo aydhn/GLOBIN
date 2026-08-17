@@ -422,6 +422,21 @@ _GPU = Step("gpu", (), ("-m", "tools.quality.gpu"))
 # start rather than record why it could not measure.
 _BENCHMARK = Step("benchmark", ("numpy",), ("-m", "tools.quality.benchmark"))
 
+# Whether the diagnostics endpoint's declared contract is the one the source
+# implements. Phase 027.
+#
+# IT REACHES NOTHING AND BINDS NOTHING. No socket is opened, no server started and
+# no question asked of this host: every verdict is a comparison between
+# `endpoint-contract.toml` and the source beside it. So unlike `gpu`, `drift` and
+# `runtime`, this one could live in `full` on the "reports on the tree rather than
+# the host" test -- and it is kept out anyway, because the guarantees it recomputes
+# are already enforced by `test_library_discipline.py` and the unit suite on every
+# commit. What it adds is the *artefact*, and paying for a second enforcement on
+# every commit would be paying twice for one guarantee.
+#
+# No modules are declared. It reads files and imports nothing outside `tools`.
+_ENDPOINT = Step("endpoint", (), ("-m", "tools.quality.endpoint"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -520,6 +535,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "benchmark",
         "Which workloads actually benefit from GPU execution on this host.",
         (_BENCHMARK,),
+    ),
+    Command(
+        "endpoint",
+        "The diagnostics endpoint's declared contract against the source that implements it.",
+        (_ENDPOINT,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),
