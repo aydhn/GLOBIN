@@ -143,6 +143,26 @@ as an install requirement of a wheel that needs no building, so `build`,
 `packaging`, `pyproject_hooks` and `colorama` are in this lock as transitive
 packages. They are recorded rather than excluded: a lock exists to say what
 actually lands, and `dependency-reviews.toml` explains where they came from.
+
+Phase 026 added four roots and they more than doubled this lock, from eleven
+distributions to twenty-six. That was measured before it was chosen — resolved on
+this interpreter with `pip install --dry-run --ignore-installed` — and the owner
+reaffirmed the choice with the number in front of him.
+
+Fifteen distributions arrive, and only ONE of the four roots is responsible for
+eleven of them. `opentelemetry-api` costs `typing-extensions` alone;
+`opentelemetry-sdk` adds `opentelemetry-semantic-conventions`;
+`prometheus-client` costs nothing at all. The OTLP exporter is what brings
+`protobuf`, `requests` and the four distributions `requests` itself needs. The
+HTTP variant was named rather than the `opentelemetry-exporter-otlp`
+meta-package precisely to avoid `grpcio`, which the gRPC half would have added.
+
+`allow_source = false` still holds, and Phase 025's reasoning is now load-bearing
+for a second reason. Two of the new packages are compiled, and neither needs a
+compiler here: `charset-normalizer` publishes a native `cp314` wheel, and
+`protobuf` publishes `protobuf-7.35.1-cp310-abi3-win_amd64.whl` — a stable-ABI
+wheel of exactly the kind psutil's paragraph above describes, serving 3.14
+through a tag that does not name it.
 """
 
 # Every root the runtime lock was resolved from. Compared against
@@ -150,7 +170,11 @@ actually lands, and `dependency-reviews.toml` explains where they came from.
 # against the dev extra.
 roots = [
     "numpy>=2.5.2",
+    "opentelemetry-api>=1.44.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.44.0",
+    "opentelemetry-sdk>=1.44.0",
     "pandas>=3.0.5",
+    "prometheus-client>=0.26.0",
     "psutil>=7.2.2",
     "ta-lib>=0.7.1",
 ]

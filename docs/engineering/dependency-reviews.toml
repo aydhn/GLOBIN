@@ -404,3 +404,200 @@ import until a phase removes the tripwire deliberately. The fallback if a future
 interpreter has no wheel is documented rather than assumed: build from source, \
 which requires the C library installed first, which is the manual Windows \
 procedure this phase exists to avoid needing."""
+
+# ---------------------------------------------------------------------------
+# Adopted in Phase 026, the first entries taken for a VOCABULARY rather than a
+# capability.
+#
+# Every runtime entry above supplies something GLOBIN could in principle compute:
+# an array, a frame, a process counter, an indicator. These supply agreed NAMES
+# and SHAPES -- instrument kinds, aggregation semantics, an exposition grammar --
+# and a private spelling of those is worth nothing, because the entire value is
+# that somebody else's tool reads them without being taught.
+#
+# All four are absent on every CI run, like psutil, and each is reached through
+# one adapter. They are psutil's kind rather than a new one.
+# ---------------------------------------------------------------------------
+
+[[review]]
+name = "opentelemetry-api"
+ecosystem = "pypi"
+scope = "runtime"
+licence = "Apache-2.0"
+licence_source = "https://github.com/open-telemetry/opentelemetry-python/blob/main/LICENSE"
+adopted = "phase-026"
+reviewed = 2026-08-17
+verdict = "adopted"
+reason = """The instrument vocabulary the Phase 026 telemetry foundation maps \
+onto. GLOBIN's canonical metric names live in its own `globin.*` namespace; this \
+package is what lets them reach a reader who has never seen this repository.
+
+WHAT IT COSTS TRANSITIVELY: ONE DISTRIBUTION, AND THE COUNT MOVED RECENTLY ENOUGH \
+TO BE A TRAP. `typing-extensions` and nothing else. Through 1.41.0 this package \
+also required `importlib-metadata<8.8.0,>=6.0` unconditionally; that was dropped \
+at 1.42.0, in the same release that raised `requires_python` from >=3.9 to >=3.10. \
+A review written from memory or from a summary would have declared a dependency \
+this repository does not take. Measured on this interpreter with `pip install \
+--dry-run --ignore-installed`, not read off documentation.
+
+LICENCE. Apache-2.0, a single identifier in `license_expression`, corroborated by \
+the project's own LICENSE. On the allow list.
+
+MAINTAINED. A CNCF project with a published release train and no single dominant \
+maintainer, which is the axis psutil's review had to concede. The API/SDK split is \
+itself the maintenance signal: `-api` is versioned for stability precisely so that \
+instrumentation does not move when the machinery does.
+
+RUNTIME, AND FREE. No paid tier, no account, no service. The `-api` package alone \
+exports nothing over a network and configures no exporter -- its default provider \
+is a documented no-op. ADR-0003 is satisfied.
+
+COULD IT BE WRITTEN INSTEAD? THE MECHANISM YES, THE VOCABULARY NO, AND THAT \
+DISTINCTION IS THE WHOLE REVIEW. A counter and a histogram are an afternoon, and \
+`docs/engineering/GPU_BENEFIT.md` shows this repository will write a harness by \
+hand when the harness is the point. What cannot usefully be reinvented is the \
+agreement about what a counter MEANS -- monotonicity, temporality, how a bucket \
+boundary is read -- because a private agreement is one nobody else's tool honours.
+
+WHAT BREAKS IF IT DISAPPEARS? Nothing today, and that is observed rather than \
+designed for. `globin.adapters.telemetry_otel` reaches it through one factory \
+behind a port that already has a second implementation; absent, the factory \
+records unavailability and the local snapshot is still produced. That is what \
+happens in the CI `quality` job on every run, which installs neither it nor the \
+SDK."""
+
+[[review]]
+name = "opentelemetry-sdk"
+ecosystem = "pypi"
+scope = "runtime"
+licence = "Apache-2.0"
+licence_source = "https://github.com/open-telemetry/opentelemetry-python/blob/main/LICENSE"
+adopted = "phase-026"
+reviewed = 2026-08-17
+verdict = "adopted"
+reason = """The machinery behind the vocabulary. The API alone is a no-op, which \
+is exactly what keeps a default bootstrap silent -- but it also means the mapping \
+in `globin.adapters.telemetry_otel` could never be exercised end to end, and an \
+untested mapping between two naming schemes is where a wrong series comes from.
+
+WHAT IT COSTS TRANSITIVELY: ONE DISTRIBUTION BEYOND THE API. \
+`opentelemetry-semantic-conventions`, which arrives at version 0.65b0 -- and the \
+`b` is a beta marker rather than a typo. That is recorded rather than smoothed \
+over, because it is precisely the hazard the Phase 026 brief named: an \
+experimental convention must not become this repository's permanent contract. \
+Nothing under `src/globin` imports it. GLOBIN's names are its own, and the mapping \
+to any convention is a declared table rather than a derivation.
+
+LICENCE. Apache-2.0, same project, same LICENSE file as the API.
+
+MAINTAINED. The same release train, versioned in lockstep with the API.
+
+RUNTIME, AND FREE. No paid tier, no account, no service. The SDK opens nothing on \
+its own: a reader must be registered before anything is collected, and a default \
+GLOBIN registers none.
+
+COULD IT BE WRITTEN INSTEAD? YES, AND THAT MAKES THIS THE WEAKEST OF THE FOUR \
+ENTRIES ADDED HERE. An in-memory double over GLOBIN's own snapshot would exercise \
+the mapping without this package. What it buys is that the thing under test is the \
+REAL aggregation, so a mapping that is wrong about temporality fails here rather \
+than agreeing with a double that shares the misunderstanding.
+
+WHAT BREAKS IF IT DISAPPEARS? Nothing today. The same one-factory shape as the \
+API, and the CI `quality` job demonstrates it on every run."""
+
+[[review]]
+name = "opentelemetry-exporter-otlp-proto-http"
+ecosystem = "pypi"
+scope = "runtime"
+licence = "Apache-2.0"
+licence_source = "https://github.com/open-telemetry/opentelemetry-python/blob/main/LICENSE"
+adopted = "phase-026"
+reviewed = 2026-08-17
+verdict = "adopted"
+reason = """The only path by which a GLOBIN metric can leave this machine, and it \
+is off by default and opens nothing unless configured.
+
+WHAT IT COSTS TRANSITIVELY: THE LARGEST ANSWER THIS REGISTER HAS PRODUCED, AND THE \
+OWNER WAS GIVEN THE NUMBER BEFORE CHOOSING. Eleven further distributions -- \
+`opentelemetry-proto`, `opentelemetry-exporter-otlp-proto-common`, \
+`googleapis-common-protos`, `protobuf`, `requests`, `urllib3`, `certifi`, `idna`, \
+`charset-normalizer`, alongside the API and SDK above. `pylock.toml` goes from \
+eleven distributions to twenty-six. Two are compiled: `charset-normalizer` ships a \
+native `cp314` wheel and `protobuf` a `cp310-abi3` one, which serves 3.14 through \
+the stable ABI. Resolved on this interpreter rather than inferred from filenames.
+
+THE HTTP VARIANT WAS CHOSEN OVER THE GRPC ONE DELIBERATELY. \
+`opentelemetry-exporter-otlp` is a meta-package pulling both, and the gRPC half \
+adds `grpcio`, a large compiled distribution whose wheel availability is a \
+per-release question on a new interpreter line. The HTTP variant avoids it \
+entirely, which is why this entry names the variant and not the meta-package.
+
+LICENCE. Apache-2.0. Its transitive set adds Apache-2.0, BSD-3-Clause, MPL-2.0 \
+and MIT, all on the allow list. `certifi` is called out separately because it is \
+CONTENT rather than code: a CA-certificate bundle whose value is data somebody \
+must keep current, and it will appear in the SBOM as such.
+
+MAINTAINED. The same release train, versioned in lockstep.
+
+RUNTIME, AND FREE. OTLP is an open protocol with free collectors, so ADR-0003's \
+zero-budget rule -- which is about paid services -- is satisfied. No collector is \
+configured, named or required by GLOBIN.
+
+COULD IT BE WRITTEN INSTEAD? THE WIRE FORMAT, NOT REASONABLY. OTLP over HTTP is \
+protobuf, and hand-rolling a protobuf encoder to avoid a protobuf dependency is a \
+category error rather than a trade.
+
+WHAT BREAKS IF IT DISAPPEARS? Nothing, and more completely than for any other \
+entry here. Export is opt-in and default-off, so an ordinary GLOBIN never \
+constructs this exporter at all."""
+
+[[review]]
+name = "prometheus-client"
+ecosystem = "pypi"
+scope = "runtime"
+licence = "Apache-2.0 AND BSD-2-Clause"
+licence_source = "https://github.com/prometheus/client_python/blob/master/LICENSE"
+adopted = "phase-026"
+reviewed = 2026-08-17
+verdict = "adopted"
+reason = """The exposition grammar, and the second interoperability surface the \
+Phase 026 telemetry foundation maps onto.
+
+WHAT IT COSTS TRANSITIVELY: NOTHING, AND IT TIES PSUTIL FOR THE CHEAPEST ANSWER \
+QUESTION 1 HAS HAD. All three `requires_dist` entries sit behind `extra == \
+"twisted"`, `"aiohttp"` and `"django"`; the installed set is one distribution.
+
+LICENCE. A COMPOUND EXPRESSION, RECORDED WHOLE. `Apache-2.0 AND BSD-2-Clause`, \
+which is what both `license` and `license_expression` serve. Every component is on \
+the allow list, so the compound rule this policy gained in Phase 021 for numpy \
+covers it -- and covers it WITHOUT BEING WIDENED, which is worth recording: a rule \
+that works the second time unchanged was written at the right level.
+
+MAINTAINED, WITH A WRINKLE THAT CONTRADICTS THE PEDIGREE. Prometheus's own client, \
+under the Prometheus GitHub organisation and CNCF governance. But it publishes \
+`Development Status :: 4 - Beta` at 0.26.0 after a decade of releases, and its \
+version is still `0.x`. That is a stated signal pointing the other way from the \
+reputation, and question 3's real test -- could one person stop and nobody notice \
+-- is answered no by the organisation rather than by the version string.
+
+RUNTIME, AND FREE. No paid tier, no account, no service. The library formats and \
+serves; it contacts nothing outward. ADR-0003 is satisfied.
+
+IT IS ALSO THE FIRST DEPENDENCY THAT CAN BIND A SOCKET, AND NAMING THAT IS WHY \
+THIS PARAGRAPH EXISTS. `start_http_server` defaults its address to `0.0.0.0` -- \
+every interface, not this machine. GLOBIN passes `127.0.0.1` as a literal and \
+exposes no setting that could widen it, the listener is off by default, and an \
+architecture tripwire refuses the call anywhere but the one adapter. The library \
+also runs its server on daemon threads, which `globin.adapters.watchdog` refuses \
+for GLOBIN's own; that deviation is documented rather than inherited in silence.
+
+COULD IT BE WRITTEN INSTEAD? THE FORMAT YES, THE ESCAPING NOT WORTH IT. The text \
+exposition format is a few hundred lines, and ADR-0033's precedent for writing a \
+harness by hand reaches further here than it did for numpy. What decides against \
+it is the failure mode: a label value escaped slightly wrong produces a SCRAPEABLE \
+BUT WRONG series -- a plausible number, which `docs/ARCHITECTURE_PRINCIPLES.md` \
+treats as worse than a crash.
+
+WHAT BREAKS IF IT DISAPPEARS? Nothing today. One factory in \
+`globin.adapters.telemetry_prometheus`, behind a port with a second \
+implementation, and absent on every CI run."""

@@ -124,6 +124,16 @@ The standing example is `numpy`, which publishes
 `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` — its own code under
 BSD-3-Clause and four vendored components under the rest.
 
+Phase 026 added the second, `prometheus-client`, which publishes
+`Apache-2.0 AND BSD-2-Clause`. Both components were already permitted, so the
+rule needed no widening to accept it — but the expression still had to be written
+here, and that is the part worth stating rather than leaving to be rediscovered.
+`tests/contract/test_supply_contract.py::test_every_licence_is_permitted_by_the_policy`
+looks for the recorded licence **as a literal string in this document**, not for
+its components. A compound is therefore permitted by being *named* here, one
+expression at a time, and never by an argument that the general rule covers it.
+That is deliberate: it makes each compound a decision somebody wrote down.
+
 An expression joined by `OR` is **not** covered here. `OR` is a choice, and
 choosing is a decision somebody has to make and record rather than a lookup; the
 first one that appears gets its own paragraph in this section.

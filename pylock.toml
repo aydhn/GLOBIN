@@ -13,6 +13,28 @@ url = "https://files.pythonhosted.org/packages/0d/fe/6bea5c9162869c5beba5d9c8abb
 sha256 = "13f3eecb844759ab66efec90ca17639bbf14dc06cb2fdf37a9010322d9c50a6f"
 
 [[packages]]
+name = "certifi"
+version = "2026.7.22"
+
+[[packages.wheels]]
+name = "certifi-2026.7.22-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775"
+
+[[packages]]
+name = "charset-normalizer"
+version = "3.5.1"
+
+[[packages.wheels]]
+name = "charset_normalizer-3.5.1-cp314-cp314-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/7a/7c/4938c329b6a9d446f6a59aa2092ff7118f274209b5ed0e26893d1d30a63c/charset_normalizer-3.5.1-cp314-cp314-win_amd64.whl"
+
+[packages.wheels.hashes]
+sha256 = "c658c50ac0c98cd755a2dd50b7977d3bca7df401dcc47fbdfa87db53ef7d4e8b"
+
+[[packages]]
 name = "colorama"
 version = "0.4.6"
 
@@ -24,6 +46,28 @@ url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed
 sha256 = "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"
 
 [[packages]]
+name = "googleapis-common-protos"
+version = "1.75.1"
+
+[[packages.wheels]]
+name = "googleapis_common_protos-1.75.1-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/9a/51/186c02b8549b69ccda44429cf6ff5081e4b61a602ddfe6a8020d1be31d1b/googleapis_common_protos-1.75.1-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "28a1934bcd33b9c9da66ac301a0a4227e3367f095a17d0375cb98f0a09d93b79"
+
+[[packages]]
+name = "idna"
+version = "3.18"
+
+[[packages.wheels]]
+name = "idna-3.18-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "7f952cbe720b688055e3f87de14f5c3e5fdaa8bc3928985c4077ca689de849a2"
+
+[[packages]]
 name = "numpy"
 version = "2.5.2"
 
@@ -33,6 +77,72 @@ url = "https://files.pythonhosted.org/packages/15/5c/7bcbd5b11f94199073320410cdd
 
 [packages.wheels.hashes]
 sha256 = "7587f53dfbd5edc0f7b87c6217b4c6d2d1f2ef9c3da70bc1315e7db5f8d7ec9d"
+
+[[packages]]
+name = "opentelemetry-api"
+version = "1.44.0"
+
+[[packages.wheels]]
+name = "opentelemetry_api-1.44.0-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/ca/6f/a04e900f465ff3221ccc395522503e2d10e79fa21f2723c8e177aae1e0d1/opentelemetry_api-1.44.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "94b98c893a91b88657eaac1e3ba89618cdb85be6918196705354f34728b2cdef"
+
+[[packages]]
+name = "opentelemetry-exporter-otlp-proto-common"
+version = "1.44.0"
+
+[[packages.wheels]]
+name = "opentelemetry_exporter_otlp_proto_common-1.44.0-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/5e/71/65fd9d54c10b860f87c045ccee1264cab7011268895d3528818a29c1172a/opentelemetry_exporter_otlp_proto_common-1.44.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "9a9fe61bba73d802904bc989f1d6b4a7b1ee40f06c40e98d6f85af65aaebb694"
+
+[[packages]]
+name = "opentelemetry-exporter-otlp-proto-http"
+version = "1.44.0"
+
+[[packages.wheels]]
+name = "opentelemetry_exporter_otlp_proto_http-1.44.0-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/cd/d0/fdeb1a98d8d3a6205f5f297c51b4a9bfe65126ab60339669bbe3dd54c2e2/opentelemetry_exporter_otlp_proto_http-1.44.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "838592fce774c1c8bb7b9a0a7facbfa82e17be5a8a4e94cef10cb84ae026bae3"
+
+[[packages]]
+name = "opentelemetry-proto"
+version = "1.44.0"
+
+[[packages.wheels]]
+name = "opentelemetry_proto-1.44.0-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/d1/7c/8be563d68e93bbefa5c8affb82ddcff91b3ad858ce49957ba7b16fd3e0ab/opentelemetry_proto-1.44.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "898b155a0e1557afd867478fb6158e8122a46329ca0bb8dc53cc55e98f017f56"
+
+[[packages]]
+name = "opentelemetry-sdk"
+version = "1.44.0"
+
+[[packages.wheels]]
+name = "opentelemetry_sdk-1.44.0-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/e7/23/ff077e61886ee020a17ce9c8b6fa11c601c8d8345b09ea24f605445df62a/opentelemetry_sdk-1.44.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "df081c4c6bcfdb1211e3e86140376792643128a25f8d72d1d27675936e7e96ad"
+
+[[packages]]
+name = "opentelemetry-semantic-conventions"
+version = "0.65b0"
+
+[[packages.wheels]]
+name = "opentelemetry_semantic_conventions-0.65b0-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/a6/0e/49df70d9b81fb5cbae4bbf2a49d865b09bcbcbc4eb53f5851b1027738d78/opentelemetry_semantic_conventions-0.65b0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "1cacde7b0ad306f84c5ef08c3dbe1bbaf20165bba6f8bff43b670e555a086bcb"
 
 [[packages]]
 name = "packaging"
@@ -55,6 +165,28 @@ url = "https://files.pythonhosted.org/packages/96/58/ad979ae617615576e8aafd569c9
 
 [packages.wheels.hashes]
 sha256 = "cd8f7c6dc98527058ee6264219343f5392240a6f1bfa654fc5d79023020d0c92"
+
+[[packages]]
+name = "prometheus-client"
+version = "0.26.0"
+
+[[packages.wheels]]
+name = "prometheus_client-0.26.0-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/eb/a3/b69efbf4143b5b9859b977770bbbabcc2796b702fa69dc40271e45cd5a56/prometheus_client-0.26.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "fa93d06737aa02bacd05794768508bb97d2fbee28cb3bca04eaae92f0ca953d6"
+
+[[packages]]
+name = "protobuf"
+version = "7.35.1"
+
+[[packages.wheels]]
+name = "protobuf-7.35.1-cp310-abi3-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/0a/19/8d0cb6f20a1ef7b18f1c8986ad5783f22f84cce39c6ce9a6e645ea55192e/protobuf-7.35.1-cp310-abi3-win_amd64.whl"
+
+[packages.wheels.hashes]
+sha256 = "230a75ddfc2de4806e56696ce9640c1cdfdb6543b7cfce98d42a4c0a0e7bdb87"
 
 [[packages]]
 name = "psutil"
@@ -90,6 +222,17 @@ url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543
 sha256 = "a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427"
 
 [[packages]]
+name = "requests"
+version = "2.34.2"
+
+[[packages.wheels]]
+name = "requests-2.34.2-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0"
+
+[[packages]]
 name = "six"
 version = "1.17.0"
 
@@ -112,6 +255,17 @@ url = "https://files.pythonhosted.org/packages/1e/79/158b1146e3ecff9533446e7d902
 sha256 = "aa8e8edcfc04e1cfe66208e1fa6f833270e66d52dec4d523b8ba2d661cbadfe2"
 
 [[packages]]
+name = "typing-extensions"
+version = "4.16.0"
+
+[[packages.wheels]]
+name = "typing_extensions-4.16.0-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+
+[[packages]]
 name = "tzdata"
 version = "2026.3"
 
@@ -121,3 +275,14 @@ url = "https://files.pythonhosted.org/packages/e5/6d/b53b99a9f2766d095985947a578
 
 [packages.wheels.hashes]
 sha256 = "dc096730c87af6cab1b171c9d532be840741ff5d459015e7f6947bd7d7e54931"
+
+[[packages]]
+name = "urllib3"
+version = "2.7.0"
+
+[[packages.wheels]]
+name = "urllib3-2.7.0-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/7f/3e/5db95bcf282c52709639744ca2a8b149baccf648e39c8cc87553df9eae0c/urllib3-2.7.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897"

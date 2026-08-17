@@ -82,9 +82,35 @@ classifiers = [
 # host instead. Its review records one surprise worth knowing before reading the
 # lock diff: `build` is declared as an install requirement upstream, so
 # `packaging` and `pyproject_hooks` arrive with it.
+#
+# opentelemetry-api and prometheus-client join in Phase 026 and are psutil's kind
+# rather than a fourth: declared, locked, imported, and required to be absent
+# without breaking anything. What is new is WHAT is being adopted. psutil supplies
+# a capability this repository could have written with `ctypes`; these two supply a
+# VOCABULARY -- instrument kinds, aggregation semantics, an exposition grammar --
+# that is worth nothing if GLOBIN spells it privately. That is also why the
+# OpenTelemetry half takes the `-api` package and the SDK beside it rather than the
+# API alone: the API's no-op default is what keeps a default bootstrap silent, and
+# the SDK is what makes the mapping testable end to end.
+#
+# THE COST IS THE LARGEST IN THIS FILE, AND IT WAS MEASURED BEFORE IT WAS ACCEPTED.
+# Resolved against this interpreter with `pip install --dry-run --ignore-installed`,
+# the four requirements pull FIFTEEN distributions, taking `pylock.toml` from eleven
+# to twenty-six. Two are compiled -- `charset-normalizer` ships a native `cp314`
+# wheel and `protobuf` a `cp310-abi3` one, which serves 3.14 through the stable ABI.
+# The owner was given that number and reaffirmed the choice.
+#
+# `prometheus-client` is also the first dependency that can BIND A SOCKET. Its
+# `start_http_server` defaults to `0.0.0.0`, which is every interface rather than
+# this machine; `globin.adapters.telemetry_prometheus` passes `127.0.0.1` as a
+# literal and exposes no setting that could widen it. See ADR-0069.
 dependencies = [
     "numpy>=2.5.2",
+    "opentelemetry-api>=1.44.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.44.0",
+    "opentelemetry-sdk>=1.44.0",
     "pandas>=3.0.5",
+    "prometheus-client>=0.26.0",
     "psutil>=7.2.2",
     "ta-lib>=0.7.1",
 ]
@@ -492,6 +518,27 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["torch"]
 ignore_missing_imports = true
+
+# NO OVERRIDE FOR `opentelemetry` OR `prometheus_client` YET, AND THE ABSENCE IS
+# THE RULE THIS FILE ALREADY STATES RATHER THAN AN OVERSIGHT.
+#
+# Phase 026 declares both in `project.dependencies`, so a reader arriving here
+# expecting a sixth and seventh block has read the dependency list correctly. They
+# are not here because `warn_unused_configs = true` and NOTHING IMPORTS THEM YET:
+# mypy reports an override nothing matches, which is the same argument the numpy
+# block makes about a `numpy.*` wildcard -- the pattern stays exactly as wide as
+# the imports that exist.
+#
+# They arrive in the same diff as `globin.adapters.telemetry_otel` and
+# `globin.adapters.telemetry_prometheus`, for psutil's first reason: the CI
+# `quality` job installs neither library, so without an override mypy reports
+# `import-not-found` there while passing locally -- the worst of both answers.
+#
+# When they arrive they will NOT carry psutil's second reason. Both projects ship
+# `py.typed`, so on a machine that has them installed the surface is genuinely
+# checkable and there is no untyped region to name and no stub distribution to
+# decline. That makes them CI-absence exemptions only, and it makes them removable
+# the day the `quality` job installs the runtime lock.
 
 # ---------------------------------------------------------------------------
 # coverage
