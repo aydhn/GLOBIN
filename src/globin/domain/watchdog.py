@@ -701,7 +701,24 @@ def transitions() -> tuple[tuple[WatchdogState, WatchdogState], ...]:
         (WatchdogState.DISABLED, WatchdogState.STARTING),
         (WatchdogState.STARTING, WatchdogState.HEALTHY),
         (WatchdogState.STARTING, WatchdogState.SUSPECT),
+        # Straight from start-up to a stall, without pausing at suspect. Nothing
+        # orders `grace_millis` against `stall_millis`, so a long grace over a
+        # short stall is a legal policy — and when that grace ends, a component
+        # that has been quiet throughout is already past the threshold. Found by
+        # the property test rather than reasoned about, and admitted here rather
+        # than forbidden in the policy: the situation is real, and refusing to
+        # name it would only mean the machine reached a state its own table
+        # denied.
+        (WatchdogState.STARTING, WatchdogState.STALLED),
         (WatchdogState.HEALTHY, WatchdogState.SUSPECT),
+        # And straight from healthy to a stall, skipping suspect entirely. The
+        # watchdog looks every `interval_millis`, but nothing guarantees it is
+        # *scheduled* that often: under load, or after the host resumes, two ticks
+        # can be far enough apart that a component was within its interval at the
+        # first and past the stall threshold at the second. Suspect is a courtesy
+        # the machine extends when it gets the chance, not a station every episode
+        # stops at.
+        (WatchdogState.HEALTHY, WatchdogState.STALLED),
         (WatchdogState.SUSPECT, WatchdogState.HEALTHY),
         (WatchdogState.SUSPECT, WatchdogState.STALLED),
         (WatchdogState.STALLED, WatchdogState.CAPTURING_EVIDENCE),
@@ -775,11 +792,24 @@ def decide(
     Values in, value out. No clock, no port, no logging and no mutation, which is
     what lets every row of :func:`transitions` be a test built from literals.
     """
-    if not enabled:
+    if not enabled or episode.state is WatchdogState.DISABLED:
+        # **A disarmed episode stays disarmed, and only :meth:`arm` leaves it.**
+        # Without this a tick arriving after ``stand_down`` would move straight to
+        # ``HEALTHY``, which is both an edge :func:`transitions` does not contain
+        # and a live hazard: :meth:`WatchdogThread.stop` disarms *before* it joins
+        # precisely so that a loop which never noticed the wake event can do no
+        # harm, and a cycle that could re-arm itself would undo that. Found by a
+        # property test comparing every decision against the table.
         return WatchdogDecision(state=WatchdogState.DISABLED, reason=REASON_DISABLED)
     if settled(episode.state):
         return _settled_decision(episode=episode, snapshot=snapshot, policy=policy)
-    if since_start < policy.grace():
+    if episode.state is WatchdogState.STARTING and since_start < policy.grace():
+        # **Grace applies while starting, and not afterwards.** Testing the elapsed
+        # time alone would let a ``HEALTHY`` episode fall back to ``STARTING`` —
+        # an edge :func:`transitions` does not contain, and unreachable in
+        # production only because ``since_start`` never decreases. Reading the
+        # state as well says what the rule actually is: start-up is a phase the
+        # machine leaves once, not a window it can re-enter.
         return WatchdogDecision(state=WatchdogState.STARTING, reason=REASON_WITHIN_GRACE)
     quietest = snapshot.quietest()
     if quietest is None:
@@ -825,8 +855,21 @@ def _settled_decision(
         return WatchdogDecision(
             state=episode.state, reason=REASON_LATE_PROGRESS, component=episode.component
         )
-    if episode.state is WatchdogState.SHUTDOWN_REQUESTED and episode.began is not None:
-        elapsed = snapshot.taken_at.since(episode.began)
+    began = episode.began
+    if (
+        episode.state is WatchdogState.SHUTDOWN_REQUESTED
+        and began is not None
+        # A snapshot older than the episode it is judged against cannot have
+        # reached any deadline, and `since` refuses to subtract in that direction.
+        # In production the ordering makes it unreachable — `tick` reads the clock
+        # before it takes the snapshot, so the snapshot is never the earlier of the
+        # two — but this function is pure and total by contract, and a property
+        # test over generated input found the combination that made it raise. A
+        # judgement that can raise would take the watchdog loop with it, and the
+        # loop is deliberately written to stop rather than retry.
+        and began <= snapshot.taken_at
+    ):
+        elapsed = snapshot.taken_at.since(began)
         if elapsed > policy.deadline():
             return WatchdogDecision(
                 state=WatchdogState.ESCALATING,

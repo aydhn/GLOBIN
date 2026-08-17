@@ -86,6 +86,15 @@ Only `suspect → healthy`. Once a stall is confirmed the machine cannot return 
 health, and that is structural rather than a guard: the transition table simply has
 no such pair.
 
+**Suspect is a courtesy, not a station every episode stops at.** Three edges reach
+`stalled`: from `suspect`, from `starting` when a long grace expires over a
+component already past a short threshold, and from `healthy` when two ticks fall
+far enough apart — under load, or after the host resumes — that the intermediate
+state is skipped. The count is not the guarantee. The guarantee is that none of
+those three sources is reachable once the machine has settled, so an episode enters
+`stalled` at most once however many ways in there are. All three edges were found
+by a property test rather than reasoned about.
+
 A component that resumes afterwards is **recorded and ignored** — a
 `watchdog.late.progress` warning carrying its old and new sequence. It has already
 missed whatever deadline mattered, and the process has already published a record
@@ -96,8 +105,10 @@ run nobody reads twice.
 
 ## Exactly one incident per stall
 
-Guaranteed by the graph rather than by a counter. There is exactly one edge into
-`stalled`, from `suspect`, and `suspect` is unreachable from any settled state.
+Guaranteed by the graph rather than by a counter, and by an absence rather than by
+a count: **none of the three states that can reach `stalled` is reachable once the
+machine has settled.** An episode therefore enters it at most once, however many
+ways in the table contains.
 
 The state machine is also **thread-confined**: only the watchdog thread ticks it, so
 there is no race to prevent and no lock around it. Two things genuinely are shared,
@@ -202,6 +213,28 @@ a launcher seeing it knows the run did not choose its own ending.
 
 ---
 
+## Reading it from the command line
+
+```bash
+globin diagnostics watchdog
+```
+
+Reports the configured policy and the last recorded stall. It **starts no
+watchdog**, which is why it can be run beside a running GLOBIN — a command that
+armed one would start a thread able to end the process it was asked to describe.
+
+It exits `0` when nothing has stalled and `1` when something has, and that reading
+is deliberate: the incident document only exists because a run was stopped for not
+making progress, so a launcher branching on the code learns *the last run here went
+wrong* rather than *a watchdog is configured*. Nothing in GLOBIN deletes the file —
+the evidence outliving the run is the point — so clearing it is an operator's act.
+
+`--json` puts the document on standard output and the human text on standard error,
+as every other GLOBIN command does. Note that it reports the **configured** policy,
+which is not necessarily the one the recorded incident ran under.
+
+---
+
 ## Configuration
 
 Six settings, registered in
@@ -235,6 +268,7 @@ killing off wants to know what happened more, not less.
 | `watchdog.loop.failed` once, then silence | A tick raised. The protection is gone and the record says so; retrying would flood the log for ever |
 | `watchdog.evidence.failed` with `stage=publish` | The runtime tree could not be written. The escalation continues, because the record exists to explain a termination that is happening anyway |
 | No `watchdog` object in `diagnostics snapshot --json` | Expected today — see *Limitations* |
+| `diagnostics watchdog` exits `1` | A stall was recorded on this machine. The document is not cleared by GLOBIN; delete `state/watchdog.json` once it has been read |
 
 ---
 

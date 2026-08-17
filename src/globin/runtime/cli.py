@@ -48,13 +48,16 @@ from globin.domain.configuration import (
     resolve,
 )
 from globin.domain.health import RuntimeHealthSnapshot, RuntimeHealthState
+from globin.domain.runtime_state import RuntimeArea
 from globin.errors import GlobinError
 from globin.project_contract import PROJECT_NAME
 from globin.runtime.composition import (
     BUNDLE_MANIFEST_MEMBER,
     BUNDLE_REPORT_MEMBER,
     DEFAULT_PROFILE,
+    WATCHDOG_FILE,
     Bootstrap,
+    RuntimeState,
     build_bootstrap,
     build_bundle_builder,
     build_configuration,
@@ -73,6 +76,8 @@ DIAGNOSTICS: Final[str] = "diagnostics"
 SNAPSHOT: Final[str] = "snapshot"
 BUNDLE: Final[str] = "bundle"
 MEMORY: Final[str] = "memory"
+
+WATCHDOG: Final[str] = "watchdog"
 VERSION: Final[str] = "--version"
 JSON_FLAG: Final[str] = "--json"
 HELP_WORDS: Final[tuple[str, ...]] = ("-h", "--help")
@@ -86,7 +91,7 @@ call, and a layer package performs none at import.
 BOOTSTRAP_SUBCOMMANDS: Final[tuple[str, ...]] = (CHECK, EVIDENCE)
 """What may follow ``bootstrap``. ``check`` is the default and changes nothing."""
 
-DIAGNOSTICS_SUBCOMMANDS: Final[tuple[str, ...]] = (SNAPSHOT, BUNDLE, MEMORY)
+DIAGNOSTICS_SUBCOMMANDS: Final[tuple[str, ...]] = (SNAPSHOT, BUNDLE, MEMORY, WATCHDOG)
 """What may follow ``diagnostics``. ``snapshot`` is the default.
 
 ``memory`` is a separate word rather than a flag on ``snapshot`` because it
@@ -111,6 +116,8 @@ Commands:
   diagnostics snapshot  Measure this runtime once and report its health.
   diagnostics bundle    Write a redacted support archive and print its digest.
   diagnostics memory    Snapshot with the allocator tracer on, then off again.
+  diagnostics watchdog  Report the liveness policy and the last recorded stall.
+                        Reads; starts no watchdog and changes nothing.
 
 Options:
   --json              Write the machine-readable document to standard output,
@@ -576,9 +583,11 @@ def _diagnostics(invocation: Invocation, *, out: TextIO, err: TextIO) -> int:
     A read-only command that took the production lock would refuse to run beside
     a running GLOBIN, which is the trap ADR-0057 already declined for ``doctor``.
     """
-    wants_memory = invocation.command.endswith(MEMORY)
     state = build_runtime_state()
     config = build_configuration()
+    if invocation.command.endswith(WATCHDOG):
+        return _watchdog(state, config, invocation, out=out, err=err)
+    wants_memory = invocation.command.endswith(MEMORY)
     # Standard error, always. Under `--json` standard output carries the
     # document and nothing else, and a log record printed beside it would
     # break the one contract the flag makes. Without `--json` the human table
@@ -613,6 +622,92 @@ def _diagnostics(invocation: Invocation, *, out: TextIO, err: TextIO) -> int:
     else:
         print(render_snapshot_human(snapshot), end="", file=out)
     return int(exit_code_for_state(snapshot.state))
+
+
+def _watchdog(
+    state: RuntimeState,
+    config: GlobinConfig,
+    invocation: Invocation,
+    *,
+    out: TextIO,
+    err: TextIO,
+) -> int:
+    """Report the liveness policy, and the last stall this machine recorded.
+
+    Args:
+        state: The runtime tree the incident is read from.
+        config: Where the thresholds come from.
+        invocation: What was asked for.
+        out: Where the answer goes.
+        err: Where human text goes under ``--json``.
+
+    Returns:
+        :attr:`~globin.domain.bootstrap.ExitCode.OK` when no stall has been
+        recorded, and :attr:`~globin.domain.bootstrap.ExitCode.GATE_FAILED` when
+        one has.
+
+    **It starts no watchdog**, which is why it can be run beside a running GLOBIN.
+    A command that armed one would start a thread able to end the process it was
+    asked to describe.
+
+    **A recorded incident is a failure, and that is a deliberate reading.** The
+    document only exists because a run was stopped for not making progress, so a
+    launcher branching on this code learns "the last run here went wrong" rather
+    than "a watchdog is configured". Delete the file to clear it — nothing in
+    GLOBIN removes it, because the evidence outliving the run is the point.
+    """
+    policy = config.watchdog.policy()
+    recorded = state.store.read(RuntimeArea.STATE, WATCHDOG_FILE)
+    document: dict[str, object] = {
+        "enabled": config.watchdog.enabled,
+        "escalation_enabled": config.watchdog.escalation_enabled,
+        "interval_millis": policy.interval_millis,
+        "grace_millis": policy.grace_millis,
+        "stall_millis": policy.stall_millis,
+        "escalate_millis": policy.escalate_millis,
+        "deadline_millis": policy.stall_millis + policy.escalate_millis,
+        "incident": dict(recorded) if recorded is not None else None,
+    }
+    human = _watchdog_text(document)
+    if invocation.as_json:
+        print(json.dumps(document, sort_keys=True, separators=(",", ":")), file=out)
+        print(human, end="", file=err)
+    else:
+        print(human, end="", file=out)
+    return int(ExitCode.OK if recorded is None else ExitCode.GATE_FAILED)
+
+
+def _watchdog_text(document: dict[str, object]) -> str:
+    """The human rendering of the watchdog report.
+
+    Args:
+        document: What :func:`_watchdog` assembled.
+
+    Returns:
+        The text, ending in a newline.
+
+    Built from the same mapping the JSON rendering uses, so the two cannot say
+    different things — the property both bootstrap renderings already have.
+    """
+    incident = document.get("incident")
+    lines = [
+        f"watchdog: {'enabled' if document['enabled'] else 'disabled'}",
+        f"  interval   {document['interval_millis']} ms",
+        f"  grace      {document['grace_millis']} ms",
+        f"  stall      {document['stall_millis']} ms",
+        f"  escalate   {document['escalate_millis']} ms"
+        f"  (deadline {document['deadline_millis']} ms from the stall)",
+        f"  hard exit  {'enabled' if document['escalation_enabled'] else 'disabled'}",
+    ]
+    if not isinstance(incident, dict):
+        lines.append("incident: none recorded")
+    else:
+        lines.append(f"incident: {incident.get('incident_id', '')}")
+        lines.append(f"  component  {incident.get('component', '')}")
+        lines.append(f"  detected   {incident.get('detected_at', '')}")
+        lines.append(f"  reason     {incident.get('reason', '')}")
+        lines.append(f"  escalated  {incident.get('escalated', False)}")
+    return "\n".join(lines) + "\n"
 
 
 def _bundle(

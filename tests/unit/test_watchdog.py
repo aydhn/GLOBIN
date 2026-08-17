@@ -205,10 +205,23 @@ def test_no_settled_state_may_return_to_health() -> None:
             assert not may_move(state, WatchdogState.HEALTHY)
 
 
-def test_exactly_one_edge_enters_the_stalled_state() -> None:
-    """What makes one incident per episode a property of the graph."""
-    inbound = [pair for pair in transitions() if pair[1] is WatchdogState.STALLED]
-    assert inbound == [(WatchdogState.SUSPECT, WatchdogState.STALLED)]
+def test_no_settled_state_can_reach_the_stalled_state() -> None:
+    """What makes one incident per episode a property of the graph.
+
+    Three edges enter ``STALLED``: from ``SUSPECT``, from ``STARTING`` when a long
+    grace expires over a component already past a short threshold, and from
+    ``HEALTHY`` when two ticks fall far enough apart that suspect is skipped. The
+    count is not the guarantee. The guarantee is that **no source is reachable
+    once the machine has settled**, so an episode enters ``STALLED`` at most once
+    however many ways in there are.
+    """
+    inbound = {source for source, target in transitions() if target is WatchdogState.STALLED}
+    assert inbound == {WatchdogState.SUSPECT, WatchdogState.STARTING, WatchdogState.HEALTHY}
+    assert not any(settled(source) for source in inbound)
+    for state in WatchdogState:
+        if settled(state):
+            assert not may_move(state, WatchdogState.SUSPECT)
+            assert not may_move(state, WatchdogState.STARTING)
 
 
 def test_recovery_has_exactly_one_inbound_edge() -> None:
