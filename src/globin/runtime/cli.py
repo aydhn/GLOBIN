@@ -40,6 +40,8 @@ from globin.adapters.bootstrap import build
 from globin.adapters.health import snapshot_document
 from globin.adapters.identifiers import new_run_id
 from globin.adapters.observability import new_correlation_id
+from globin.adapters.telemetry_otel import opentelemetry_bridge
+from globin.adapters.telemetry_prometheus import LOOPBACK_ADDRESS, prometheus_publisher
 from globin.domain.bootstrap import BootstrapOutcome, CheckStatus, ExitCode
 from globin.domain.configuration import (
     GlobinConfig,
@@ -48,6 +50,7 @@ from globin.domain.configuration import (
     resolve,
 )
 from globin.domain.health import RuntimeHealthSnapshot, RuntimeHealthState
+from globin.domain.metrics import declared_series, metrics
 from globin.domain.runtime_state import RuntimeArea
 from globin.errors import GlobinError
 from globin.project_contract import PROJECT_NAME
@@ -78,6 +81,9 @@ BUNDLE: Final[str] = "bundle"
 MEMORY: Final[str] = "memory"
 
 WATCHDOG: Final[str] = "watchdog"
+
+TELEMETRY: Final[str] = "telemetry"
+"""Report what telemetry would record and whether any of it leaves. Reads only."""
 VERSION: Final[str] = "--version"
 JSON_FLAG: Final[str] = "--json"
 HELP_WORDS: Final[tuple[str, ...]] = ("-h", "--help")
@@ -91,7 +97,13 @@ call, and a layer package performs none at import.
 BOOTSTRAP_SUBCOMMANDS: Final[tuple[str, ...]] = (CHECK, EVIDENCE)
 """What may follow ``bootstrap``. ``check`` is the default and changes nothing."""
 
-DIAGNOSTICS_SUBCOMMANDS: Final[tuple[str, ...]] = (SNAPSHOT, BUNDLE, MEMORY, WATCHDOG)
+DIAGNOSTICS_SUBCOMMANDS: Final[tuple[str, ...]] = (
+    SNAPSHOT,
+    BUNDLE,
+    MEMORY,
+    WATCHDOG,
+    TELEMETRY,
+)
 """What may follow ``diagnostics``. ``snapshot`` is the default.
 
 ``memory`` is a separate word rather than a flag on ``snapshot`` because it
@@ -117,6 +129,8 @@ Commands:
   diagnostics bundle    Write a redacted support archive and print its digest.
   diagnostics memory    Snapshot with the allocator tracer on, then off again.
   diagnostics watchdog  Report the liveness policy and the last recorded stall.
+  diagnostics telemetry Report what telemetry declares, and whether any of it
+                        leaves this machine. Records nothing and binds nothing.
                         Reads; starts no watchdog and changes nothing.
 
 Options:
@@ -587,6 +601,8 @@ def _diagnostics(invocation: Invocation, *, out: TextIO, err: TextIO) -> int:
     config = build_configuration()
     if invocation.command.endswith(WATCHDOG):
         return _watchdog(state, config, invocation, out=out, err=err)
+    if invocation.command.endswith(TELEMETRY):
+        return _telemetry(config, invocation, out=out, err=err)
     wants_memory = invocation.command.endswith(MEMORY)
     # Standard error, always. Under `--json` standard output carries the
     # document and nothing else, and a log record printed beside it would
@@ -675,6 +691,105 @@ def _watchdog(
     else:
         print(human, end="", file=out)
     return int(ExitCode.OK if recorded is None else ExitCode.GATE_FAILED)
+
+
+def _telemetry(
+    config: GlobinConfig,
+    invocation: Invocation,
+    *,
+    out: TextIO,
+    err: TextIO,
+) -> int:
+    """Report the telemetry contract, and whether anything leaves this machine.
+
+    Args:
+        config: Where the settings come from.
+        invocation: What was asked for.
+        out: Where the answer goes.
+        err: Where human text goes under ``--json``.
+
+    Returns:
+        :attr:`~globin.domain.bootstrap.ExitCode.OK`, always.
+
+    **It records nothing, starts nothing and binds nothing.** It builds no store,
+    no pump and no thread; it reports what the registry declares and what the
+    configuration would do. A dropped observation is a fact about the observation
+    rather than about the work, so it is not a failing exit code — making it one
+    would let a launcher restart a healthy process because a metric was refused.
+
+    **Exit code 24 stays free.** If a later phase wants a *gate* that fails when
+    export is unhealthy, that is a different command with different semantics, and
+    that is when a new code is earned.
+    """
+    otel = opentelemetry_bridge()
+    prometheus = prometheus_publisher()
+    document: dict[str, object] = {
+        "enabled": config.telemetry.enabled,
+        "export_enabled": config.telemetry.export_enabled,
+        "listener_enabled": config.telemetry.listener_enabled,
+        "listener_address": LOOPBACK_ADDRESS,
+        "listener_port": config.telemetry.listener_port,
+        "queue_capacity": config.telemetry.queue_capacity,
+        "batch_size": config.telemetry.batch_size,
+        "flush_millis": config.telemetry.flush_millis,
+        "metrics": [
+            {
+                "name": descriptor.name,
+                "kind": descriptor.kind.value,
+                "unit": descriptor.unit.value,
+                "attributes": list(descriptor.keys()),
+                "declared_series": declared_series(descriptor),
+                "budget": descriptor.cardinality_budget,
+            }
+            for descriptor in metrics()
+        ],
+        "libraries": {
+            "opentelemetry": {"available": otel.available, "reason": otel.reason},
+            "prometheus_client": {"available": prometheus.available, "reason": prometheus.reason},
+        },
+    }
+    human = _telemetry_text(document)
+    if invocation.as_json:
+        print(json.dumps(document, sort_keys=True, separators=(",", ":")), file=out)
+        print(human, end="", file=err)
+    else:
+        print(human, end="", file=out)
+    return int(ExitCode.OK)
+
+
+def _telemetry_text(document: dict[str, object]) -> str:
+    """The human rendering of the telemetry report.
+
+    Args:
+        document: What :func:`_telemetry` assembled.
+
+    Returns:
+        The text, ending in a newline.
+
+    Built from the same mapping the JSON rendering uses, so the two cannot say
+    different things.
+    """
+    lines = [
+        f"recording   {'on' if document['enabled'] else 'off'}",
+        f"export      {'on' if document['export_enabled'] else 'off'}",
+        f"listener    {'on' if document['listener_enabled'] else 'off'} "
+        f"({document['listener_address']}:{document['listener_port']})",
+    ]
+    families = document["metrics"]
+    if isinstance(families, list):
+        lines.append(f"metrics     {len(families)} declared")
+        for family in families:
+            if isinstance(family, dict):
+                lines.append(
+                    f"  {family['name']:<44} {family['kind']:<9} "
+                    f"{family['declared_series']}/{family['budget']} series"
+                )
+    libraries = document["libraries"]
+    if isinstance(libraries, dict):
+        for name, state in sorted(libraries.items()):
+            if isinstance(state, dict):
+                lines.append(f"  {name:<20} {'present' if state['available'] else 'absent'}")
+    return chr(10).join(lines) + chr(10)
 
 
 def _watchdog_text(document: dict[str, object]) -> str:

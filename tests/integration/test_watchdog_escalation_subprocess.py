@@ -44,6 +44,7 @@ from globin.domain.configuration import (
     DiagnosticsConfig,
     GlobinConfig,
     LoggingConfig,
+    TelemetryConfig,
     WatchdogConfig,
 )
 from globin.domain.watchdog import Criticality
@@ -62,6 +63,7 @@ config = GlobinConfig(
         stall_millis=1000,
         escalate_millis=1000,
     ),
+    telemetry=TelemetryConfig(),
 )
 
 state = build_runtime_state()

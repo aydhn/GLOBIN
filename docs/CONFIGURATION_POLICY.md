@@ -55,8 +55,15 @@ so a new setting is one line and cannot be half-added.
 | `watchdog.stall_millis` | `int` | `30000` | How long a required component may be silent. Between 1000 and 3600000, and above the interval. |
 | `watchdog.escalate_millis` | `int` | `15000` | How long after that the process has to stop itself. Between 1000 and 600000, and not below the interval. |
 | `watchdog.escalation_enabled` | `bool` | `true` | Whether the process is ended when it does not stop itself. |
+| `telemetry.enabled` | `bool` | `true` | Whether measurements are recorded at all. |
+| `telemetry.export_enabled` | `bool` | `false` | Whether anything is handed to an exporter. Off by default, and the default is the posture: with it off no exporter, queue, pump or thread is constructed. |
+| `telemetry.listener_enabled` | `bool` | `false` | Whether a Prometheus scrape endpoint is bound on loopback. Off by default. |
+| `telemetry.listener_port` | `int` | `9464` | Which loopback port the endpoint uses. Between 1024 and 65535. |
+| `telemetry.queue_capacity` | `int` | `256` | The most batches held before dropping starts. Between 1 and 4096. |
+| `telemetry.batch_size` | `int` | `32` | The most documents handed over in one attempt. Between 1 and 4096, and not above the queue capacity. |
+| `telemetry.flush_millis` | `int` | `5000` | How often the exporter loop wakes. Between 100 and 300000. |
 
-Twenty-two settings in three sections. Of everything Phases 001-006 built, only
+Twenty-nine settings in four sections. Of everything Phases 001-006 built, only
 logging held anything an operator may reasonably change: the project contract and
 the roadmap are immutable identity, the error taxonomy has nothing to tune, and
 the architecture review's paths are constants rather than settings. Phase 023

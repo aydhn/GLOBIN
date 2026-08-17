@@ -24,6 +24,7 @@ from globin.domain.configuration import (
     DiagnosticsConfig,
     GlobinConfig,
     LoggingConfig,
+    TelemetryConfig,
     WatchdogConfig,
 )
 from globin.domain.runtime_state import RuntimeArea, RuntimeLayout
@@ -88,6 +89,7 @@ def settings() -> GlobinConfig:
             stall_millis=STALL_MILLIS,
             escalate_millis=ESCALATE_MILLIS,
         ),
+        telemetry=TelemetryConfig(),
     )
 
 

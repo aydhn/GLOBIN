@@ -111,6 +111,12 @@ comparing this module against ``CONFIGURATION_POLICY.md`` should expect to find.
 """
 
 WATCHDOG_SECTION: Final[str] = "watchdog"
+
+TELEMETRY_SECTION: Final[str] = "telemetry"
+"""The fourth section, added in Phase 026.
+
+What GLOBIN measures about itself, and whether any of it leaves the machine.
+The default answers are "measure" and "no"."""
 """The section name liveness settings are filed under.
 
 A third section, added in Phase 025, and the smallest of the three on purpose.
@@ -216,6 +222,53 @@ WATCHDOG_STALL_MILLIS: Final[str] = f"{WATCHDOG_SECTION}{KEY_SEPARATOR}stall_mil
 WATCHDOG_ESCALATE_MILLIS: Final[str] = f"{WATCHDOG_SECTION}{KEY_SEPARATOR}escalate_millis"
 
 WATCHDOG_ESCALATION_ENABLED: Final[str] = f"{WATCHDOG_SECTION}{KEY_SEPARATOR}escalation_enabled"
+
+TELEMETRY_ENABLED: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}enabled"
+"""Whether measurements are recorded at all."""
+
+TELEMETRY_EXPORT_ENABLED: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}export_enabled"
+"""Whether anything is handed to an exporter.
+
+**Off by default, and that default is the security posture.** With it off no
+exporter, queue, pump or thread is constructed, so "GLOBIN opens no socket" is a
+property of the object graph rather than of a branch somebody could get wrong."""
+
+TELEMETRY_LISTENER_ENABLED: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}listener_enabled"
+"""Whether a Prometheus scrape endpoint is bound on loopback.
+
+Off by default. There is deliberately no *address* setting: the library's own
+default is `0.0.0.0`, and GLOBIN passes `127.0.0.1` as a literal so no
+configuration value can widen it."""
+
+TELEMETRY_LISTENER_PORT: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}listener_port"
+"""Which loopback port the scrape endpoint uses when it is enabled."""
+
+TELEMETRY_QUEUE_CAPACITY: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}queue_capacity"
+"""The most batches held before the queue starts dropping."""
+
+TELEMETRY_BATCH_SIZE: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}batch_size"
+"""The most documents handed over in one attempt."""
+
+TELEMETRY_FLUSH_MILLIS: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}flush_millis"
+"""How often the exporter loop wakes."""
+
+MINIMUM_LISTENER_PORT: Final[int] = 1_024
+"""Below this a listener needs privilege on most hosts."""
+
+MAXIMUM_LISTENER_PORT: Final[int] = 65_535
+"""The highest addressable port."""
+
+MINIMUM_QUEUE_CAPACITY: Final[int] = 1
+"""A queue of nothing could never deliver."""
+
+MAXIMUM_QUEUE_CAPACITY: Final[int] = 4_096
+"""Bounded so that "the queue is bounded" is a fact rather than a promise."""
+
+MINIMUM_FLUSH_MILLIS: Final[int] = 100
+"""Below this the loop spins rather than waits."""
+
+MAXIMUM_FLUSH_MILLIS: Final[int] = 300_000
+"""Five minutes, past which a flush is not a flush."""
 """How many allocation sites a memory summary reports."""
 
 DEFAULT_MINIMUM_FREE_BYTES: Final[int] = 268_435_456
@@ -496,6 +549,47 @@ class WatchdogConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class TelemetryConfig:
+    """What GLOBIN measures about itself, and whether any of it leaves.
+
+    Args:
+        enabled: Whether measurements are recorded at all.
+        export_enabled: Whether anything is handed to an exporter.
+        listener_enabled: Whether a scrape endpoint is bound on loopback.
+        listener_port: Which loopback port it uses.
+        queue_capacity: The most batches held before dropping starts.
+        batch_size: The most documents handed over in one attempt.
+        flush_millis: How often the exporter loop wakes.
+
+    **Seven settings, and the two that are off by default are the interesting
+    ones.** `enabled` defaults on because recording costs a dictionary write and
+    an unmeasured process cannot explain itself. `export_enabled` and
+    `listener_enabled` default off because each adds a capability GLOBIN otherwise
+    does not have -- reaching the network, and accepting a connection -- and
+    ADR-0003's zero-budget posture plus the offline-by-default rule make silence
+    the right default for both.
+
+    **There is deliberately no address setting.** `prometheus_client` defaults its
+    bind address to `0.0.0.0`, which is every interface; GLOBIN passes `127.0.0.1`
+    as a literal and exposes nothing that could widen it, so the absence of a
+    setting here is load-bearing rather than an omission.
+
+    What is also not here: which exporter to use. That is a parameter to
+    `build_telemetry`, because `runtime/composition.py`'s own rule is that these
+    functions build rather than choose -- and a configuration value that selected a
+    provider would be a value that could open a socket.
+    """
+
+    enabled: bool = True
+    export_enabled: bool = False
+    listener_enabled: bool = False
+    listener_port: int = 9_464
+    queue_capacity: int = 256
+    batch_size: int = 32
+    flush_millis: int = 5_000
+
+
+@dataclass(frozen=True, slots=True)
 class GlobinConfig:
     """Everything an operator may vary, one field per subsystem that has any.
 
@@ -522,6 +616,7 @@ class GlobinConfig:
     logging: LoggingConfig
     diagnostics: DiagnosticsConfig
     watchdog: WatchdogConfig
+    telemetry: TelemetryConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -730,6 +825,7 @@ def known_keys() -> tuple[str, ...]:
         section_keys(LOGGING_SECTION, LoggingConfig)
         + section_keys(DIAGNOSTICS_SECTION, DiagnosticsConfig)
         + section_keys(WATCHDOG_SECTION, WatchdogConfig)
+        + section_keys(TELEMETRY_SECTION, TelemetryConfig)
     )
 
 
@@ -752,6 +848,7 @@ def default_layer() -> ConfigLayer:
             **section_defaults(LOGGING_SECTION, LoggingConfig),
             **section_defaults(DIAGNOSTICS_SECTION, DiagnosticsConfig),
             **section_defaults(WATCHDOG_SECTION, WatchdogConfig),
+            **section_defaults(TELEMETRY_SECTION, TelemetryConfig),
         },
     )
 
@@ -767,7 +864,10 @@ def default_config() -> GlobinConfig:
     to "the defaults" agree. If they ever disagree, one of them is lying.
     """
     return GlobinConfig(
-        logging=LoggingConfig(), diagnostics=DiagnosticsConfig(), watchdog=WatchdogConfig()
+        logging=LoggingConfig(),
+        diagnostics=DiagnosticsConfig(),
+        watchdog=WatchdogConfig(),
+        telemetry=TelemetryConfig(),
     )
 
 
@@ -934,6 +1034,31 @@ def as_config(resolved: ResolvedConfig) -> GlobinConfig:
                 high=MAXIMUM_ESCALATE_MILLIS,
             ),
             escalation_enabled=_flag(resolved.setting(WATCHDOG_ESCALATION_ENABLED)),
+        ),
+        telemetry=TelemetryConfig(
+            enabled=_flag(resolved.setting(TELEMETRY_ENABLED)),
+            export_enabled=_flag(resolved.setting(TELEMETRY_EXPORT_ENABLED)),
+            listener_enabled=_flag(resolved.setting(TELEMETRY_LISTENER_ENABLED)),
+            listener_port=_bounded(
+                resolved.setting(TELEMETRY_LISTENER_PORT),
+                low=MINIMUM_LISTENER_PORT,
+                high=MAXIMUM_LISTENER_PORT,
+            ),
+            queue_capacity=_bounded(
+                resolved.setting(TELEMETRY_QUEUE_CAPACITY),
+                low=MINIMUM_QUEUE_CAPACITY,
+                high=MAXIMUM_QUEUE_CAPACITY,
+            ),
+            batch_size=_bounded(
+                resolved.setting(TELEMETRY_BATCH_SIZE),
+                low=1,
+                high=MAXIMUM_QUEUE_CAPACITY,
+            ),
+            flush_millis=_bounded(
+                resolved.setting(TELEMETRY_FLUSH_MILLIS),
+                low=MINIMUM_FLUSH_MILLIS,
+                high=MAXIMUM_FLUSH_MILLIS,
+            ),
         ),
     )
 
