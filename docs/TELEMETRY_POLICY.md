@@ -33,11 +33,28 @@ to one and not the other fails.
 | `globin.telemetry.dropped.total` | counter | count | `reason` |
 | `globin.telemetry.series.active` | gauge | count | — |
 | `globin.telemetry.snapshot.nanoseconds` | histogram | seconds | — |
+| `globin.diagnostics.http.requests.total` | counter | count | `route`, `status_class` |
+| `globin.diagnostics.http.request.nanoseconds` | histogram | seconds | `route` |
+| `globin.diagnostics.http.inflight` | gauge | count | — |
+| `globin.diagnostics.http.rejected.total` | counter | count | `reason` |
+| `globin.diagnostics.http.response.bytes.total` | counter | bytes | `route` |
 
-**These describe telemetry itself and nothing else.** A descriptor named after a
-capability GLOBIN does not have would be a claim that somebody is working on it —
-`REPOSITORY_LAYOUT.md`'s rule about directories, applied to a register. Market
-data, orders and strategies get theirs from the phases that build them.
+**Every family names a capability GLOBIN has.** A descriptor named after one it does
+not would be a claim that somebody is working on it — `REPOSITORY_LAYOUT.md`'s rule
+about directories, applied to a register. Phase 026 declared the first four, about
+telemetry itself; Phase 027 added five, about the diagnostics surface it built.
+Market data, orders and strategies get theirs from the phases that build them.
+
+**The five diagnostics families are the first whose dimensions a remote party could
+try to choose, and every budget is arithmetic.** `route` is a six-member enum whose
+sixth member is `unknown`, so ten thousand invented paths produce one series;
+`status_class` is three; `reason` is six. Each family's budget is the exact product of
+its own domains — 18, 6, 1, 6 and 6 — so a family cannot produce a series its
+declaration did not predict, and adding a route changes both numbers in one edit.
+
+Absent by construction, never by filtering: the raw path, the query string, the peer
+address and port, any correlation, trace or request identifier, exception text, and
+every header value. None of those is redacted out of a label — none can reach one.
 
 ---
 

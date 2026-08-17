@@ -44,7 +44,7 @@ def test_opening_a_connection_is_refused() -> None:
     this catches ``BaseException`` and pins the identity with ``match`` instead
     of naming a pytest-internal type.
     """
-    with pytest.raises(BaseException, match="network connection") as refused:
+    with pytest.raises(BaseException, match="tried to connect to") as refused:
         socket.create_connection(UNREACHABLE, timeout=0.001)
 
     assert type(refused.value).__name__ == "Failed"
@@ -59,10 +59,10 @@ def test_connecting_a_socket_directly_is_refused() -> None:
     033-048 will add.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        with pytest.raises(BaseException, match="network connection"):
+        with pytest.raises(BaseException, match="tried to connect to"):
             sock.connect(UNREACHABLE)
 
-        with pytest.raises(BaseException, match="network connection"):
+        with pytest.raises(BaseException, match="tried to connect to"):
             sock.connect_ex(UNREACHABLE)
 
 

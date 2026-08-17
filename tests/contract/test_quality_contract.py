@@ -29,7 +29,13 @@ from tools.quality.commands import command_names
 #: Attribute markers that are registered but not applied by directory. They
 #: describe a property of a test, not its level, so a test may carry none of
 #: them or several.
-ATTRIBUTE_MARKERS: tuple[str, ...] = ("slow", "network", "external", "windows")
+ATTRIBUTE_MARKERS: tuple[str, ...] = (
+    "slow",
+    "network",
+    "external",
+    "windows",
+    "loopback",
+)
 
 #: A pinned GitHub Actions reference: `uses: owner/repo@<40 hex characters>`.
 ACTION_USE_RE = re.compile(r"^\s*(?:-\s*)?uses:\s*(?P<ref>\S+)", re.MULTILINE)

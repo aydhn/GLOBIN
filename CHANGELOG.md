@@ -19,6 +19,92 @@ can be opened and read.
 
 ## [Unreleased]
 
+### Configuration resolves from four sources in a declared order
+
+- **Precedence is two functions and one assembly point.** `precedence()` orders the
+  four documents weakest first — base, profile, local base, local profile — on two
+  rules: specific beats general, uncommitted beats committed. `profile_from()` orders a
+  `--profile` argument above `GLOBIN_PROFILE` above the declared default, because the
+  more deliberate act wins. `build_config_sources()` puts the environment **above every
+  document**, for the same reason. Phase 026 deliberately returned the four documents as
+  a *mapping* so nobody could mistake a listing order for a precedence; that mapping is
+  unchanged, and the order now lives beside it rather than inside it.
+- **An environment variable name is derived, never declared beside the key.**
+  `telemetry.enabled` becomes `GLOBIN_TELEMETRY_ENABLED`. Derivation risks two keys
+  colliding on one name, so a contract test asserts the map is injective over every
+  known key rather than hoping.
+- **An unrecognised `GLOBIN_` variable is refused, and a credential-shaped one is
+  refused before it is even looked up.** The prefix is what makes a typo *detectable*;
+  the alternative was ignoring typos or refusing to start because of somebody else's
+  `PATH`. A variable whose name looks like a credential is refused with the reason,
+  because `SECURITY_BASELINE.md` says no secret reaches GLOBIN through configuration and
+  the environment is where somebody would try.
+- **A missing document is answered by a wrapper, not a flag.** Absence becomes an empty
+  layer; a file that exists and cannot be read, a malformed document and an unflattenable
+  key all propagate. The decision sits at the composition root, where a reader can see
+  which documents are required.
+- **Preflight now validates what a run will actually use.** `bootstrap check` resolved
+  *no sources at all*, so it validated the declared defaults while the process ran on
+  something else — a document or variable the model refuses passed the gate and failed at
+  start-up. That was a hole rather than a simplification, and closing it means a bad
+  configuration is refused earlier and louder.
+- **A superscript two would have crashed the CLI.** `_bounded` screened strings with
+  `str.isdigit`, which is true for characters `int` refuses, so the pair raised
+  `ValueError` on input it had just accepted — escaping the error taxonomy entirely.
+  Unreachable while every string came from a TOML document; live the moment environment
+  variables arrived. Found by a property test over generated text, fixed with
+  `str.isdecimal`, in both places that had it.
+
+### And, as the eleventh scope amendment, a loopback diagnostics surface
+
+- **Five routes, read-only, off by default.** `/health/live`, `/health/ready`,
+  `/health/runtime`, `/metrics`, and `/diagnostics/snapshot` — the last off even when the
+  surface is on. With the surface disabled **no server, socket, queue or worker thread is
+  constructed**, so opening nothing is a property of the object graph rather than of a
+  branch.
+- **The bind address is a type, not a literal or a string.** `LoopbackAddress` refuses
+  anything `ipaddress` does not call loopback, so the setting **cannot hold** a wildcard,
+  a LAN address or a hostname — and the refusal covers spellings a denylist would not
+  have enumerated: four zeroes, a bare zero, hexadecimal, a bare pair of colons, an
+  IPv4-mapped form, loopback written as a decimal integer. Phase 026 refused an address
+  setting outright and was right about the danger; a literal made `::1` unreachable and
+  put the guarantee in a constant somebody could edit.
+- **Liveness cannot reach a health probe, and that is structural.** A liveness endpoint
+  that failed when a disk filled up would turn a disk problem into a restart loop. Its
+  port has one method and no way to reach a snapshot, which is asserted by a test where
+  the health projection *raises* and liveness still answers.
+- **A bounded pool, not a thread per connection.** `ThreadingHTTPServer` is unbounded by
+  construction and marks its threads daemons; instead a fixed pool of non-daemon workers
+  drains a bounded queue, and a full queue is a deterministic 503 written on the accept
+  loop. Twenty requests through a pool of two leave the thread count unmoved, which a
+  test measures rather than claims.
+- **`GET` and `HEAD` only — and defining two handlers was not enough.** The standard
+  library answers every other verb through `send_error`, which writes a **generic HTML
+  page** with the requested method in the body, no cache directive and no sniffing
+  refusal; the same path handles a malformed request line. One override closes all of it.
+  Every response now carries `no-store`, `nosniff`, an explicit length, and **no `Server`
+  header** — no Python version reaches a client.
+- **Both exposition formats are encoded by GLOBIN, so `/metrics` needs no library.**
+  Negotiation follows the scrape protocol's own rule and is **total**: there is no 406,
+  because the specification's answer when nothing offered is supported is to fall back to
+  Prometheus text 0.0.4. A version GLOBIN does not produce is a non-match rather than a
+  near-match. OpenMetrics gained the counter family/sample split, cumulative `_bucket`
+  samples through `+Inf`, and the `# EOF` its specification requires — which is also why
+  an oversized response is **refused rather than truncated**.
+- **Phase 026's dormant listener is gone.** It served a registry GLOBIN never populated
+  and had no production caller, so two ways to open a socket — one working, one empty —
+  became one. `start_http_server` joins the forbidden list beside its two siblings, and
+  the architecture test now names the single module that may reach a socket and asserts it
+  contains **no address literal of any kind**.
+- **Five new metric families, every budget the exact product of its own domains.** The
+  dimensions a remote party could otherwise choose are absent by construction: the route
+  *enum* is recorded, whose unrecognised member is the single value `unknown`, so ten
+  thousand invented paths produce one series.
+- Details: [`docs/engineering/DIAGNOSTICS_ENDPOINT.md`](docs/engineering/DIAGNOSTICS_ENDPOINT.md),
+  [ADR-0070](docs/adr/0070-phase-027-widens-to-deliver-the-loopback-diagnostics-surface.md),
+  [ADR-0071](docs/adr/0071-configuration-precedence-is-declared-and-an-environment-variable-is-a-derived-name.md),
+  [ADR-0072](docs/adr/0072-the-diagnostics-surface-is-loopback-only-read-only-and-bounded-by-construction.md).
+
 ### Configuration has a place to live, and four profiles that name documents
 
 - **`config/` exists**, holding a base document, four profiles and a Git-ignored

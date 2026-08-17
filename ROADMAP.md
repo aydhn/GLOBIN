@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-026 are complete. Phase 027 is next and has not started.**
-> Nothing beyond Phase 026 is implemented. GLOBIN does not trade, does not
+> **Phases 001-027 are complete. Phase 028 is next and has not started.**
+> Nothing beyond Phase 027 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
 >
@@ -271,6 +271,30 @@ the contract:
 > decision. A tenth amendment inherits nothing from this one and must additionally
 > say whether it too collides with a title.
 >
+> **Eleventh, and taken against this document's own refusal.** Phase 027 still
+> delivers the environment variable and profile resolution its title names -- one
+> declared document order, one declared profile order, the environment above every
+> document, and a preflight that resolves what a run resolves rather than the declared
+> defaults it used to validate. Alongside it, the loopback diagnostics surface:
+> liveness, readiness, a redacted runtime health projection and a
+> Prometheus/OpenMetrics scrape, read-only and bounded, on an address a value type
+> refuses to widen.
+>
+> **The paragraph above says an eleventh "is not another argument to be weighed", and
+> that sentence was put to the owner verbatim** along with the two courses it implies --
+> bring the granularity review forward now, or deliver the titled scope alone. The owner
+> chose to proceed. **It scores two of ADR-0021's four conditions**, and the two it
+> fails are the two the tenth failed: work is displaced (Phase 280 *Operational Metrics
+> Collection* and Phase 315 *Live Monitoring and Escalation* own collection and
+> escalation; this phase neither collects, retains, dashboards nor alerts, and names
+> them), and the two halves do not need each other. Three in a row is worse than two.
+>
+> **Nothing here answers the granularity question.** It remains Phase 032's, now with
+> eleven amendments in front of it, and a twelfth may cite neither this record nor the
+> owner's having overridden the refusal once.
+> [ADR-0070](docs/adr/0070-phase-027-widens-to-deliver-the-loopback-diagnostics-surface.md)
+> carries the whole of it.
+
 > **Tenth.** Phase 026 still delivers the configuration file layout and the paper,
 > demo, testnet and live profile structure its title names, and now also gives the
 > running application its telemetry foundation: a provider-neutral typed contract, a
@@ -345,7 +369,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 024 | GPU Runtime Verification Harness | Build a harness that proves which workloads actually benefit from GPU execution on this host; and, as the eighth scope amendment, give the running application its health surface -- a typed runtime health snapshot, process and host resource diagnostics, bounded thread and memory introspection, and a redacted, self-validating support bundle. | Complete |
 | 025 | TA-Lib Native Library Provisioning | Provision the native TA-Lib dependency required by the Python wrapper on Windows, with a documented fallback, measured on this host rather than read off a filename; and, as the ninth scope amendment, give the running application its watchdog -- a monotonic heartbeat registry, a suspect threshold distinct from a confirmed stall, bounded and redacted stall evidence, a graceful shutdown request and a bounded escalation to a hard exit. | Complete |
 | 026 | Configuration File Layout and Profiles | Define on-disk configuration locations and the paper, demo, testnet and live profile structure; and, as the tenth scope amendment, give the running application its telemetry foundation -- a provider-neutral metric contract, cardinality bounded by construction, span context propagation, a bounded and failure-safe export path, and two provider bridges that are absent without breaking anything. | Complete |
-| 027 | Environment Variable and Profile Resolution | Implement deterministic precedence between defaults, files, environment variables and launcher selection. | Planned |
+| 027 | Environment Variable and Profile Resolution | Implement deterministic precedence between defaults, files, environment variables and launcher selection; and, as the eleventh scope amendment, give the running application its loopback diagnostics surface -- liveness, readiness, a redacted runtime health projection and a Prometheus/OpenMetrics scrape, bounded and read-only, on an address a value type refuses to widen. | Complete |
 | 028 | Local Secret Storage Mechanism | Implement the approved local secret store so credentials never reach the repository or plain configuration. | Planned |
 | 029 | Credential Prompting and Validation Flow | Define interactive credential collection, format validation and permission verification before use. | Planned |
 | 030 | Bootstrap Health Check Suite | Implement the preflight checks that must pass before any long-running GLOBIN process starts. | Planned |

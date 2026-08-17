@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from globin.adapters import telemetry_prometheus
 from globin.adapters.telemetry import (
     DisabledExporter,
     LocalFileExporter,
@@ -26,22 +27,23 @@ from globin.adapters.telemetry_otel import (
     otel_mapping,
 )
 from globin.adapters.telemetry_prometheus import (
-    LOOPBACK_ADDRESS,
-    MAXIMUM_PORT,
-    MINIMUM_PORT,
     PrometheusPublisher,
     UnavailablePrometheus,
-    port_problems,
+    openmetrics_mapping,
+    openmetrics_name,
     prometheus_mapping,
+    prometheus_name,
     prometheus_publisher,
     render_exposition,
-    start_loopback_listener,
+    render_openmetrics,
 )
 from globin.application.observability import Logger
 from globin.application.telemetry_delivery import telemetry_pump
 from globin.domain.clock import MonotonicReading
-from globin.domain.metrics import metric_names
+from globin.domain.diagnostics_http import OPENMETRICS_TERMINATOR
+from globin.domain.metrics import metric_names, metrics
 from globin.domain.observability import LogEvent
+from globin.domain.telemetry import MetricKind
 from globin.domain.telemetry_delivery import ExportOutcome, ExportPolicy
 
 
@@ -295,39 +297,17 @@ def test_the_factories_return_something_usable_either_way() -> None:
         assert built.reason
 
 
-def test_a_publisher_binds_nothing_by_default() -> None:
-    """A default bootstrap opens no socket, by construction rather than by branch."""
-    publisher = prometheus_publisher()
-    assert getattr(publisher, "listening", False) is False
+def test_a_publisher_has_no_way_at_all_to_bind() -> None:
+    """Stronger than Phase 026's "no listener unless asked": there is nothing to ask.
 
-
-@pytest.mark.parametrize(
-    "port",
-    [
-        pytest.param(0, id="zero"),
-        pytest.param(80, id="privileged"),
-        pytest.param(MINIMUM_PORT - 1, id="just-below"),
-        pytest.param(MAXIMUM_PORT + 1, id="above-range"),
-        pytest.param(True, id="bool"),
-    ],
-)
-def test_an_unusable_listener_port_is_reported(port: int) -> None:
-    """Validated before anything binds, because binding is the irreversible part."""
-    assert port_problems(port)
-
-
-def test_a_usable_port_has_no_problems() -> None:
-    """The positive case."""
-    assert port_problems(9_464) == ()
-
-
-def test_the_loopback_address_is_the_only_one_declared() -> None:
-    """The library's own default is `0.0.0.0`, which is every interface.
-
-    GLOBIN declares one address as a constant and exposes no setting that could
-    widen it, so the absence of an address parameter is the security posture.
+    `start_loopback_listener` and the `server` field are both gone. This asserts
+    their absence rather than a `False` value, because a field that could hold a
+    server is a field somebody could set.
     """
-    assert LOOPBACK_ADDRESS == "127.0.0.1"
+    publisher = prometheus_publisher()
+    assert not hasattr(publisher, "server")
+    assert not hasattr(publisher, "listening")
+    assert not hasattr(telemetry_prometheus, "start_loopback_listener")
 
 
 # ---------------------------------------------------------------------------
@@ -551,55 +531,150 @@ def test_a_publisher_that_cannot_render_reports_a_temporary_failure() -> None:
     assert publisher.offer(malformed) is ExportOutcome.TEMPORARY_FAILURE
 
 
-class Server:
-    """A listener that records its shutdown."""
+def test_closing_a_publisher_releases_nothing_and_is_safe() -> None:
+    """Idempotent and empty, because this publisher holds no resource.
 
-    def __init__(self) -> None:
-        """Start with nothing recorded."""
-        self.stopped = 0
-
-    def shutdown(self) -> None:
-        """Record one shutdown."""
-        self.stopped += 1
-
-
-class Angry:
-    """A listener that refuses to shut down."""
-
-    def shutdown(self) -> None:
-        """Raise instead of stopping.
-
-        Raises:
-            RuntimeError: Always.
-        """
-        message = "the server refused"
-        raise RuntimeError(message)
-
-
-def test_closing_a_publisher_shuts_a_listener_down_once() -> None:
-    """Idempotent, because shutdown paths call close more than once."""
-    server = Server()
-    publisher = PrometheusPublisher(registry=None, server=server)
-    assert publisher.listening
-    publisher.close()
-    publisher.close()
-    assert server.stopped == 1
-    assert not publisher.listening
-
-
-def test_a_listener_whose_shutdown_raises_is_contained() -> None:
-    """A teardown that raised would turn a clean run into a failed one."""
-    PrometheusPublisher(registry=None, server=Angry()).close()
-
-
-def test_an_unusable_port_is_refused_before_anything_binds() -> None:
-    """Binding is the irreversible part, so validation happens first.
-
-    No socket is opened here, and the offline guard would not have caught one if
-    it were: it blocks outbound connections rather than listeners. That gap is
-    exactly why the port is validated before `start_http_server` is reached.
+    Phase 026's version shut a listener down. There is no listener here any more:
+    `start_loopback_listener` was retired with Phase 027, and
+    `adapters/diagnostics_http.py` owns the one socket GLOBIN opens. What is asserted
+    is that calling it twice is still safe, because every shutdown path does.
     """
     publisher = PrometheusPublisher(registry=None)
-    with pytest.raises(ValueError, match="outside"):
-        start_loopback_listener(publisher, 80)
-    assert not publisher.listening
+    publisher.close()
+    publisher.close()
+    assert publisher.latest == ""
+
+
+# ---------------------------------------------------------------------------
+# The OpenMetrics encoder, which is where the two formats stop agreeing
+# ---------------------------------------------------------------------------
+
+
+def _one_family(
+    name: str, kind: str, points: list[dict[str, object]], **extra: object
+) -> dict[str, object]:
+    """One snapshot document carrying a single family."""
+    return {"families": [{"name": name, "kind": kind, "points": points, **extra}]}
+
+
+def test_an_openmetrics_exposition_always_ends_with_the_terminator() -> None:
+    """*"Expositions MUST end with EOF"* — including an exposition of nothing.
+
+    The empty case is the one worth asserting: a renderer that returned `""` for an
+    empty registry would be producing an invalid document rather than a short one,
+    and the official parser refuses it.
+    """
+    assert render_openmetrics({}).endswith(OPENMETRICS_TERMINATOR)
+    assert render_openmetrics({"families": []}) == OPENMETRICS_TERMINATOR
+
+
+def test_a_counter_family_drops_the_total_suffix_and_its_sample_keeps_it() -> None:
+    """The spec's rule, and the one place the two encoders disagree about a name.
+
+    Leaving `_total` on the family would produce `..._total_total` on the sample.
+    """
+    text = render_openmetrics(
+        _one_family(
+            "globin.telemetry.observations.total",
+            "counter",
+            [{"series": "component=health,result=ok", "value": 3}],
+        )
+    )
+    assert "# TYPE globin_telemetry_observations counter" in text
+    assert 'globin_telemetry_observations_total{component="health",result="ok"} 3' in text
+    assert "_total_total" not in text
+
+
+def test_every_family_carries_a_help_line_the_registry_supplies() -> None:
+    """Phase 026's exposition carried types alone, so a scrape explained nothing."""
+    text = render_openmetrics(
+        _one_family("globin.telemetry.series.active", "gauge", [{"series": "", "value": 1}])
+    )
+    assert "# HELP globin_telemetry_series_active Series currently materialised" in text
+
+
+def test_a_gauge_sample_is_named_exactly_like_its_family() -> None:
+    """Only a counter's sample carries a suffix."""
+    text = render_openmetrics(
+        _one_family("globin.telemetry.series.active", "gauge", [{"series": "", "value": 4}])
+    )
+    assert "globin_telemetry_series_active 4" in text
+
+
+def test_a_histogram_emits_cumulative_buckets_ending_at_positive_infinity() -> None:
+    """The stored counts are per-bucket; the exposition's are cumulative.
+
+    `le="+Inf"` is not optional: it is the sample that makes the last bucket the
+    total, and a histogram without it is one whose total is missing.
+    """
+    text = render_openmetrics(
+        _one_family(
+            "globin.telemetry.snapshot.nanoseconds",
+            "histogram",
+            [{"series": "", "count": 3, "total": 60, "buckets": [1, 0, 1, 1]}],
+            boundaries=[10, 20, 30],
+        )
+    )
+    assert 'globin_telemetry_snapshot_nanoseconds_bucket{le="10"} 1' in text
+    assert 'globin_telemetry_snapshot_nanoseconds_bucket{le="20"} 1' in text
+    assert 'globin_telemetry_snapshot_nanoseconds_bucket{le="30"} 2' in text
+    assert 'globin_telemetry_snapshot_nanoseconds_bucket{le="+Inf"} 3' in text
+    assert "globin_telemetry_snapshot_nanoseconds_count 3" in text
+    assert "globin_telemetry_snapshot_nanoseconds_sum 60" in text
+
+
+def test_no_unit_line_is_emitted_even_for_a_family_that_has_a_unit() -> None:
+    """A deliberate omission, and conformant because the spec's rule is conditional.
+
+    GLOBIN's durations are integer nanoseconds by ADR-0068, so a `# UNIT` line of
+    `s` beside a family named `..._nanoseconds` would be a false claim about its own
+    numbers.
+    """
+    text = render_openmetrics(
+        _one_family(
+            "globin.telemetry.snapshot.nanoseconds",
+            "histogram",
+            [{"series": "", "count": 1, "total": 5, "buckets": [1, 0]}],
+            boundaries=[10],
+        )
+    )
+    assert "# UNIT" not in text
+
+
+def test_a_bucket_list_that_disagrees_with_its_boundaries_emits_no_buckets() -> None:
+    """A malformed point produces a smaller document rather than a wrong one."""
+    text = render_openmetrics(
+        _one_family(
+            "globin.telemetry.snapshot.nanoseconds",
+            "histogram",
+            [{"series": "", "count": 1, "total": 5, "buckets": [1]}],
+            boundaries=[10, 20],
+        )
+    )
+    assert "_bucket" not in text
+    assert "globin_telemetry_snapshot_nanoseconds_count 1" in text
+
+
+def test_an_undeclared_family_is_rendered_by_neither_encoder() -> None:
+    """An exposition comes from the declared table, never from what a document holds."""
+    document = _one_family("globin.invented.total", "counter", [{"series": "", "value": 1}])
+    assert render_openmetrics(document) == OPENMETRICS_TERMINATOR
+    assert render_exposition(document) == ""
+
+
+def test_no_two_families_collide_in_the_openmetrics_spelling() -> None:
+    """The same guard `prometheus_mapping` carries, over a second name derivation.
+
+    Stripping `_total` is a *lossy* transformation, so it can collide where the
+    Prometheus spelling does not: a counter `a.b.total` and a gauge `a.b` would both
+    become `a_b`.
+    """
+    families = [family for _name, family, _kind, _description in openmetrics_mapping()]
+    assert len(set(families)) == len(families), families
+
+
+def test_the_openmetrics_name_of_a_non_counter_is_its_prometheus_name() -> None:
+    """Only a counter's family name differs between the two encoders."""
+    for descriptor in metrics():
+        if descriptor.kind is not MetricKind.COUNTER:
+            assert openmetrics_name(descriptor) == prometheus_name(descriptor)

@@ -22,6 +22,7 @@ from globin.domain.bootstrap import ExitCode
 from globin.domain.clock import Instant, MonotonicReading, instant_from_epoch_millis
 from globin.domain.configuration import (
     DiagnosticsConfig,
+    DiagnosticsHttpConfig,
     GlobinConfig,
     LoggingConfig,
     TelemetryConfig,
@@ -90,6 +91,7 @@ def settings() -> GlobinConfig:
             escalate_millis=ESCALATE_MILLIS,
         ),
         telemetry=TelemetryConfig(),
+        diagnostics_http=DiagnosticsHttpConfig(),
     )
 
 

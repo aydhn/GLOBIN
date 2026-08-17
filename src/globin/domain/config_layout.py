@@ -9,9 +9,17 @@ one — and this module is what finally supplies the paths without breaking it.
 **Nothing here searches.** Given a layout and a profile, the set of candidate
 documents is a pure function of the two. There is no upward walk, no fallback
 chain and no "first one that exists wins", because each of those is a *precedence*
-decision and precedence is Phase 027's question. `adapters/configuration.py` says
-the path is given rather than guessed; this module keeps that sentence true by
-computing spellings rather than by looking anything up.
+decision. `adapters/configuration.py` says the path is given rather than guessed;
+this module keeps that sentence true by computing spellings rather than by looking
+anything up.
+
+**Phase 027 answered the precedence question, and the answer is one function.**
+:func:`precedence` declares the order the four roles fold in, and it is the only
+place that order exists. What did *not* change is
+:meth:`ConfigLayout.documents_for`'s return type: it still hands back a mapping,
+because the *set* of candidates and the *order* they fold in are different facts
+and conflating them is how a reader starts believing a listing order is a
+precedence. Ask `documents_for` what exists; ask :func:`precedence` what wins.
 
 **This module registers a kind, never the instances**, which is `identifiers.py`'s
 discipline applied to a second subject. It states what a profile name may look
@@ -265,7 +273,45 @@ def roles() -> tuple[ConfigRole, ...]:
     performs no call at import, which rules out both ``frozenset({...})`` and
     ``tuple(ConfigRole)``. Declaration order here is a *listing* order for
     documents and tests; it is emphatically not a precedence, which is why
-    :meth:`ConfigLayout.documents_for` returns a mapping.
+    :meth:`ConfigLayout.documents_for` returns a mapping and why
+    :func:`precedence` exists separately.
+    """
+    return (
+        ConfigRole.BASE,
+        ConfigRole.PROFILE,
+        ConfigRole.LOCAL_BASE,
+        ConfigRole.LOCAL_PROFILE,
+    )
+
+
+def precedence() -> tuple[ConfigRole, ...]:
+    """The order the four documents fold in, weakest first.
+
+    Returns:
+        Every role exactly once, weakest first, so the last one that mentions a
+        key wins.
+
+    **This is the whole of Phase 027's document-ordering decision**, and it is one
+    function so that there is one place to read it and one place to change it.
+
+    The order encodes two rules, each with a reason a reader can check:
+
+    * **Specific beats general.** A profile document is chosen deliberately for
+      this run, so it outranks the base document that applies to every run.
+    * **Uncommitted beats committed.** The two `local` documents are the
+      operator's own and are Git-ignored, so they exist precisely to override what
+      the repository ships. If they were folded first they could never override
+      anything and there would be no reason for them.
+
+    Composing the two gives base, profile, local base, local profile — which is
+    :func:`roles`' declaration order. **That coincidence is not the reason**, and
+    the two functions stay separate because of it rather than in spite of it: a
+    later layout that added a role would have to decide where it folds, and a
+    reader who had been told "the listing order is the precedence" would not know
+    that a decision was owed.
+
+    Nothing here says whether a missing document is fatal. That is a property of
+    the *source*, not of the order, and `adapters/configuration.py` answers it.
     """
     return (
         ConfigRole.BASE,
@@ -345,3 +391,49 @@ def resolve_profile(name: str, declared: Sequence[str]) -> str:
     accepted = ", ".join(declared)
     msg = f"{name!r} is not a profile; accepted profiles are {accepted}"
     raise ConfigurationError(msg)
+
+
+def profile_from(
+    *,
+    requested: str | None,
+    environment_value: str | None,
+    declared: Sequence[str],
+    default: str,
+) -> str:
+    """Decide which profile a run uses: from the launcher, the environment, or neither.
+
+    Args:
+        requested: What a launcher argument asked for, or ``None`` when it said
+            nothing. A string of whitespace also counts as saying nothing.
+        environment_value: What the environment asked for, or ``None``.
+        declared: Every profile this installation declares.
+        default: The profile to use when nobody asked.
+
+    Returns:
+        The declared spelling of the selected profile.
+
+    Raises:
+        ConfigurationError: If a selection names no declared profile, or if the
+            default itself is not declared.
+
+    **Launcher beats environment beats default, and that order is the only thing
+    this function decides.** The reasoning is the one every precedence in Phase 027
+    follows: the more deliberate act wins. A launcher argument is a decision taken
+    for this run; an exported variable is a decision taken for a shell and then
+    forgotten about; a default is nobody's decision at all.
+
+    **A selection that names nothing is refused, never defaulted.** A misspelled
+    profile quietly becoming the safe one would be the reassuring half of a bad
+    mechanism — the same mistake in the other direction is a misspelling that
+    quietly becomes ``live``, and refusing both is how one rule covers both. The
+    default is reached only when *nobody asked*, which is a different situation from
+    somebody asking and being wrong.
+
+    This is the profile half of Phase 027's ordering; :func:`precedence` is the
+    document half. They live in one module because a reader who wants to know how a
+    profile reaches a document should not have to find two.
+    """
+    for candidate in (requested, environment_value):
+        if candidate is not None and candidate.strip():
+            return resolve_profile(candidate, declared)
+    return resolve_profile(default, declared)

@@ -134,6 +134,9 @@ a future reader can judge whether the reason still holds.
 | [0067](0067-phase-026-widens-to-deliver-the-telemetry-foundation.md) | Phase 026 widens to deliver the telemetry foundation, and this is the tenth amendment | Accepted |
 | [0068](0068-telemetry-is-provider-neutral-and-cardinality-is-bounded-by-construction.md) | Telemetry is provider-neutral, and cardinality is bounded by construction rather than policed at runtime | Accepted |
 | [0069](0069-configuration-is-derived-rather-than-searched-and-a-profile-names-a-document.md) | Configuration is derived rather than searched, and a profile names a document rather than an environment | Accepted |
+| [0070](0070-phase-027-widens-to-deliver-the-loopback-diagnostics-surface.md) | Phase 027 widens to deliver the loopback diagnostics surface, over the roadmap's own refusal | Accepted |
+| [0071](0071-configuration-precedence-is-declared-and-an-environment-variable-is-a-derived-name.md) | Configuration precedence is one declared order, and an environment variable is a derived name | Accepted |
+| [0072](0072-the-diagnostics-surface-is-loopback-only-read-only-and-bounded-by-construction.md) | The diagnostics surface is loopback-only by type, read-only, and bounded by construction | Accepted |
 
 ## Relationship to other documents
 

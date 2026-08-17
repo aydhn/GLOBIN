@@ -252,6 +252,7 @@ markers = [
     "smoke: the smallest set of checks that would catch a broken tree",
     "slow: takes long enough to be worth deselecting during a tight edit loop",
     "network: requires network access; never permitted below the external level",
+    "loopback: connects to a listener this process started; nothing else is permitted",
     "external: talks to a real external system; skipped by default (Phases 033-048)",
     "windows: depends on behaviour specific to the Windows host",
 ]

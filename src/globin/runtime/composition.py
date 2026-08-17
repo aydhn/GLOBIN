@@ -11,9 +11,10 @@ happens to be installed. Passing it in keeps the dependency visible and lets a
 test point the review at a fixture tree instead. Configuration sources are given
 the same way, for the same reason.
 
-These functions build; they do not choose. Which configuration sources exist and
-in what order they are consulted is Phase 027's decision, and a composition root
-that grew branching logic about *what* to construct would be the failure
+These functions build; they do not choose. Phase 027 answered which configuration
+sources exist and in what order, and the answer is one function --
+:func:`build_config_sources` -- rather than branching spread through the others: a
+composition root that grew logic about *what* to construct would be the failure
 ADR-0015 names in its own risk section.
 """
 
@@ -25,7 +26,7 @@ import types
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO, Final, TextIO
+from typing import IO, Any, Final, TextIO
 
 import globin
 from globin.adapters.architecture import AstModuleImportSource, TomlArchitectureContractSource
@@ -44,6 +45,11 @@ from globin.adapters.bootstrap import (
     write,
 )
 from globin.adapters.clock import SystemClock, SystemMonotonicClock
+from globin.adapters.configuration import (
+    EnvironmentConfigurationSource,
+    OptionalDocumentSource,
+    TomlConfigurationSource,
+)
 from globin.adapters.diagnostics import (
     DIAGNOSTICS_FILE,
     FAULT_FILE_NAME,
@@ -58,6 +64,14 @@ from globin.adapters.diagnostics import (
     StandardLibraryCapture,
     system_hooks,
 )
+from globin.adapters.diagnostics_http import (
+    CachedHealthProjection,
+    DiagnosticsEndpoint,
+    DiagnosticsSnapshotProjection,
+    ReadinessGate,
+    ShutdownLiveness,
+    TelemetryExposition,
+)
 from globin.adapters.health import (
     DiagnosticsStateProbe,
     FilesystemTreeProbe,
@@ -65,6 +79,7 @@ from globin.adapters.health import (
     SystemPlatformProbe,
     SystemThreadProbe,
     TracemallocProbe,
+    snapshot_document,
     system_host_probe,
     system_process_probe,
 )
@@ -92,10 +107,12 @@ from globin.adapters.watchdog import (
 from globin.application.architecture_review import ArchitectureReview
 from globin.application.bootstrap import BootstrapPipeline
 from globin.application.configuration import ConfigurationResolution
+from globin.application.diagnostics_http import DiagnosticsService
 from globin.application.health import HealthCollector
 from globin.application.lifecycle import Lifecycle
 from globin.application.observability import Logger
 from globin.application.support import BundleBuilder, Candidate
+from globin.application.telemetry import MetricStore, metric_store
 from globin.application.watchdog import RuntimeWatchdog
 from globin.domain.bootstrap import (
     BootstrapOutcome,
@@ -105,8 +122,19 @@ from globin.domain.bootstrap import (
     RuntimePaths,
 )
 from globin.domain.clock import MonotonicReading
-from globin.domain.config_layout import ConfigLayout, ConfigRole, resolve_profile
-from globin.domain.configuration import GlobinConfig, default_config
+from globin.domain.config_layout import (
+    ConfigLayout,
+    ConfigRole,
+    precedence,
+    profile_from,
+    resolve_profile,
+)
+from globin.domain.configuration import (
+    PROFILE_VARIABLE,
+    GlobinConfig,
+    ResolvedConfig,
+    default_config,
+)
 from globin.domain.diagnostics import MAXIMUM_BACKUP_COUNT
 from globin.domain.runtime_state import (
     INSTANCE_FILE,
@@ -120,6 +148,7 @@ from globin.domain.watchdog import WatchdogEpisode
 from globin.errors import ConfigurationError
 from globin.ports.clock import Clock, MonotonicClock
 from globin.ports.configuration import ConfigurationSource
+from globin.ports.runtime_state import ShutdownSignals
 from globin.ports.serialization import Codec
 from globin.ports.watchdog import ProcessTerminator
 
@@ -169,10 +198,13 @@ is not a profile.
 
 **`paper`, and it must never be `live`.** ADR-0006's "never downgraded to
 production" read in the other direction means never silently *upgraded* to it
-either, and a default is the quietest upgrade there is. Phase 027 owns how a real
-selection arrives -- environment variable, launcher argument, precedence between
-them -- and until then this is what the instance record and every health snapshot
-carry."""
+either, and a default is the quietest upgrade there is.
+
+Phase 027 built the selection this was waiting for: :func:`resolve_run_profile`
+orders a launcher argument above `GLOBIN_PROFILE` above this value. What did not
+change is that a *misspelled* selection never lands here — `profile_from` refuses an
+undeclared name rather than falling back, so this is reached only when nobody
+asked."""
 
 
 def build_architecture_review(repo_root: Path) -> ArchitectureReview:
@@ -217,6 +249,26 @@ def build_configuration(sources: Sequence[ConfigurationSource] | None = None) ->
     :func:`build_architecture_review` has.
     """
     return ConfigurationResolution(sources=() if sources is None else tuple(sources)).run()
+
+
+def resolve_settings(sources: Sequence[ConfigurationSource] | None = None) -> ResolvedConfig:
+    """Fold the same sources :func:`build_configuration` folds, without validating.
+
+    Args:
+        sources: Weakest first, strongest last.
+
+    Returns:
+        The resolved settings, each carrying the origin that set it.
+
+    Raises:
+        ConfigurationError: If a source could not produce a layer.
+
+    For the one caller that needs both the model and the settings behind it: a health
+    snapshot carries a fingerprint over what was configured, and taking that
+    fingerprint from a separate resolution would let it describe a configuration the
+    process is not running on.
+    """
+    return ConfigurationResolution(sources=() if sources is None else tuple(sources)).resolved()
 
 
 def build_config_layout() -> ConfigLayout:
@@ -279,6 +331,96 @@ def resolve_declared_profile(name: str) -> str:
     argument rather than reading anything.
     """
     return resolve_profile(name, PROFILES)
+
+
+def resolve_run_profile(
+    requested: str | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> str:
+    """Which profile this run uses, from the launcher, the environment or the default.
+
+    Args:
+        requested: What a launcher argument asked for, or ``None``.
+        environment: The variables to read, defaulting to this process's own.
+
+    Returns:
+        The declared spelling of the selected profile.
+
+    Raises:
+        ConfigurationError: If a selection names no declared profile.
+
+    Supplies :data:`PROFILES` and :data:`DEFAULT_PROFILE` to
+    :func:`~globin.domain.config_layout.profile_from`, which owns the order. The
+    domain bounds the shape and decides the precedence; this function owns the *set*
+    and the default, which is the division :func:`resolve_declared_profile` already
+    draws.
+
+    The environment is read here rather than in the domain because :mod:`os` is
+    I/O-capable, which is the same reason :func:`build_runtime_state` takes one.
+    """
+    variables = system_environment() if environment is None else environment
+    return profile_from(
+        requested=requested,
+        environment_value=variables.get(PROFILE_VARIABLE),
+        declared=PROFILES,
+        default=DEFAULT_PROFILE,
+    )
+
+
+def build_config_sources(
+    repo_root: Path | None,
+    profile: str,
+    environment: Mapping[str, str] | None = None,
+    layout: ConfigLayout | None = None,
+) -> tuple[ConfigurationSource, ...]:
+    """Every configuration source, weakest first.
+
+    Args:
+        repo_root: The discovered project root, or ``None`` when there is none — an
+            installed ``globin`` run from somewhere else has no repository to read
+            documents out of.
+        profile: The resolved profile, which decides which two of the four documents
+            are named.
+        environment: The variables to read, defaulting to this process's own.
+        layout: The layout to read, defaulting to the declared one.
+
+    Returns:
+        The sources in the order :func:`~globin.domain.configuration.resolve` folds
+        them, with the environment last.
+
+    **This function is Phase 027's answer, assembled in one place.** The document
+    order is :func:`~globin.domain.config_layout.precedence`'s and is not restated
+    here; what this adds is where the environment sits relative to those documents,
+    and it sits **above all of them**. The reasoning is the one the whole phase
+    follows: a variable is set for this invocation and a committed document is set
+    for every invocation, so the narrower act wins. It is also the only source an
+    operator can use without write access to the tree, which is what makes it the
+    right lever for a one-off.
+
+    **Every document is optional; the environment is not.** A missing file means the
+    operator did not write one, so it contributes an empty layer through
+    :class:`~globin.adapters.configuration.OptionalDocumentSource`. There is no
+    equivalent absence for the environment — a process always has one, possibly
+    empty — so it is read directly and an unrecognised ``GLOBIN_`` variable is
+    refused rather than skipped.
+
+    **With no project root there are no documents at all**, and that is reported by
+    returning only the environment source rather than by raising. An installed
+    GLOBIN running outside a checkout is a supported situation, and the honest
+    consequence is that it runs on declared defaults plus whatever the environment
+    says.
+
+    No file is opened here. Each source records its path and reads it when the
+    resolution runs.
+    """
+    variables = system_environment() if environment is None else environment
+    declared = build_config_layout() if layout is None else layout
+    documents: list[ConfigurationSource] = []
+    if repo_root is not None:
+        for role in precedence():
+            path = configuration_document(repo_root, role, profile, declared)
+            documents.append(OptionalDocumentSource(TomlConfigurationSource(path), str(path)))
+    return (*documents, EnvironmentConfigurationSource(variables))
 
 
 def build_clock() -> Clock:
@@ -639,6 +781,7 @@ def build_bootstrap(
     start: Path,
     sources: Sequence[ConfigurationSource] | None = None,
     runtime_state: RuntimeState | None = None,
+    profile: str | None = None,
 ) -> Bootstrap:
     """Wire the bootstrap against wherever the project turns out to be.
 
@@ -647,16 +790,25 @@ def build_bootstrap(
             working directory. Passed in rather than read from :func:`os.getcwd`
             so that the search is testable and so that this function keeps the
             property every builder here has: it is told what it cannot know.
-        sources: Configuration sources, weakest first. Until Phase 027 decides
-            which of them exist, the honest answer is none, which resolves to the
-            declared defaults.
+        sources: Configuration sources, weakest first. Defaults to the real chain
+            :func:`build_config_sources` assembles for the resolved profile — the four
+            documents, then the environment.
         runtime_state: The wired mutable tree. Defaults to
             :func:`build_runtime_state`, which is where it comes from in
             production; a test supplies one rooted in a temporary directory so
             that running the suite never touches a real user profile.
+        profile: The resolved profile, which decides which two documents are named.
 
     Returns:
         The wired :class:`Bootstrap`.
+
+    **The default changed in Phase 027, and the old one was a hole rather than a
+    simplification.** Until this phase the honest answer was "no sources", because
+    none existed; the consequence was that `bootstrap check` validated the *declared
+    defaults* rather than the configuration the process would actually run on. A
+    document or a variable that `as_config` refuses would have passed preflight and
+    then failed at start-up — which is the precise inversion of what a fail-closed
+    gate is for. The gate now resolves what a run resolves.
 
     **Unlike every other builder in this module, this one reads the filesystem.**
     The others open nothing because their adapters record a path and read it when
@@ -668,6 +820,8 @@ def build_bootstrap(
     """
     root = find_project_root(start.resolve())
     state = build_runtime_state() if runtime_state is None else runtime_state
+    selected = resolve_run_profile() if profile is None else profile
+    chain = build_config_sources(root, selected) if sources is None else tuple(sources)
     return Bootstrap(
         pipeline=BootstrapPipeline(
             baseline=TomlRuntimeBaselineSource(
@@ -690,7 +844,7 @@ def build_bootstrap(
             state=state.store,
             lock=state.lock,
             layout=state.layout,
-            configuration_sources=() if sources is None else tuple(sources),
+            configuration_sources=tuple(chain),
         ),
         root=root,
         paths=RuntimePaths(),
@@ -1056,3 +1210,135 @@ def _watchdog_publisher(state: RuntimeState) -> Callable[[Mapping[str, object]],
         state.store.publish(RuntimeArea.STATE, WATCHDOG_FILE, document)
 
     return publish
+
+
+def build_metric_store(logger: Logger | None = None) -> MetricStore:
+    """The one registry every measurement is recorded into.
+
+    Args:
+        logger: Where a dropped observation is announced. Defaults to one writing to
+            standard error.
+
+    Returns:
+        The store, which satisfies both telemetry ports at once.
+
+    **One store, and this is the function that makes "one" true.** Phase 026 built the
+    store and the two ports but wired neither, so nothing in the product had a
+    registry; a phase wanting to record something would have constructed its own, and
+    two registries is two answers to "what has this process measured". Phase 027 needs
+    a registry for the diagnostics surface, so it builds the shared one rather than a
+    private one.
+
+    It records and exports nothing. No pump, no thread, no exporter — those stay
+    ADR-0068's "off is an object graph rather than a flag", and a later phase that wants
+    delivery builds it beside this rather than inside it.
+    """
+    return metric_store(build_logger() if logger is None else logger)
+
+
+def build_diagnostics_endpoint(
+    state: RuntimeState,
+    signals: ShutdownSignals,
+    *,
+    run_id: str,
+    correlation_id: str,
+    config: GlobinConfig | None = None,
+    store: MetricStore | None = None,
+    logger: Logger | None = None,
+    clock: Clock | None = None,
+    monotonic: MonotonicClock | None = None,
+    started: MonotonicReading | None = None,
+    version: str = "",
+    profile: str = DEFAULT_PROFILE,
+    config_fingerprint_value: str = "",
+    context_fingerprint: str = "",
+    spawn: Callable[..., Any] | None = None,
+) -> tuple[DiagnosticsEndpoint, ReadinessGate]:
+    """The diagnostics surface, wired to this runtime and **not started**.
+
+    Args:
+        state: The runtime tree the health collector reads.
+        signals: Where a stop request arrives, which is what liveness and readiness
+            both read.
+        run_id: Which run this is.
+        correlation_id: The run's correlation identifier.
+        config: Where the settings come from.
+        store: The metric registry. Defaults to a fresh one, which is right for a
+            command and wrong for a run — a run passes the shared store so that what
+            the surface reports is what the process measured.
+        logger: Where its records go.
+        clock: The wall clock, for snapshot stamps.
+        monotonic: The clock durations and uptime are measured on.
+        started: The reading taken when the process started.
+        version: This GLOBIN's version, for the health document.
+        profile: The resolved profile.
+        config_fingerprint_value: A digest over the resolved configuration.
+        context_fingerprint: The bootstrap's own fingerprint.
+        spawn: How a thread is created. Substituted in tests.
+
+    Returns:
+        The endpoint and the readiness gate. **Two values, because the caller needs
+        both**: the endpoint is started and stopped, and the gate is what the run
+        advances once its start-up has finished. Returning only the endpoint would
+        leave a process that can never report itself ready.
+
+    Raises:
+        ValidationError: If the configured address is not loopback, or a bound is
+            outside its permitted range. Raised **here**, before a socket exists, which
+            is what makes the surface fail closed: there is no path on which an invalid
+            configuration produces a listening server.
+
+    **This binds nothing.** Building the graph opens no socket;
+    :meth:`~globin.adapters.diagnostics_http.DiagnosticsEndpoint.start` does, and only
+    when a caller asks. A caller that finds ``config.diagnostics_http.enabled`` false
+    should not call this at all — but calling it and never starting it is also safe,
+    which is the property every builder in this module has.
+    """
+    settings = default_config() if config is None else config
+    surface = settings.diagnostics_http
+    policy = surface.policy()
+    records = build_logger(config=settings) if logger is None else logger
+    wall = build_clock() if clock is None else clock
+    ticks = build_monotonic_clock() if monotonic is None else monotonic
+    origin = ticks.reading() if started is None else started
+    registry = build_metric_store(records) if store is None else store
+    collector = build_health_collector(
+        state, config=settings, logger=records, clock=wall, monotonic=ticks, started=origin
+    )
+    health = CachedHealthProjection(
+        take=lambda: snapshot_document(
+            collector.snapshot(
+                correlation_id=correlation_id,
+                run_id=run_id,
+                version=version,
+                profile=profile,
+                config_fingerprint=config_fingerprint_value,
+                context_fingerprint=context_fingerprint,
+            )
+        ),
+        monotonic=ticks,
+    )
+    exposition = TelemetryExposition(
+        source=registry, clock=wall, monotonic=ticks, started=origin, run_id=run_id
+    )
+    gate = ReadinessGate(signals=signals)
+    service = DiagnosticsService(
+        surface=surface,
+        liveness=ShutdownLiveness(signals=signals),
+        readiness=gate,
+        health=health,
+        snapshot=DiagnosticsSnapshotProjection(health=health, exposition=exposition),
+        exposition=exposition,
+        recorder=registry,
+        logger=records,
+        monotonic=ticks,
+    )
+    endpoint = DiagnosticsEndpoint(
+        service=service,
+        policy=policy,
+        recorder=registry,
+        logger=records,
+        workers=[],
+        spawn=threading.Thread if spawn is None else spawn,
+    )
+    return endpoint, gate

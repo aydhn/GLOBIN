@@ -26,6 +26,7 @@ is what lets ``tests/contract/test_quality_contract.py`` assert that the CI
 profile is actually reproducible instead of trusting a comment.
 """
 
+import ipaddress
 import os
 import socket
 from collections.abc import Iterator
@@ -44,11 +45,27 @@ from tests.support import (
     taxonomy_level,
 )
 
-#: Markers whose tests are permitted to open a socket. Both are empty today:
-#: no test carries either, and the external level does not exist until Phases
-#: 033-048. The opt-out is written now so that the guard has a documented door
-#: rather than acquiring an undocumented one later, under deadline.
+#: Markers whose tests are permitted to open *any* connection. The external level
+#: does not exist until Phases 033-048, and ``network``'s own registration says it
+#: is "never permitted below the external level" — so the only test carrying either
+#: today is the one in ``tests/contract/test_isolation_contract.py`` that proves the
+#: door works. The opt-out was written before anything needed it so that the guard
+#: had a documented door rather than acquiring an undocumented one later.
 NETWORK_PERMITTED_MARKERS: Final[frozenset[str]] = frozenset({"external", "network"})
+
+#: The marker whose tests may connect to loopback, and to nothing else.
+#:
+#: Added in Phase 027, which built a loopback HTTP surface and therefore needed
+#: tests that make a real request to it. The guard already permitted ``bind`` and
+#: ``listen``; what it refused was the client half, so an end-to-end test of a local
+#: server was impossible without opting out of the guard entirely.
+#:
+#: **Narrowing rather than opting out is the whole point.** ``network`` would have
+#: removed the guarantee for those tests, and its own registered description forbids
+#: it below the external level anyway. This keeps the guarantee that matters — no
+#: test reaches another machine — while permitting the one thing a local surface
+#: needs. A ``loopback``-marked test that tried to reach a real service still fails.
+LOOPBACK_PERMITTED_MARKER: Final[str] = "loopback"
 
 #: Environment variables pytest maintains itself, which therefore change during
 #: a test without any test having changed them. ``PYTEST_CURRENT_TEST`` is
@@ -175,6 +192,14 @@ def block_network(request: pytest.FixtureRequest) -> Iterator[None]:
     connecting, so blocking the connection is sufficient and blocking DNS as well
     would only produce a less specific message.
 
+    **``bind`` and ``listen`` were never blocked, and Phase 027 is when that
+    mattered.** The guard defends against reaching *out*; a test that opens a
+    listening socket on this machine reaches nothing. What it could not previously
+    do was connect to its own listener, which made an end-to-end test of a local
+    HTTP surface impossible. The ``loopback`` marker permits exactly that and
+    nothing more: a marked test connecting to anything that is not a loopback
+    address still fails, so the guarantee is narrowed rather than lifted.
+
     Subprocesses are unaffected — this patches sockets in this interpreter only.
     Nothing in the suite spawns a process that wants the network, and a test that
     did would be an integration or external test rather than one of these.
@@ -188,30 +213,74 @@ def block_network(request: pytest.FixtureRequest) -> Iterator[None]:
     to remove. Saving and restoring by hand keeps ``monkeypatch`` out of the
     autouse chain, so it stays where a test put it and unwinds first.
     """
-    if NETWORK_PERMITTED_MARKERS.intersection(mark.name for mark in request.node.iter_markers()):
+    markers = {mark.name for mark in request.node.iter_markers()}
+    if NETWORK_PERMITTED_MARKERS.intersection(markers):
         yield
         return
+    permit_loopback = LOOPBACK_PERMITTED_MARKER in markers
 
-    def refuse(*_args: object, **_kwargs: object) -> NoReturn:
+    def refuse(target: object) -> NoReturn:
         pytest.fail(
-            "this test tried to open a network connection, which the default "
-            "test suite forbids (docs/TESTING_STRATEGY.md). Represent the remote "
-            "side with a local test double, or mark the test `external`.",
+            f"this test tried to connect to {target!r}, which the default test suite "
+            "forbids (docs/TESTING_STRATEGY.md). Represent the remote side with a "
+            "local test double, mark the test `loopback` if the target really is this "
+            "machine, or mark it `external`.",
             pytrace=False,
         )
 
     connect = socket.socket.connect
     connect_ex = socket.socket.connect_ex
     create_connection = socket.create_connection
-    socket.socket.connect = refuse  # type: ignore[method-assign]
-    socket.socket.connect_ex = refuse  # type: ignore[method-assign]
-    socket.create_connection = refuse
+
+    def guarded(original: object) -> object:
+        """Wrap a bound-method connector so loopback may pass and nothing else may."""
+
+        def call(self: object, address: object, *args: object, **kwargs: object) -> object:
+            if permit_loopback and _is_loopback(address):
+                return original(self, address, *args, **kwargs)  # type: ignore[operator]
+            refuse(address)
+
+        return call
+
+    def guarded_create(address: object, *args: object, **kwargs: object) -> object:
+        """Wrap :func:`socket.create_connection`, whose first argument is the target."""
+        if permit_loopback and _is_loopback(address):
+            return create_connection(address, *args, **kwargs)  # type: ignore[arg-type]
+        refuse(address)
+
+    socket.socket.connect = guarded(connect)  # type: ignore[method-assign,assignment]
+    socket.socket.connect_ex = guarded(connect_ex)  # type: ignore[method-assign,assignment]
+    socket.create_connection = guarded_create  # type: ignore[assignment]
     try:
         yield
     finally:
         socket.socket.connect = connect  # type: ignore[method-assign]
         socket.socket.connect_ex = connect_ex  # type: ignore[method-assign]
         socket.create_connection = create_connection
+
+
+def _is_loopback(address: object) -> bool:
+    """Whether a connect target is on this machine.
+
+    Args:
+        address: Whatever was passed to a connector.
+
+    Returns:
+        Whether it is a loopback address.
+
+    **The host is parsed, not compared.** Reusing
+    :func:`~globin.domain.diagnostics_http.address_problems` would import the product
+    into the guard, so this parses directly — but for the same reason: a denylist of
+    spellings has to be complete, and ``is_loopback`` is a property of the parsed
+    address. A target this cannot make sense of is **not** loopback, so an unfamiliar
+    address family is refused rather than waved through.
+    """
+    if not isinstance(address, tuple) or not address:
+        return False
+    try:
+        return ipaddress.ip_address(str(address[0])).is_loopback
+    except ValueError:
+        return False
 
 
 @pytest.fixture(scope="session")

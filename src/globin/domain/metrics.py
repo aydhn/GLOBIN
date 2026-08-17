@@ -25,6 +25,11 @@ from itertools import pairwise
 from typing import Final
 
 from globin.domain.clock import Duration, Instant
+from globin.domain.diagnostics_http import (
+    rejection_reason_values,
+    route_values,
+    status_class_values,
+)
 from globin.domain.telemetry import (
     MAXIMUM_METRIC_VALUE,
     AttributeDomain,
@@ -740,11 +745,24 @@ def metrics() -> tuple[MetricDescriptor, ...]:
     A function rather than a module-level tuple because constructing a dataclass
     is a call and a layer package performs none at import.
 
-    **These describe telemetry itself and nothing else.** A descriptor named after
-    a capability GLOBIN does not have would be a claim that somebody is working on
-    it — `REPOSITORY_LAYOUT.md`'s rule about directories, applied to a registry.
-    Market data, orders and strategies get theirs from the phases that build them.
+    **Every descriptor names a capability GLOBIN has.** A descriptor named after one
+    it does not would be a claim that somebody is working on it —
+    `REPOSITORY_LAYOUT.md`'s rule about directories, applied to a registry. Phase 026
+    declared four, about telemetry itself; Phase 027 added five, about the
+    diagnostics surface it built. Market data, orders and strategies get theirs from
+    the phases that build them.
+
+    **The five diagnostics families spend their cardinality deliberately, and every
+    budget is arithmetic rather than a round number.** Each is the exact product of
+    its own attribute domains, so a family cannot produce a series its declaration
+    did not predict, and adding a route changes both numbers in one edit. The
+    dimensions a remote party could otherwise choose — path, query, address, header —
+    are absent by construction: what is recorded is the *route enum*, whose
+    unrecognised member is the single value ``unknown``.
     """
+    diagnostics_routes = route_values()
+    status_classes = status_class_values()
+    rejection_reasons = rejection_reason_values()
     return (
         MetricDescriptor(
             name="globin.telemetry.observations.total",
@@ -775,6 +793,49 @@ def metrics() -> tuple[MetricDescriptor, ...]:
             unit=MetricUnit.SECONDS,
             description="How long producing a telemetry snapshot took.",
             boundaries=DEFAULT_SECOND_BOUNDARIES,
+        ),
+        MetricDescriptor(
+            name="globin.diagnostics.http.requests.total",
+            kind=MetricKind.COUNTER,
+            unit=MetricUnit.COUNT,
+            description="Diagnostics requests answered, by route and status class.",
+            attributes=(
+                AttributeDomain("route", diagnostics_routes),
+                AttributeDomain("status_class", status_classes),
+            ),
+            cardinality_budget=len(diagnostics_routes) * len(status_classes),
+        ),
+        MetricDescriptor(
+            name="globin.diagnostics.http.request.nanoseconds",
+            kind=MetricKind.HISTOGRAM,
+            unit=MetricUnit.SECONDS,
+            description="How long answering a diagnostics request took, by route.",
+            attributes=(AttributeDomain("route", diagnostics_routes),),
+            boundaries=DEFAULT_SECOND_BOUNDARIES,
+            cardinality_budget=len(diagnostics_routes),
+        ),
+        MetricDescriptor(
+            name="globin.diagnostics.http.inflight",
+            kind=MetricKind.GAUGE,
+            unit=MetricUnit.COUNT,
+            description="Diagnostics requests in flight right now.",
+            cardinality_budget=1,
+        ),
+        MetricDescriptor(
+            name="globin.diagnostics.http.rejected.total",
+            kind=MetricKind.COUNTER,
+            unit=MetricUnit.COUNT,
+            description="Diagnostics requests refused, by the rule that refused them.",
+            attributes=(AttributeDomain("reason", rejection_reasons),),
+            cardinality_budget=len(rejection_reasons),
+        ),
+        MetricDescriptor(
+            name="globin.diagnostics.http.response.bytes.total",
+            kind=MetricKind.COUNTER,
+            unit=MetricUnit.BYTES,
+            description="Bytes of diagnostics response body sent, by route.",
+            attributes=(AttributeDomain("route", diagnostics_routes),),
+            cardinality_budget=len(diagnostics_routes),
         ),
     )
 

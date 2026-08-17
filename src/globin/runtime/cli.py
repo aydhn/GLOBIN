@@ -36,39 +36,50 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TextIO
 
-from globin.adapters.bootstrap import build
+from globin.adapters.bootstrap import build, find_project_root
 from globin.adapters.health import snapshot_document
 from globin.adapters.identifiers import new_run_id
 from globin.adapters.observability import new_correlation_id
 from globin.adapters.telemetry_otel import opentelemetry_bridge
-from globin.adapters.telemetry_prometheus import LOOPBACK_ADDRESS, prometheus_publisher
+from globin.adapters.telemetry_prometheus import prometheus_publisher
 from globin.domain.bootstrap import BootstrapOutcome, CheckStatus, ExitCode
 from globin.domain.configuration import (
+    DiagnosticsHttpConfig,
     GlobinConfig,
+    as_config,
     config_fingerprint,
-    default_layer,
-    resolve,
+)
+from globin.domain.diagnostics_http import SCHEMA as ENDPOINT_SCHEMA
+from globin.domain.diagnostics_http import SCHEMA_VERSION as ENDPOINT_SCHEMA_VERSION
+from globin.domain.diagnostics_http import (
+    DiagnosticsRoute,
+    ExpositionFormat,
+    address_problems,
+    content_type_for,
+    policy_problems,
+    route_paths,
 )
 from globin.domain.health import RuntimeHealthSnapshot, RuntimeHealthState
 from globin.domain.metrics import declared_series, metrics
 from globin.domain.runtime_state import RuntimeArea
-from globin.errors import GlobinError
+from globin.errors import ConfigurationError, GlobinError
 from globin.project_contract import PROJECT_NAME
 from globin.runtime.composition import (
     BUNDLE_MANIFEST_MEMBER,
     BUNDLE_REPORT_MEMBER,
-    DEFAULT_PROFILE,
     WATCHDOG_FILE,
     Bootstrap,
     RuntimeState,
     build_bootstrap,
     build_bundle_builder,
-    build_configuration,
+    build_config_sources,
     build_health_collector,
     build_logger,
     build_runtime_state,
     bundle_candidates,
     project_identity,
+    resolve_run_profile,
+    resolve_settings,
 )
 
 DOCTOR: Final[str] = "doctor"
@@ -84,8 +95,27 @@ WATCHDOG: Final[str] = "watchdog"
 
 TELEMETRY: Final[str] = "telemetry"
 """Report what telemetry would record and whether any of it leaves. Reads only."""
+
+ENDPOINT: Final[str] = "endpoint"
+"""Report the diagnostics surface's configuration and bounds. Binds nothing.
+
+**It does not start a server**, which is why it can be run beside a running GLOBIN
+and why `doctor` may reach the same report. A command that bound a socket in order
+to describe one would compete with the process it was asked to describe, and could
+fail for the single reason — the port is already taken — that means everything is
+working.
+"""
+
 VERSION: Final[str] = "--version"
 JSON_FLAG: Final[str] = "--json"
+PROFILE_FLAG: Final[str] = "--profile"
+"""Which configuration profile this run uses.
+
+The launcher half of Phase 027's selection, and the strongest of the three sources:
+above `GLOBIN_PROFILE`, which is above the declared default. Accepted by every
+command that resolves configuration, because a report about a profile other than the
+one a launcher would use would be a report about a different process.
+"""
 HELP_WORDS: Final[tuple[str, ...]] = ("-h", "--help")
 """Both spellings of the help request.
 
@@ -103,6 +133,7 @@ DIAGNOSTICS_SUBCOMMANDS: Final[tuple[str, ...]] = (
     MEMORY,
     WATCHDOG,
     TELEMETRY,
+    ENDPOINT,
 )
 """What may follow ``diagnostics``. ``snapshot`` is the default.
 
@@ -114,7 +145,7 @@ the deliberate act it is.
 """
 
 USAGE: Final[str] = """usage: globin [--version] [doctor|bootstrap|diagnostics]
-                     [subcommand] [--json]
+                     [subcommand] [--json] [--profile NAME]
 
 GLOBIN's local entry point. It performs no network access of any kind: no
 exchange is contacted, no credential is read and no order is placed. See
@@ -132,10 +163,17 @@ Commands:
   diagnostics telemetry Report what telemetry declares, and whether any of it
                         leaves this machine. Records nothing and binds nothing.
                         Reads; starts no watchdog and changes nothing.
+  diagnostics endpoint  Report the loopback diagnostics surface: whether it is
+                        enabled, where it would bind, which routes answer, and
+                        every bound it runs inside. Binds nothing.
 
 Options:
   --json              Write the machine-readable document to standard output,
                       and nothing else. Human text goes to standard error.
+  --profile NAME      Which configuration profile to resolve. Outranks
+                      GLOBIN_PROFILE, which outranks the declared default.
+                      A name that is not a declared profile is refused, never
+                      quietly replaced by the default.
   --version           Print the version and exit.
   -h, --help          Print this and exit.
 
@@ -177,10 +215,16 @@ class Invocation:
         command: One of ``doctor``, ``bootstrap check``, ``bootstrap evidence``,
             ``--version`` or the help word.
         as_json: Whether the machine-readable document was asked for.
+        profile: The profile a launcher asked for, or an empty string when it said
+            nothing. Empty rather than ``None`` because "not asked for" and "asked
+            for nothing" are the same thing to
+            :func:`~globin.domain.config_layout.profile_from`, and a second spelling
+            of absence would be a second case for every caller to handle.
     """
 
     command: str
     as_json: bool = False
+    profile: str = ""
 
 
 def parse(argv: Sequence[str]) -> Invocation:
@@ -210,7 +254,8 @@ def parse(argv: Sequence[str]) -> Invocation:
         _no_more(words[1:], head)
         return Invocation(command=VERSION)
     if head == DOCTOR:
-        return Invocation(command=DOCTOR, as_json=_json_only(words[1:], DOCTOR))
+        as_json, profile = _options(words[1:], DOCTOR)
+        return Invocation(command=DOCTOR, as_json=as_json, profile=profile)
     if head == BOOTSTRAP:
         return _parse_bootstrap(words[1:])
     if head == DIAGNOSTICS:
@@ -239,39 +284,60 @@ def _parse_bootstrap(rest: Sequence[str]) -> Invocation:
         if subcommand not in BOOTSTRAP_SUBCOMMANDS:
             msg = f"unrecognised argument: {subcommand!r}"
             raise UsageError(msg)
-    as_json = _json_only(words, f"{BOOTSTRAP} {subcommand}")
+    as_json, profile = _options(words, f"{BOOTSTRAP} {subcommand}")
     if as_json and subcommand == EVIDENCE:
         msg = (
             f"{JSON_FLAG} means nothing with {EVIDENCE}, which writes a file; "
             f"use `{BOOTSTRAP} {CHECK} {JSON_FLAG}` to read the same document on standard output"
         )
         raise UsageError(msg)
-    return Invocation(command=f"{BOOTSTRAP} {subcommand}", as_json=as_json)
+    return Invocation(command=f"{BOOTSTRAP} {subcommand}", as_json=as_json, profile=profile)
 
 
-def _json_only(words: Sequence[str], context: str) -> bool:
-    """Accept ``--json`` and nothing else.
+def _options(words: Sequence[str], context: str) -> tuple[bool, str]:
+    """Accept ``--json`` and ``--profile NAME``, and nothing else.
 
     Args:
         words: The remaining words.
         context: What they followed, for the message.
 
     Returns:
-        Whether ``--json`` was given.
+        Whether ``--json`` was given, and the requested profile or an empty string.
 
     Raises:
-        UsageError: If anything else appears, or ``--json`` appears twice.
+        UsageError: If anything else appears, if either option appears twice, or if
+            ``--profile`` is given without a name.
+
+    **The name is not validated here.** Whether a spelling is a declared profile is
+    :func:`~globin.domain.config_layout.profile_from`'s question, and answering it in
+    the parser would put the set of profiles in two places. What this refuses is a
+    *shape* problem: a missing name, or a name that is itself another option — the
+    case that would otherwise silently swallow ``--json`` and leave the caller
+    believing they asked for it.
     """
-    seen = False
-    for word in words:
-        if word != JSON_FLAG:
-            msg = f"unrecognised argument after {context}: {word!r}"
-            raise UsageError(msg)
-        if seen:
-            msg = f"{JSON_FLAG} was given twice"
-            raise UsageError(msg)
-        seen = True
-    return seen
+    remaining = list(words)
+    as_json = False
+    profile = ""
+    while remaining:
+        word = remaining.pop(0)
+        if word == JSON_FLAG:
+            if as_json:
+                msg = f"{JSON_FLAG} was given twice"
+                raise UsageError(msg)
+            as_json = True
+            continue
+        if word == PROFILE_FLAG:
+            if profile:
+                msg = f"{PROFILE_FLAG} was given twice"
+                raise UsageError(msg)
+            if not remaining or remaining[0].startswith("-"):
+                msg = f"{PROFILE_FLAG} needs a profile name"
+                raise UsageError(msg)
+            profile = remaining.pop(0)
+            continue
+        msg = f"unrecognised argument after {context}: {word!r}"
+        raise UsageError(msg)
+    return as_json, profile
 
 
 def _no_more(words: Sequence[str], head: str) -> None:
@@ -377,7 +443,18 @@ def main(
 
     if invocation.command.startswith(DIAGNOSTICS):
         try:
-            return _diagnostics(invocation, out=out, err=err)
+            return _diagnostics(invocation, out=out, err=err, start=start)
+        except ConfigurationError as fault:
+            # Separate from the clause below, and not merely for a nicer sentence.
+            # Since Phase 027 a diagnostics command resolves configuration the way a
+            # real run does, so it can now fail for a reason that has nothing to do
+            # with diagnostics: an undeclared `--profile`, an unreadable document, an
+            # unrecognised `GLOBIN_` variable. Reporting those as 22 would tell a
+            # launcher "no health verdict could be produced" when the truth is
+            # "`bootstrap check` would refuse this configuration too", which is what
+            # 14 already means.
+            print(f"globin: the configuration did not validate: {fault}", file=err)
+            return int(ExitCode.CONFIGURATION_INVALID)
         except (GlobinError, OSError) as fault:
             print(f"globin: the diagnostic could not be produced: {fault}", file=err)
             return int(ExitCode.DIAGNOSTICS_FAILED)
@@ -431,7 +508,10 @@ def _bootstrap(invocation: Invocation, *, out: TextIO, err: TextIO, start: Path 
         OSError: If evidence could not be written.
     """
     wanted_evidence = invocation.command.endswith(EVIDENCE)
-    bootstrap = build_bootstrap(Path.cwd() if start is None else start)
+    bootstrap = build_bootstrap(
+        Path.cwd() if start is None else start,
+        profile=resolve_run_profile(invocation.profile or None),
+    )
     outcome = bootstrap.run(stop_at_first_refusal=invocation.command != DOCTOR)
 
     if invocation.as_json:
@@ -500,14 +580,14 @@ def _parse_diagnostics(rest: Sequence[str]) -> Invocation:
         if subcommand not in DIAGNOSTICS_SUBCOMMANDS:
             msg = f"unrecognised argument: {subcommand!r}"
             raise UsageError(msg)
-    as_json = _json_only(words, f"{DIAGNOSTICS} {subcommand}")
+    as_json, profile = _options(words, f"{DIAGNOSTICS} {subcommand}")
     if as_json and subcommand == BUNDLE:
         msg = (
             f"{JSON_FLAG} means nothing with {BUNDLE}, which writes an archive; "
             f"use `{DIAGNOSTICS} {SNAPSHOT} {JSON_FLAG}` to read the same document"
         )
         raise UsageError(msg)
-    return Invocation(command=f"{DIAGNOSTICS} {subcommand}", as_json=as_json)
+    return Invocation(command=f"{DIAGNOSTICS} {subcommand}", as_json=as_json, profile=profile)
 
 
 def render_snapshot_json(snapshot: RuntimeHealthSnapshot) -> str:
@@ -581,13 +661,17 @@ def exit_code_for_state(state: RuntimeHealthState) -> ExitCode:
     return ExitCode.OK
 
 
-def _diagnostics(invocation: Invocation, *, out: TextIO, err: TextIO) -> int:
-    """Take a snapshot, or build a bundle from one.
+def _diagnostics(
+    invocation: Invocation, *, out: TextIO, err: TextIO, start: Path | None = None
+) -> int:
+    """Take a snapshot, or build a bundle from one, or report a subsystem.
 
     Args:
         invocation: What was asked for.
         out: Where the answer goes.
         err: Where human text goes under ``--json``.
+        start: Where to begin the search for the project root, which decides which
+            configuration documents are read. Defaults to the working directory.
 
     Returns:
         The exit code.
@@ -596,13 +680,26 @@ def _diagnostics(invocation: Invocation, *, out: TextIO, err: TextIO) -> int:
     the runtime tree, probes the lock by acquiring and releasing it, and exits.
     A read-only command that took the production lock would refuse to run beside
     a running GLOBIN, which is the trap ADR-0057 already declined for ``doctor``.
+
+    **Since Phase 027 it resolves configuration the way a real run does** — through
+    the documents the resolved profile names, then the environment — rather than
+    reporting the declared defaults. A diagnostic that described a configuration
+    nobody is running would be worse than no diagnostic, because it would look like
+    one.
     """
     state = build_runtime_state()
-    config = build_configuration()
+    profile = resolve_run_profile(invocation.profile or None)
+    sources = build_config_sources(
+        find_project_root(Path.cwd() if start is None else start), profile
+    )
+    settings = resolve_settings(sources)
+    config = as_config(settings)
     if invocation.command.endswith(WATCHDOG):
         return _watchdog(state, config, invocation, out=out, err=err)
     if invocation.command.endswith(TELEMETRY):
         return _telemetry(config, invocation, out=out, err=err)
+    if invocation.command.endswith(ENDPOINT):
+        return _endpoint(config, invocation, out=out, err=err)
     wants_memory = invocation.command.endswith(MEMORY)
     # Standard error, always. Under `--json` standard output carries the
     # document and nothing else, and a log record printed beside it would
@@ -619,8 +716,8 @@ def _diagnostics(invocation: Invocation, *, out: TextIO, err: TextIO) -> int:
             correlation_id=new_correlation_id(),
             run_id=str(new_run_id()),
             version=_version_string(),
-            profile=DEFAULT_PROFILE,
-            config_fingerprint=config_fingerprint(resolve((default_layer(),))),
+            profile=profile,
+            config_fingerprint=config_fingerprint(settings),
             context_fingerprint="",
             include_memory=wants_memory,
             memory_top=config.diagnostics.tracemalloc_top,
@@ -726,9 +823,6 @@ def _telemetry(
     document: dict[str, object] = {
         "enabled": config.telemetry.enabled,
         "export_enabled": config.telemetry.export_enabled,
-        "listener_enabled": config.telemetry.listener_enabled,
-        "listener_address": LOOPBACK_ADDRESS,
-        "listener_port": config.telemetry.listener_port,
         "queue_capacity": config.telemetry.queue_capacity,
         "batch_size": config.telemetry.batch_size,
         "flush_millis": config.telemetry.flush_millis,
@@ -772,8 +866,7 @@ def _telemetry_text(document: dict[str, object]) -> str:
     lines = [
         f"recording   {'on' if document['enabled'] else 'off'}",
         f"export      {'on' if document['export_enabled'] else 'off'}",
-        f"listener    {'on' if document['listener_enabled'] else 'off'} "
-        f"({document['listener_address']}:{document['listener_port']})",
+        f"scrape      see `{DIAGNOSTICS} {ENDPOINT}`",
     ]
     families = document["metrics"]
     if isinstance(families, list):
@@ -790,6 +883,144 @@ def _telemetry_text(document: dict[str, object]) -> str:
             if isinstance(state, dict):
                 lines.append(f"  {name:<20} {'present' if state['available'] else 'absent'}")
     return chr(10).join(lines) + chr(10)
+
+
+def _endpoint(
+    config: GlobinConfig,
+    invocation: Invocation,
+    *,
+    out: TextIO,
+    err: TextIO,
+) -> int:
+    """Report the diagnostics surface: where it would bind, and inside what bounds.
+
+    Args:
+        config: Where the settings come from.
+        invocation: What was asked for.
+        out: Where the answer goes.
+        err: Where human text goes under ``--json``.
+
+    Returns:
+        :attr:`~globin.domain.bootstrap.ExitCode.OK` when the configuration is
+        usable, and
+        :attr:`~globin.domain.bootstrap.ExitCode.CONFIGURATION_INVALID` when it is
+        not.
+
+    **It binds nothing and starts nothing.** Building the policy is the whole of the
+    work: that is the object a server would be constructed from, so validating it
+    answers "would this start" without anything starting. A command that bound the
+    port to find out could fail for the one reason that means everything is working.
+
+    **The exit code is 14 rather than a new one.** An unusable bind address or an
+    out-of-range bound is a configuration that did not validate, which is exactly
+    what 14 already means and what `bootstrap check` would report for the same
+    document. Code 24 stays free.
+    """
+    surface = config.diagnostics_http
+    document: dict[str, object] = {
+        "schema": ENDPOINT_SCHEMA,
+        "schema_version": ENDPOINT_SCHEMA_VERSION,
+        "enabled": surface.enabled,
+        "bind_host": surface.bind_host,
+        "port": surface.port,
+        "request_timeout_seconds": surface.request_timeout_seconds,
+        "shutdown_timeout_seconds": surface.shutdown_timeout_seconds,
+        "max_concurrent_requests": surface.max_concurrent_requests,
+        "max_response_bytes": surface.max_response_bytes,
+        "health_enabled": surface.health_enabled,
+        "metrics_enabled": surface.metrics_enabled,
+        "diagnostics_snapshot_enabled": surface.diagnostics_snapshot_enabled,
+        "expositions": [
+            {"format": exposition.value, "content_type": content_type_for(exposition)}
+            for exposition in (ExpositionFormat.PROMETHEUS_TEXT, ExpositionFormat.OPENMETRICS_TEXT)
+        ],
+        "routes": [
+            {"path": path, "route": route.value, "answers": _route_answers(surface, route)}
+            for path, route in route_paths()
+        ],
+    }
+    problems = address_problems(surface.bind_host) + policy_problems(
+        port=surface.port,
+        request_timeout_seconds=surface.request_timeout_seconds,
+        shutdown_timeout_seconds=surface.shutdown_timeout_seconds,
+        max_concurrent_requests=surface.max_concurrent_requests,
+        max_response_bytes=surface.max_response_bytes,
+    )
+    document["problems"] = list(problems)
+    document["usable"] = not problems
+    human = _endpoint_text(document)
+    if invocation.as_json:
+        print(json.dumps(document, sort_keys=True, separators=(",", ":")), file=out)
+        print(human, end="", file=err)
+    else:
+        print(human, end="", file=out)
+    return int(ExitCode.OK if not problems else ExitCode.CONFIGURATION_INVALID)
+
+
+def _route_answers(surface: DiagnosticsHttpConfig, route: DiagnosticsRoute) -> bool:
+    """Whether one route would answer under this configuration.
+
+    Args:
+        surface: The resolved settings.
+        route: Which route.
+
+    Returns:
+        Whether a request to it would be served.
+
+    The same reduction :class:`~globin.application.diagnostics_http.DiagnosticsService`
+    performs, and it is deliberately *not* shared with it: this reports what a reader
+    should expect, and that one decides what happens. Two callers of one predicate
+    would make the report a description of itself.
+    """
+    if not surface.enabled:
+        return False
+    if route is DiagnosticsRoute.METRICS:
+        return surface.metrics_enabled
+    if route is DiagnosticsRoute.SNAPSHOT:
+        return surface.diagnostics_snapshot_enabled
+    return surface.health_enabled
+
+
+def _endpoint_text(document: dict[str, object]) -> str:
+    """The human rendering of the endpoint report.
+
+    Args:
+        document: What :func:`_endpoint` assembled.
+
+    Returns:
+        The text, ending in a newline.
+
+    Built from the same mapping the JSON rendering uses, so the two cannot say
+    different things — the property every rendering in this module has.
+    """
+    lines = [
+        f"surface     {'on' if document['enabled'] else 'off'} "
+        f"({document['bind_host']}:{document['port']})",
+        f"  timeouts   request {document['request_timeout_seconds']}s  "
+        f"shutdown {document['shutdown_timeout_seconds']}s",
+        f"  bounds     {document['max_concurrent_requests']} concurrent  "
+        f"{document['max_response_bytes']} bytes",
+    ]
+    routes = document["routes"]
+    if isinstance(routes, list):
+        lines.append("routes")
+        for entry in routes:
+            if isinstance(entry, dict):
+                marker = "answers" if entry["answers"] else "off"
+                lines.append(f"  {entry['path']!s:<24} {marker}")
+    expositions = document["expositions"]
+    if isinstance(expositions, list):
+        lines.append("expositions")
+        for entry in expositions:
+            if isinstance(entry, dict):
+                lines.append(f"  {entry['content_type']}")
+    problems = document["problems"]
+    if isinstance(problems, list) and problems:
+        lines.append("problems")
+        lines.extend(f"  {problem}" for problem in problems)
+    else:
+        lines.append("configuration is usable")
+    return "\n".join(lines) + "\n"
 
 
 def _watchdog_text(document: dict[str, object]) -> str:

@@ -44,6 +44,7 @@ from globin.domain.configuration import (
     DiagnosticsConfig,
     GlobinConfig,
     LoggingConfig,
+    DiagnosticsHttpConfig,
     TelemetryConfig,
     WatchdogConfig,
 )
@@ -64,6 +65,7 @@ config = GlobinConfig(
         escalate_millis=1000,
     ),
     telemetry=TelemetryConfig(),
+    diagnostics_http=DiagnosticsHttpConfig(),
 )
 
 state = build_runtime_state()

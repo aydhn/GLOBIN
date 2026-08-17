@@ -36,6 +36,7 @@ that certifies — and the one criterion it could not — is in
 | When am I finished? | [`docs/engineering/DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md) |
 | Which document wins a conflict? | [`docs/engineering/SOURCE_OF_TRUTH.md`](docs/engineering/SOURCE_OF_TRUTH.md) |
 | Where does this file go? | [`docs/engineering/REPOSITORY_LAYOUT.md`](docs/engineering/REPOSITORY_LAYOUT.md) |
+| How does a running GLOBIN answer questions about itself over HTTP? | [`docs/engineering/DIAGNOSTICS_ENDPOINT.md`](docs/engineering/DIAGNOSTICS_ENDPOINT.md), [ADR-0072](docs/adr/0072-the-diagnostics-surface-is-loopback-only-read-only-and-bounded-by-construction.md) |
 | How do I write documentation? | [`docs/engineering/DOCUMENTATION_STANDARD.md`](docs/engineering/DOCUMENTATION_STANDARD.md) |
 | How is the system structured? | [`docs/architecture/README.md`](docs/architecture/README.md) |
 | Which layer may import which? | [`docs/architecture/dependency-rules.toml`](docs/architecture/dependency-rules.toml) |
@@ -496,12 +497,49 @@ that could exceed its own budget **cannot be constructed**. Every value is an in
 -- durations in nanoseconds, ratios in parts per million -- with a `2**53` ceiling
 that is **not Python's limit** but every other JSON reader's. **Export is off by
 default and "off" is an object graph rather than a flag**: no exporter, queue, pump
-or thread exists, so opening no socket is structural. The Prometheus listener binds
-`127.0.0.1` as a **literal** with no address setting, because the library's own
-default is `0.0.0.0`. Details:
+or thread exists, so opening no socket is structural. Phase 026's scrape listener is **gone** -- it served a registry GLOBIN never populated
+and had no caller; Phase 027's endpoint replaced it. Details:
 [`docs/engineering/RUNTIME_TELEMETRY.md`](docs/engineering/RUNTIME_TELEMETRY.md),
 [`docs/TELEMETRY_POLICY.md`](docs/TELEMETRY_POLICY.md) and
 [`docs/engineering/CONFIGURATION_LAYOUT.md`](docs/engineering/CONFIGURATION_LAYOUT.md).
+
+Phase 027 gave that process a **loopback diagnostics surface**, and gave configuration
+a **precedence**.
+
+```bash
+.venv\Scripts\globin.exe diagnostics endpoint --json
+```
+
+```bash
+.venv\Scripts\globin.exe doctor --profile paper
+```
+
+Configuration now resolves from four documents and then the environment, in a declared
+order: `precedence()` for the documents, `profile_from()` for the profile
+(`--profile` beats `GLOBIN_PROFILE` beats the default), and `build_config_sources()` for
+the chain. **An unrecognised `GLOBIN_` variable is refused**, and a credential-shaped one
+is refused before it is read -- the prefix is what makes a typo detectable. A missing
+document is an empty layer; a document that exists and cannot be read is not.
+**`bootstrap check` now validates what a run will use** rather than the declared
+defaults, so exit `14` arrives at the gate instead of at start-up.
+
+The HTTP surface is **off by default**, and off means no server, socket, queue or worker
+thread exists. Five read-only routes -- `/health/live`, `/health/ready`,
+`/health/runtime`, `/metrics`, `/diagnostics/snapshot` (off again even when the surface
+is on). **The bind address is a value type, not a literal and not a free string**:
+`LoopbackAddress` refuses anything `ipaddress` does not call loopback, so
+`diagnostics_http.bind_host` cannot *hold* a wildcard, a LAN address or a hostname.
+`GET` and `HEAD` only, and `send_error` is overridden because defining two handlers
+leaves the standard library answering every other verb with a **generic HTML page**.
+Negotiation is **total with no 406** -- the scrape protocol's own answer when nothing
+offered is supported is to serve Prometheus text 0.0.4. Exactly **one module** may reach
+a socket, and `tests/architecture/test_library_discipline.py` fails if a second one does
+or if that one spells any address at all. Details:
+[`docs/engineering/DIAGNOSTICS_ENDPOINT.md`](docs/engineering/DIAGNOSTICS_ENDPOINT.md).
+
+**Do not widen the bind address for remote access.** The type will not let you, and the
+supported shape is a separate authenticated, TLS-capable collector that scrapes
+`127.0.0.1` locally -- Phases 280 and 315.
 
 **Four libraries are now absent-safe, not one.** `psutil`, `opentelemetry`,
 `prometheus_client` -- each reached through one factory in one adapter, each with its

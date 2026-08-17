@@ -54,6 +54,20 @@ from globin.domain.diagnostics import (
     MINIMUM_ROTATION_BYTES,
     RotationPolicy,
 )
+from globin.domain.diagnostics_http import (
+    LOOPBACK_IPV4,
+    MAXIMUM_CONCURRENT_REQUESTS,
+    MAXIMUM_PORT,
+    MAXIMUM_RESPONSE_BYTES,
+    MAXIMUM_TIMEOUT_SECONDS,
+    MINIMUM_CONCURRENT_REQUESTS,
+    MINIMUM_PORT,
+    MINIMUM_RESPONSE_BYTES,
+    MINIMUM_TIMEOUT_SECONDS,
+    DiagnosticsHttpPolicy,
+    LoopbackAddress,
+    address_problems,
+)
 from globin.domain.health import (
     MAXIMUM_BUDGET_MILLIS,
     MAXIMUM_FRAME_DEPTH,
@@ -111,12 +125,6 @@ comparing this module against ``CONFIGURATION_POLICY.md`` should expect to find.
 """
 
 WATCHDOG_SECTION: Final[str] = "watchdog"
-
-TELEMETRY_SECTION: Final[str] = "telemetry"
-"""The fourth section, added in Phase 026.
-
-What GLOBIN measures about itself, and whether any of it leaves the machine.
-The default answers are "measure" and "no"."""
 """The section name liveness settings are filed under.
 
 A third section, added in Phase 025, and the smallest of the three on purpose.
@@ -127,11 +135,61 @@ twenty-four frames to thirty-two and ``CONFIGURATION_POLICY.md`` warns that this
 exactly where such fields accumulate.
 """
 
+TELEMETRY_SECTION: Final[str] = "telemetry"
+"""The fourth section, added in Phase 026.
+
+What GLOBIN measures about itself, and whether any of it leaves the machine.
+The default answers are "measure" and "no".
+"""
+
+DIAGNOSTICS_HTTP_SECTION: Final[str] = "diagnostics_http"
+"""The fifth section, added in Phase 027.
+
+Whether GLOBIN answers questions about itself over a socket, and inside what
+bounds. Every switch here defaults **off** or to a value that opens nothing, so a
+default bootstrap has no listener — which is the same posture
+:data:`TELEMETRY_EXPORT_ENABLED` takes and for the same reason.
+
+**Two words rather than one, unlike its four neighbours.** ``diagnostics`` is
+already a section, and ``endpoint`` alone will stop being unambiguous the moment
+Phases 033-048 give GLOBIN exchange endpoints to configure. The section that serves
+health over HTTP should not one day have to be told apart from the section that
+names a venue's base URL.
+"""
+
 DEFAULTS_ORIGIN: Final[str] = "defaults"
 """The origin recorded for values that came from the model's own declarations.
 
 Named rather than left blank so that an error message about a defaulted value
 reads the same way as one about a value from a file.
+"""
+
+ENVIRONMENT_ORIGIN: Final[str] = "environment"
+"""The origin recorded for values that came from environment variables.
+
+A word rather than a path, unlike the four document origins. There is no file to
+open and no line to point at, so the most specific true thing an error message can
+say is which *kind* of source set the value — and it then names the variable, which
+is the part an operator can act on.
+"""
+
+ENVIRONMENT_PREFIX: Final[str] = "GLOBIN_"
+"""What every environment variable GLOBIN reads begins with.
+
+The prefix is what makes an unrecognised variable *detectable*. Without it there
+would be no way to tell "a setting spelled wrongly" from "some other program's
+variable", and the choice would be between ignoring typos and refusing to start
+because of somebody else's ``PATH``.
+"""
+
+PROFILE_VARIABLE: Final[str] = f"{ENVIRONMENT_PREFIX}PROFILE"
+"""The variable that selects a configuration profile.
+
+**Not a setting, and deliberately not in the register.** Which profile is active
+decides *which documents are read*, so it has to be known before any document can
+be opened — a value that could itself be set by one of those documents would be a
+circular definition. It is therefore read from the environment and the launcher
+only, and :func:`profile_from` is where the two are ordered.
 """
 
 MIN_SEVERITY: Final[str] = f"{LOGGING_SECTION}{KEY_SEPARATOR}min_severity"
@@ -210,6 +268,7 @@ TRACEMALLOC_FRAME_DEPTH: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}trac
 """How many frames each traced allocation retains."""
 
 TRACEMALLOC_TOP: Final[str] = f"{DIAGNOSTICS_SECTION}{KEY_SEPARATOR}tracemalloc_top"
+"""How many allocation sites a memory summary reports."""
 
 WATCHDOG_ENABLED: Final[str] = f"{WATCHDOG_SECTION}{KEY_SEPARATOR}enabled"
 
@@ -233,16 +292,6 @@ TELEMETRY_EXPORT_ENABLED: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}expor
 exporter, queue, pump or thread is constructed, so "GLOBIN opens no socket" is a
 property of the object graph rather than of a branch somebody could get wrong."""
 
-TELEMETRY_LISTENER_ENABLED: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}listener_enabled"
-"""Whether a Prometheus scrape endpoint is bound on loopback.
-
-Off by default. There is deliberately no *address* setting: the library's own
-default is `0.0.0.0`, and GLOBIN passes `127.0.0.1` as a literal so no
-configuration value can widen it."""
-
-TELEMETRY_LISTENER_PORT: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}listener_port"
-"""Which loopback port the scrape endpoint uses when it is enabled."""
-
 TELEMETRY_QUEUE_CAPACITY: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}queue_capacity"
 """The most batches held before the queue starts dropping."""
 
@@ -252,11 +301,73 @@ TELEMETRY_BATCH_SIZE: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}batch_siz
 TELEMETRY_FLUSH_MILLIS: Final[str] = f"{TELEMETRY_SECTION}{KEY_SEPARATOR}flush_millis"
 """How often the exporter loop wakes."""
 
-MINIMUM_LISTENER_PORT: Final[int] = 1_024
-"""Below this a listener needs privilege on most hosts."""
+ENDPOINT_ENABLED: Final[str] = f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}enabled"
+"""Whether the diagnostics surface binds a socket at all.
 
-MAXIMUM_LISTENER_PORT: Final[int] = 65_535
-"""The highest addressable port."""
+**Off by default, and the default is the posture.** With it off no server, socket,
+queue or worker thread is constructed, so "GLOBIN is listening on nothing" is a
+property of the object graph rather than of a branch somebody could get wrong.
+"""
+
+ENDPOINT_BIND_HOST: Final[str] = f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}bind_host"
+"""Which loopback address the surface binds.
+
+**A setting, and it still cannot be widened.** Phase 026 refused an address setting
+outright, on the grounds that a configurable address is one typo away from
+publishing this process's internals. That reasoning was right about the danger and
+reached for the wrong instrument: a literal keeps the address safe while making IPv6
+unreachable, and it puts the guarantee in a constant somebody could edit rather than
+in a type. What replaces it is
+:class:`~globin.domain.diagnostics_http.LoopbackAddress`, which refuses anything
+:mod:`ipaddress` does not call loopback — so the *field itself cannot hold* a
+wildcard, a LAN address, or a hostname, and the refusal covers spellings no denylist
+would have thought of. ADR-0072 records the exchange.
+"""
+
+ENDPOINT_PORT: Final[str] = f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}port"
+"""Which port the surface binds."""
+
+ENDPOINT_REQUEST_TIMEOUT_SECONDS: Final[str] = (
+    f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}request_timeout_seconds"
+)
+"""How long one request may occupy a worker before its socket times out."""
+
+ENDPOINT_SHUTDOWN_TIMEOUT_SECONDS: Final[str] = (
+    f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}shutdown_timeout_seconds"
+)
+"""How long in-flight requests are given to finish during an orderly stop."""
+
+ENDPOINT_MAX_CONCURRENT_REQUESTS: Final[str] = (
+    f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}max_concurrent_requests"
+)
+"""How many requests may be in flight at once, which is also the worker count."""
+
+ENDPOINT_MAX_RESPONSE_BYTES: Final[str] = (
+    f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}max_response_bytes"
+)
+"""The largest body the surface will send."""
+
+ENDPOINT_SNAPSHOT_ENABLED: Final[str] = (
+    f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}diagnostics_snapshot_enabled"
+)
+"""Whether the snapshot route answers.
+
+Off by default even when the surface is on, because it is the most detailed thing
+the surface can say about this process and the only one an operator has to opt into
+twice.
+"""
+
+ENDPOINT_METRICS_ENABLED: Final[str] = f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}metrics_enabled"
+"""Whether the scrape route answers."""
+
+ENDPOINT_HEALTH_ENABLED: Final[str] = f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}health_enabled"
+"""Whether the three health routes answer.
+
+A single switch for all three rather than one each. Liveness, readiness and the
+runtime snapshot are what a supervisor asks in sequence, and an installation that
+wanted liveness without readiness would be configuring a supervisor that cannot
+work.
+"""
 
 MINIMUM_QUEUE_CAPACITY: Final[int] = 1
 """A queue of nothing could never deliver."""
@@ -269,7 +380,50 @@ MINIMUM_FLUSH_MILLIS: Final[int] = 100
 
 MAXIMUM_FLUSH_MILLIS: Final[int] = 300_000
 """Five minutes, past which a flush is not a flush."""
-"""How many allocation sites a memory summary reports."""
+
+DEFAULT_ENDPOINT_PORT: Final[int] = 9_464
+"""Which port the diagnostics surface binds by default.
+
+Inherited from the scrape listener Phase 026 declared and never started, rather than
+chosen afresh. It is the port the OpenTelemetry project's own Prometheus exporter
+uses, so a scrape configuration written against any other OpenTelemetry deployment
+already points at it — and reusing the number means the one this repository has
+already documented does not become the one that used to be right.
+"""
+
+DEFAULT_ENDPOINT_REQUEST_TIMEOUT_SECONDS: Final[int] = 5
+"""Five seconds for one request.
+
+Matched to :data:`DEFAULT_BUDGET_MILLIS`, which is the health snapshot's own budget
+and therefore the longest honest answer any route has to produce. A shorter timeout
+would cut off the slowest legitimate request; a longer one would hold a worker past
+the point at which the work should already have finished or failed.
+"""
+
+DEFAULT_ENDPOINT_SHUTDOWN_TIMEOUT_SECONDS: Final[int] = 5
+"""How long in-flight requests get to finish when the process is stopping.
+
+The same five seconds, for the same reason: a request that arrived a moment before
+the stop is entitled to exactly the time a request is ever entitled to, and no more.
+"""
+
+DEFAULT_ENDPOINT_MAX_CONCURRENT_REQUESTS: Final[int] = 4
+"""How many requests may be in flight at once, and therefore how many workers exist.
+
+Four, against a realistic load of one scraper and one supervisor. This surface is
+not a service with users; it answers a handful of pollers on a fixed interval, and a
+number chosen for an imagined crowd would be four threads that exist to be idle.
+Capacity beyond this is refused deterministically rather than queued indefinitely,
+so the honest small number is also the safe one.
+"""
+
+DEFAULT_ENDPOINT_MAX_RESPONSE_BYTES: Final[int] = 1_048_576
+"""One mebibyte.
+
+Comfortably above every document this surface serves — the largest is a health
+snapshot, which is tens of kilobytes — and small enough that a body which somehow
+grew past it is refused while the mistake is still cheap.
+"""
 
 DEFAULT_MINIMUM_FREE_BYTES: Final[int] = 268_435_456
 """256 MiB, below which the runtime filesystem check fails.
@@ -555,24 +709,24 @@ class TelemetryConfig:
     Args:
         enabled: Whether measurements are recorded at all.
         export_enabled: Whether anything is handed to an exporter.
-        listener_enabled: Whether a scrape endpoint is bound on loopback.
-        listener_port: Which loopback port it uses.
         queue_capacity: The most batches held before dropping starts.
         batch_size: The most documents handed over in one attempt.
         flush_millis: How often the exporter loop wakes.
 
-    **Seven settings, and the two that are off by default are the interesting
-    ones.** `enabled` defaults on because recording costs a dictionary write and
-    an unmeasured process cannot explain itself. `export_enabled` and
-    `listener_enabled` default off because each adds a capability GLOBIN otherwise
-    does not have -- reaching the network, and accepting a connection -- and
-    ADR-0003's zero-budget posture plus the offline-by-default rule make silence
-    the right default for both.
+    **Five settings, and the one that is off by default is the interesting one.**
+    `enabled` defaults on because recording costs a dictionary write and an
+    unmeasured process cannot explain itself. `export_enabled` defaults off because
+    it adds a capability GLOBIN otherwise does not have -- reaching the network --
+    and ADR-0003's zero-budget posture plus the offline-by-default rule make silence
+    the right default.
 
-    **There is deliberately no address setting.** `prometheus_client` defaults its
-    bind address to `0.0.0.0`, which is every interface; GLOBIN passes `127.0.0.1`
-    as a literal and exposes nothing that could widen it, so the absence of a
-    setting here is load-bearing rather than an omission.
+    **Phase 026's two `listener_` settings are gone, and this is where they went.**
+    They described a scrape endpoint that nothing ever started, serving a registry
+    GLOBIN never populated. Phase 027 built the endpoint properly, and it serves
+    health as well as metrics, so its settings belong to
+    :class:`DiagnosticsHttpConfig` rather than here. Leaving a second, dormant way
+    to open a socket beside a working one would have been exactly the "second
+    independent source of truth" this repository refuses. ADR-0072 records it.
 
     What is also not here: which exporter to use. That is a parameter to
     `build_telemetry`, because `runtime/composition.py`'s own rule is that these
@@ -582,11 +736,82 @@ class TelemetryConfig:
 
     enabled: bool = True
     export_enabled: bool = False
-    listener_enabled: bool = False
-    listener_port: int = 9_464
     queue_capacity: int = 256
     batch_size: int = 32
     flush_millis: int = 5_000
+
+
+@dataclass(frozen=True, slots=True)
+class DiagnosticsHttpConfig:
+    """Whether GLOBIN answers questions about itself over a socket, and inside what.
+
+    Args:
+        enabled: Whether a socket is bound at all.
+        bind_host: Which loopback address. Validated as a loopback address, so it
+            cannot name anything another machine could reach.
+        port: Which port.
+        request_timeout_seconds: How long one request may occupy a worker.
+        shutdown_timeout_seconds: How long in-flight requests get to finish.
+        max_concurrent_requests: How many requests may be in flight, which is also
+            exactly how many worker threads exist.
+        max_response_bytes: The largest body that will be sent.
+        diagnostics_snapshot_enabled: Whether the snapshot route answers.
+        metrics_enabled: Whether the scrape route answers.
+        health_enabled: Whether the three health routes answer.
+
+    **Ten settings, of which two are switches that default off and five are
+    bounds.** That ratio is the shape of the feature: almost everything an operator
+    may vary here is a limit, because a read-only surface's only real degrees of
+    freedom are where it listens and how much work it will do.
+
+    **`enabled` off by default means the object graph, not a branch.** Nothing in
+    :func:`~globin.runtime.composition.build_diagnostics_endpoint` constructs a
+    server, a socket, a queue or a thread when this is false, so a default
+    bootstrap cannot be listening whatever else is wrong.
+
+    The three route switches are separate from `enabled` because they answer a
+    different question. `enabled` is "may this process be asked anything"; the
+    others are "which of the things it could say is it willing to say". An operator
+    who wants liveness for a supervisor and no metrics for anybody sets them
+    independently, and an installation that wants nothing turns off the one switch
+    above them all.
+    """
+
+    enabled: bool = False
+    bind_host: str = LOOPBACK_IPV4
+    port: int = DEFAULT_ENDPOINT_PORT
+    request_timeout_seconds: int = DEFAULT_ENDPOINT_REQUEST_TIMEOUT_SECONDS
+    shutdown_timeout_seconds: int = DEFAULT_ENDPOINT_SHUTDOWN_TIMEOUT_SECONDS
+    max_concurrent_requests: int = DEFAULT_ENDPOINT_MAX_CONCURRENT_REQUESTS
+    max_response_bytes: int = DEFAULT_ENDPOINT_MAX_RESPONSE_BYTES
+    diagnostics_snapshot_enabled: bool = False
+    metrics_enabled: bool = True
+    health_enabled: bool = True
+
+    def policy(self) -> DiagnosticsHttpPolicy:
+        """The validated bounds a server would run under.
+
+        Returns:
+            The policy.
+
+        Raises:
+            ValidationError: If the address is not loopback, or a bound is outside
+                its permitted range.
+
+        A method rather than a field, matching :meth:`LoggingConfig.rotation` and
+        :meth:`WatchdogConfig.policy`: the section holds what an operator wrote and
+        this turns it into the value type the rest of the system uses. Calling it is
+        also how a caller finds out that a configuration is unusable *before* a
+        socket exists, which is what makes the surface fail closed.
+        """
+        return DiagnosticsHttpPolicy(
+            address=LoopbackAddress(self.bind_host),
+            port=self.port,
+            request_timeout_seconds=self.request_timeout_seconds,
+            shutdown_timeout_seconds=self.shutdown_timeout_seconds,
+            max_concurrent_requests=self.max_concurrent_requests,
+            max_response_bytes=self.max_response_bytes,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -617,6 +842,7 @@ class GlobinConfig:
     diagnostics: DiagnosticsConfig
     watchdog: WatchdogConfig
     telemetry: TelemetryConfig
+    diagnostics_http: DiagnosticsHttpConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -826,7 +1052,47 @@ def known_keys() -> tuple[str, ...]:
         + section_keys(DIAGNOSTICS_SECTION, DiagnosticsConfig)
         + section_keys(WATCHDOG_SECTION, WatchdogConfig)
         + section_keys(TELEMETRY_SECTION, TelemetryConfig)
+        + section_keys(DIAGNOSTICS_HTTP_SECTION, DiagnosticsHttpConfig)
     )
+
+
+def environment_variable(key: str) -> str:
+    """The environment variable that sets one setting.
+
+    Args:
+        key: The dotted setting key.
+
+    Returns:
+        The variable name, prefixed and upper-cased.
+
+    **Derived, never declared, and checked for collisions in both directions.** A
+    hand-written table would be a second place to add a setting and therefore a
+    place to forget one. What derivation costs is the possibility of two keys
+    collapsing onto one name — ``a.b_c`` and ``a_b.c`` both become ``GLOBIN_A_B_C``
+    — and the answer is not to hope: ``tests/contract/test_configuration_contract.py``
+    asserts the map is injective over :func:`known_keys`, so a colliding pair fails
+    the suite instead of silently making one setting unreachable.
+
+    Upper case with underscores because that is what an environment variable looks
+    like on every platform GLOBIN runs on, and because Windows compares variable
+    names case-insensitively — a lower-case scheme would give two spellings of one
+    name on one host and two distinct names on another.
+    """
+    return f"{ENVIRONMENT_PREFIX}{key.replace(KEY_SEPARATOR, '_').upper()}"
+
+
+def environment_names() -> tuple[tuple[str, str], ...]:
+    """Every setting, paired with the variable that sets it.
+
+    Returns:
+        Pairs of ``(variable name, dotted key)``, in :func:`known_keys` order.
+
+    The mapping an environment source reads, in the direction it needs: given a
+    variable, which setting is it. Built from :func:`known_keys` so that a section
+    added to the model is settable from the environment in the same commit, with no
+    second list to update.
+    """
+    return tuple((environment_variable(key), key) for key in known_keys())
 
 
 def default_layer() -> ConfigLayer:
@@ -849,6 +1115,7 @@ def default_layer() -> ConfigLayer:
             **section_defaults(DIAGNOSTICS_SECTION, DiagnosticsConfig),
             **section_defaults(WATCHDOG_SECTION, WatchdogConfig),
             **section_defaults(TELEMETRY_SECTION, TelemetryConfig),
+            **section_defaults(DIAGNOSTICS_HTTP_SECTION, DiagnosticsHttpConfig),
         },
     )
 
@@ -868,6 +1135,7 @@ def default_config() -> GlobinConfig:
         diagnostics=DiagnosticsConfig(),
         watchdog=WatchdogConfig(),
         telemetry=TelemetryConfig(),
+        diagnostics_http=DiagnosticsHttpConfig(),
     )
 
 
@@ -1038,12 +1306,6 @@ def as_config(resolved: ResolvedConfig) -> GlobinConfig:
         telemetry=TelemetryConfig(
             enabled=_flag(resolved.setting(TELEMETRY_ENABLED)),
             export_enabled=_flag(resolved.setting(TELEMETRY_EXPORT_ENABLED)),
-            listener_enabled=_flag(resolved.setting(TELEMETRY_LISTENER_ENABLED)),
-            listener_port=_bounded(
-                resolved.setting(TELEMETRY_LISTENER_PORT),
-                low=MINIMUM_LISTENER_PORT,
-                high=MAXIMUM_LISTENER_PORT,
-            ),
             queue_capacity=_bounded(
                 resolved.setting(TELEMETRY_QUEUE_CAPACITY),
                 low=MINIMUM_QUEUE_CAPACITY,
@@ -1059,6 +1321,34 @@ def as_config(resolved: ResolvedConfig) -> GlobinConfig:
                 low=MINIMUM_FLUSH_MILLIS,
                 high=MAXIMUM_FLUSH_MILLIS,
             ),
+        ),
+        diagnostics_http=DiagnosticsHttpConfig(
+            enabled=_flag(resolved.setting(ENDPOINT_ENABLED)),
+            bind_host=_loopback(resolved.setting(ENDPOINT_BIND_HOST)),
+            port=_bounded(resolved.setting(ENDPOINT_PORT), low=MINIMUM_PORT, high=MAXIMUM_PORT),
+            request_timeout_seconds=_bounded(
+                resolved.setting(ENDPOINT_REQUEST_TIMEOUT_SECONDS),
+                low=MINIMUM_TIMEOUT_SECONDS,
+                high=MAXIMUM_TIMEOUT_SECONDS,
+            ),
+            shutdown_timeout_seconds=_bounded(
+                resolved.setting(ENDPOINT_SHUTDOWN_TIMEOUT_SECONDS),
+                low=MINIMUM_TIMEOUT_SECONDS,
+                high=MAXIMUM_TIMEOUT_SECONDS,
+            ),
+            max_concurrent_requests=_bounded(
+                resolved.setting(ENDPOINT_MAX_CONCURRENT_REQUESTS),
+                low=MINIMUM_CONCURRENT_REQUESTS,
+                high=MAXIMUM_CONCURRENT_REQUESTS,
+            ),
+            max_response_bytes=_bounded(
+                resolved.setting(ENDPOINT_MAX_RESPONSE_BYTES),
+                low=MINIMUM_RESPONSE_BYTES,
+                high=MAXIMUM_RESPONSE_BYTES,
+            ),
+            diagnostics_snapshot_enabled=_flag(resolved.setting(ENDPOINT_SNAPSHOT_ENABLED)),
+            metrics_enabled=_flag(resolved.setting(ENDPOINT_METRICS_ENABLED)),
+            health_enabled=_flag(resolved.setting(ENDPOINT_HEALTH_ENABLED)),
         ),
     )
 
@@ -1133,6 +1423,46 @@ def _flag(setting: Setting) -> bool:
     raise ConfigurationError(msg)
 
 
+def _loopback(setting: Setting) -> str:
+    """Read a loopback address, refusing every address that is not one.
+
+    Args:
+        setting: The resolved setting, carrying its origin for the message.
+
+    Returns:
+        The address, exactly as written.
+
+    Raises:
+        ConfigurationError: If the value is not a string, or is not a literal
+            loopback address.
+
+    **The first setting in the register whose value is refused for what it *means*
+    rather than for its type.** A port outside its range is a number in the wrong
+    place; a bind address outside loopback is a decision to expose this process, and
+    the error message says so rather than reporting a failed parse.
+
+    A :class:`~globin.errors.ConfigurationError` rather than the
+    :class:`~globin.errors.ValidationError`
+    :class:`~globin.domain.diagnostics_http.LoopbackAddress` would raise, because at
+    this point the value came out of a document an operator wrote and the taxonomy's
+    axis is *who must act*. The judgement itself is not restated here — it is
+    :func:`~globin.domain.diagnostics_http.address_problems`, so the value type and
+    the binder cannot come to different conclusions.
+    """
+    value = setting.value
+    if not isinstance(value, str):
+        msg = (
+            f"{setting.origin}: {setting.key} is {value!r}; expected a loopback "
+            f"address written as a string"
+        )
+        raise ConfigurationError(msg)
+    problems = address_problems(value)
+    if problems:
+        msg = f"{setting.origin}: {setting.key} is unusable: {'; '.join(problems)}"
+        raise ConfigurationError(msg)
+    return value
+
+
 def _bounded(setting: Setting, *, low: int, high: int) -> int:
     """Read an integer within a declared range, refusing anything else.
 
@@ -1161,10 +1491,21 @@ def _bounded(setting: Setting, *, low: int, high: int) -> int:
     integers would have to be widened then, in a phase about precedence rather
     than about types.
 
-    *Plain* digits, checked with :meth:`str.isdigit` against the unstripped value.
+    *Plain* digits, checked with :meth:`str.isdecimal` against the unstripped value.
     That refuses ``" 1 "``, ``"+1"``, ``"1_000"`` and ``"1.0"`` — the same
     spellings ``VALUE_TYPES_POLICY.md`` refuses for an amount, for the same reason:
     a value with two possible readings has none.
+
+    **:meth:`str.isdecimal` rather than :meth:`str.isdigit`, and the difference is a
+    bug rather than a nicety.** ``isdigit`` is true for characters :func:`int` refuses
+    — a superscript two among them — so the pair ``isdigit`` then ``int`` raises
+    :exc:`ValueError` on input it had just declared acceptable. That escapes the error
+    taxonomy entirely: :func:`~globin.runtime.cli.main` catches
+    :class:`~globin.errors.GlobinError` and :exc:`OSError`, so an operator would have
+    got a traceback instead of a sentence naming their setting. The path was
+    unreachable while every string value came from a TOML document; Phase 027's
+    environment variables are strings and nothing else, which is what made it live and
+    what a property test then found.
 
     The bound is checked here as well as in
     :class:`~globin.domain.diagnostics.RotationPolicy` deliberately. The value type
@@ -1174,7 +1515,7 @@ def _bounded(setting: Setting, *, low: int, high: int) -> int:
     give them. Fail closed, and say where.
     """
     value = setting.value
-    if isinstance(value, str) and value.isdigit():
+    if isinstance(value, str) and value.isdecimal():
         value = int(value)
     if isinstance(value, bool) or not isinstance(value, int):
         msg = f"{setting.origin}: {setting.key} is {value!r}; expected an integer"

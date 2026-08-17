@@ -16,7 +16,13 @@ setting it never touched.
 
 from dataclasses import dataclass
 
-from globin.domain.configuration import GlobinConfig, as_config, default_layer, resolve
+from globin.domain.configuration import (
+    GlobinConfig,
+    ResolvedConfig,
+    as_config,
+    default_layer,
+    resolve,
+)
 from globin.ports.configuration import ConfigurationSource
 
 
@@ -26,11 +32,38 @@ class ConfigurationResolution:
 
     Args:
         sources: Weakest first, strongest last. Which sources exist and in what
-            order they are consulted is Phase 027's decision; this service folds
-            whatever it is given on top of the defaults.
+            order they are consulted is
+            :func:`~globin.runtime.composition.build_config_sources`'s decision;
+            this service folds whatever it is given on top of the defaults.
     """
 
     sources: tuple[ConfigurationSource, ...]
+
+    def resolved(self) -> ResolvedConfig:
+        """Consult every source and fold the layers, without validating.
+
+        Returns:
+            The winning :class:`~globin.domain.configuration.Setting` for every key
+            any layer mentioned, each still carrying the origin that set it.
+
+        Raises:
+            ConfigurationError: If a source could not produce a layer at all — an
+                unreadable document, an unflattenable key, an unrecognised
+                environment variable.
+
+        **This exists so that the fingerprint and the model describe the same
+        resolution.** A health snapshot records ``config_fingerprint``, and until
+        Phase 027 the only caller computed it over the defaults layer alone, because
+        that was the only layer there was. With real sources folded in, a fingerprint
+        taken from a second, separate resolution could differ from the configuration
+        the process is actually running on — and a fingerprint whose job is "were
+        these two runs configured the same way" is worthless if it describes
+        something other than the run.
+
+        :meth:`run` is built on this rather than beside it, so the two cannot drift.
+        """
+        layers = (default_layer(), *(source.layer() for source in self.sources))
+        return resolve(layers)
 
     def run(self) -> GlobinConfig:
         """Consult every source, fold the layers, and validate the result.
@@ -60,5 +93,4 @@ class ConfigurationResolution:
         behaviour in place so that a future change to it is a decision rather
         than a regression.
         """
-        layers = (default_layer(), *(source.layer() for source in self.sources))
-        return as_config(resolve(layers))
+        return as_config(self.resolved())

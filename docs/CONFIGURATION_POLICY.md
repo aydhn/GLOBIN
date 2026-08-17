@@ -57,19 +57,44 @@ so a new setting is one line and cannot be half-added.
 | `watchdog.escalation_enabled` | `bool` | `true` | Whether the process is ended when it does not stop itself. |
 | `telemetry.enabled` | `bool` | `true` | Whether measurements are recorded at all. |
 | `telemetry.export_enabled` | `bool` | `false` | Whether anything is handed to an exporter. Off by default, and the default is the posture: with it off no exporter, queue, pump or thread is constructed. |
-| `telemetry.listener_enabled` | `bool` | `false` | Whether a Prometheus scrape endpoint is bound on loopback. Off by default. |
-| `telemetry.listener_port` | `int` | `9464` | Which loopback port the endpoint uses. Between 1024 and 65535. |
 | `telemetry.queue_capacity` | `int` | `256` | The most batches held before dropping starts. Between 1 and 4096. |
 | `telemetry.batch_size` | `int` | `32` | The most documents handed over in one attempt. Between 1 and 4096, and not above the queue capacity. |
 | `telemetry.flush_millis` | `int` | `5000` | How often the exporter loop wakes. Between 100 and 300000. |
+| `diagnostics_http.enabled` | `bool` | `false` | Whether the loopback diagnostics surface binds a socket at all. Off by default, and the default is the posture: with it off no server, socket, queue or worker thread is constructed. |
+| `diagnostics_http.bind_host` | `str` | `127.0.0.1` | Which loopback address it binds. Validated as a loopback address by `ipaddress`, so a wildcard, a LAN address and a hostname are all refused. `::1` is the other accepted value. |
+| `diagnostics_http.port` | `int` | `9464` | Which port it binds. Between 1024 and 65535. |
+| `diagnostics_http.request_timeout_seconds` | `int` | `5` | How long one request may occupy a worker. Between 1 and 60. |
+| `diagnostics_http.shutdown_timeout_seconds` | `int` | `5` | How long in-flight requests get to finish during an orderly stop. Between 1 and 60. |
+| `diagnostics_http.max_concurrent_requests` | `int` | `4` | How many requests may be in flight at once, which is also how many worker threads exist. Between 1 and 64. |
+| `diagnostics_http.max_response_bytes` | `int` | `1048576` | The largest body it will send. Between 1024 and 8388608. |
+| `diagnostics_http.diagnostics_snapshot_enabled` | `bool` | `false` | Whether the snapshot route answers. Off even when the surface is on. |
+| `diagnostics_http.metrics_enabled` | `bool` | `true` | Whether the scrape route answers. |
+| `diagnostics_http.health_enabled` | `bool` | `true` | Whether the three health routes answer. |
 
-Twenty-nine settings in four sections. Of everything Phases 001-006 built, only
+Thirty-seven settings in five sections. Of everything Phases 001-006 built, only
 logging held anything an operator may reasonably change: the project contract and
 the roadmap are immutable identity, the error taxonomy has nothing to tune, and
 the architecture review's paths are constants rather than settings. Phase 023
 added the two rotation values when it gave GLOBIN somewhere to write, and Phase
 024 added the `diagnostics` section — the first second section this register has
 had. Phase 025 added `watchdog`, which is the third.
+
+**Phase 027 added `diagnostics_http` and removed two rows.** `telemetry.listener_enabled`
+and `telemetry.listener_port` described a scrape endpoint that nothing ever started,
+serving a registry GLOBIN never populated. The endpoint exists now, it serves health
+as well as metrics, and its settings are in the section named after it. Two ways to
+open a socket — one working, one dormant — would have been the second independent
+source of truth this repository refuses.
+
+**`bind_host` is the one row where a *setting* replaced a *literal*, and that is a
+change of instrument rather than a relaxation.** Phase 026 exposed no address at all,
+reasoning that a configurable one is a typo away from publishing this process's
+internals. The danger was real and the instrument was wrong: a literal keeps the
+address safe while making `::1` unreachable, and it puts the guarantee in a constant
+somebody can edit. What replaced it is a value type — `LoopbackAddress` refuses
+anything `ipaddress` does not call loopback — so the field cannot *hold* an address
+another machine could reach, and the refusal covers spellings no denylist would have
+enumerated. ADR-0072 records the exchange.
 
 **The `watchdog` section is six rows where thirteen were available, and what it
 leaves out is the point.** How many threads a stall dump describes, how many frames
@@ -214,7 +239,7 @@ is a decision rather than a regression.
 | Question | Phase |
 |---|---|
 | Where configuration files live, what they are called, and what profiles exist | 026, delivered — [`engineering/CONFIGURATION_LAYOUT.md`](engineering/CONFIGURATION_LAYOUT.md) |
-| Which sources are consulted, in what order, and how environment variables and launcher selection fit | 027 |
+| Which sources are consulted, in what order, and how environment variables and launcher selection fit | 027, delivered — the `Precedence` section above, and [ADR-0071](adr/0071-configuration-precedence-is-declared-and-an-environment-variable-is-a-derived-name.md) |
 | The rules a secret is handled under | 015, delivered — [`security/SECURITY_BASELINE.md`](security/SECURITY_BASELINE.md) |
 | Where a secret is stored, and how it is supplied | 028 |
 | What an environment is, and how production, testnet and demo differ | 035 |

@@ -26,11 +26,13 @@ from typing import Final
 import pytest
 
 from globin.domain.configuration import (
+    DIAGNOSTICS_HTTP_SECTION,
     DIAGNOSTICS_SECTION,
     LOGGING_SECTION,
     TELEMETRY_SECTION,
     WATCHDOG_SECTION,
     DiagnosticsConfig,
+    DiagnosticsHttpConfig,
     LoggingConfig,
     TelemetryConfig,
     WatchdogConfig,
@@ -48,8 +50,16 @@ POLICY_RELATIVE_PATH: Final[str] = "docs/CONFIGURATION_POLICY.md"
 #: A row of the settings table: four cells, the first three inline-code spans.
 #: Keys are lowercase and dotted, which is what keeps this from also matching the
 #: refusal table further down, whose first cell is prose.
+#:
+#: The default cell admits dots and colons as well as word characters. Until Phase
+#: 027 every default was a number, a boolean or a severity name, so ``\w+`` was
+#: enough — and it therefore *silently skipped* the first row whose default was an
+#: IP address rather than failing on it. A parser that quietly matches less than it
+#: should makes every comparison below weaker without making any of them red, which
+#: is why ``test_the_row_reader_finds_its_own_failing_case`` now includes a dotted
+#: default among its examples.
 SETTING_ROW_RE: Final[re.Pattern[str]] = re.compile(
-    r"^\| `(?P<key>[a-z][a-z0-9_.]*)` \| `(?P<type>\w+)` \| `(?P<default>\w+)` \|",
+    r"^\| `(?P<key>[a-z][a-z0-9_.]*)` \| `(?P<type>\w+)` \| `(?P<default>[\w.:]+)` \|",
     re.MULTILINE,
 )
 
@@ -97,11 +107,17 @@ def test_the_row_reader_finds_its_own_failing_case() -> None:
             "| Key | Type | Default | Meaning |",
             "|---|---|---|---|",
             "| `alpha.one` | `Severity` | `DEBUG` | Something. |",
+            "| `alpha.two` | `str` | `127.0.0.1` | A default that is not one word. |",
+            "| `alpha.three` | `str` | `::1` | Nor is this one. |",
             "| Prose in the first cell | `X` | `Y` | Not a setting. |",
             "",
         ]
     )
-    assert settings_rows(document) == (Row(("alpha.one", "Severity", "DEBUG")),)
+    assert settings_rows(document) == (
+        Row(("alpha.one", "Severity", "DEBUG")),
+        Row(("alpha.two", "str", "127.0.0.1")),
+        Row(("alpha.three", "str", "::1")),
+    )
     assert settings_rows("no table here") == ()
 
 
@@ -125,6 +141,7 @@ def test_every_documented_type_is_the_type_the_default_actually_has(
         **section_defaults(DIAGNOSTICS_SECTION, DiagnosticsConfig),
         **section_defaults(WATCHDOG_SECTION, WatchdogConfig),
         **section_defaults(TELEMETRY_SECTION, TelemetryConfig),
+        **section_defaults(DIAGNOSTICS_HTTP_SECTION, DiagnosticsHttpConfig),
     }
     for key, declared, _default in rows:
         assert type(defaults[key]).__name__ == declared, key
