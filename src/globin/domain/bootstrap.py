@@ -43,6 +43,11 @@ from enum import IntEnum, StrEnum
 from typing import Final
 
 from globin.domain.configuration import GlobinConfig
+from globin.domain.environment import (
+    EnvironmentCapabilitySnapshot,
+    EnvironmentCompatibility,
+    compatibility_fingerprint,
+)
 from globin.errors import InternalError, ValidationError
 
 FINGERPRINT_LENGTH: Final[int] = 16
@@ -108,6 +113,16 @@ class ExitCode(IntEnum):
     would make *the process is unhealthy* and *nobody could tell* indistinguishable
     to the one consumer that most needs them apart.
 
+    **Phase 028 adds one value, and it is deliberately not**
+    :attr:`HOST_UNSUPPORTED`. That code means the host failed the contract
+    ``runtime-contract.toml`` declares — the wrong operating system, the wrong
+    release. :attr:`ENVIRONMENT_INCOMPATIBLE` means the host satisfies that
+    contract and fails a *capability* the contract does not describe, which
+    today means its native processor architecture is not the declared one. A
+    launcher branching on the two should behave differently: the first is a
+    machine GLOBIN was never meant to run on, the second is one that was
+    provisioned wrongly.
+
     **Phase 025 adds one value that no command ever returns.**
     :attr:`WATCHDOG_STALLED` is the status a process leaves behind when the
     watchdog ends it, and the watchdog ends it by terminating rather than by
@@ -137,6 +152,7 @@ class ExitCode(IntEnum):
     RUNTIME_PERSISTENCE_FAILED = 21
     DIAGNOSTICS_FAILED = 22
     WATCHDOG_STALLED = 23
+    ENVIRONMENT_INCOMPATIBLE = 24
 
 
 class PathLocation(StrEnum):
@@ -462,6 +478,7 @@ def checks() -> tuple[CheckSpec, ...]:
         CheckSpec("project.root", "project", ExitCode.PATHS_UNUSABLE),
         CheckSpec("runtime.host", "runtime", ExitCode.HOST_UNSUPPORTED),
         CheckSpec("runtime.architecture", "runtime", ExitCode.HOST_UNSUPPORTED),
+        CheckSpec("environment.capability", "environment", ExitCode.ENVIRONMENT_INCOMPATIBLE),
         CheckSpec("python.implementation", "python", ExitCode.INTERPRETER_MISMATCH),
         CheckSpec("python.version", "python", ExitCode.INTERPRETER_MISMATCH),
         CheckSpec("python.environment", "python", ExitCode.ENVIRONMENT_MISMATCH),
@@ -1282,6 +1299,62 @@ def configuration_outcome(config: GlobinConfig | None, *, problem: str = "") -> 
         identifier="config.valid",
         status=CheckStatus.PASS,
         summary=f"bound, logging at {config.logging.min_severity.name}",
+    )
+
+
+def capability_outcome(snapshot: EnvironmentCapabilitySnapshot) -> CheckOutcome:
+    """Judge whether this host's capabilities permit a start.
+
+    Args:
+        snapshot: What the capability probes reported.
+
+    Returns:
+        The outcome of ``environment.capability``.
+
+    **Three verdicts collapse to two statuses, and the collapse is the
+    decision.** :attr:`~globin.domain.environment.EnvironmentCompatibility.BLOCKED`
+    is a :attr:`CheckStatus.FAIL`, and both ``READY`` and ``DEGRADED`` pass —
+    ``DEGRADED`` as a :attr:`CheckStatus.WARN`, which
+    :func:`exit_code_for` ignores.
+
+    That is what stops this check making CI permanently red. The hosted runner
+    is a legitimate machine that cannot answer the native-architecture question
+    the way this one can, and ``DEGRADED`` is precisely the state ADR-0045
+    invented for "measured, usable, and not what a fully-configured host would
+    show". A phase that promoted degradation to failure would be re-deciding
+    that, and should say so.
+    """
+    compatibility = snapshot.compatibility()
+    fingerprint = compatibility_fingerprint(snapshot.projection())
+    if compatibility is EnvironmentCompatibility.BLOCKED:
+        reasons = ", ".join(reason.value for reason in snapshot.blocking_reasons())
+        return CheckOutcome(
+            identifier="environment.capability",
+            status=CheckStatus.FAIL,
+            summary=f"this host cannot run GLOBIN: {reasons}",
+            remediation=(
+                "A required environment capability is absent. The reasons above are "
+                "bounded codes; docs/engineering/ENVIRONMENT_CAPABILITY.md maps each "
+                "to what to do about it."
+            ),
+        )
+    if compatibility is EnvironmentCompatibility.DEGRADED:
+        degraded = ", ".join(
+            sorted({check.reason.value for check in snapshot.checks if check.degrading})
+        )
+        return CheckOutcome(
+            identifier="environment.capability",
+            status=CheckStatus.WARN,
+            summary=f"usable, with {degraded} ({fingerprint})",
+            remediation=(
+                "Starting is permitted. Each code above names a capability that is "
+                "absent, unmeasurable or worse than intended; none of them blocks."
+            ),
+        )
+    return CheckOutcome(
+        identifier="environment.capability",
+        status=CheckStatus.PASS,
+        summary=f"every declared capability is supported ({fingerprint})",
     )
 
 

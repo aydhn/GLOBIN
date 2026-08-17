@@ -19,6 +19,82 @@ can be opened and read.
 
 ## [Unreleased]
 
+### GLOBIN has somewhere to keep a credential, and still keeps none
+
+- **The store is the Windows Credential Manager, reached through `ctypes`.** No new
+  dependency: `ctypes` was already permitted. `keyring` was declined because a written
+  six-question review and two lock updates is a high price for wrapping four calls, and
+  a DPAPI-encrypted file was declined on the store contract's own words — "the material
+  is **not at rest in a file this repository can reach**", and a DPAPI file is a file.
+- **A reference is not a value, and the type system enforces it.** A `SecretReference`
+  is ordinary data: printable, loggable, safe in a manifest. A `SecretValue` is
+  deliberately **not a dataclass**, so `vars()` raises and `dataclasses.asdict` finds no
+  field register; it is **unhashable**, so it cannot become a dict key or a set member;
+  it has **no encoder**, in the way `MonotonicReading` has no wire form; and it
+  overrides `__format__` as well as `__str__` and `__repr__`, because
+  `object.__format__` with a non-empty spec does not route through `__str__` — a type
+  redacting only the two a reader expects would *raise* on `f"{value:>40}"`, and a
+  redaction that raises is one somebody removes.
+- **One key builder, and it folds case because the platform collides silently.** A
+  Windows target name is case-insensitive; measured, a credential written under one
+  spelling is returned for another with **no error and no warning**. An unfolded builder
+  would produce keys that look distinct, pass a test that writes and reads through one
+  spelling, and collapse the environment isolation — only once two environments differed
+  by case.
+- **Rotation is constructed, and the platform forces a step the contract did not spell.**
+  A Windows write *replaces*, so by the time the new value is written the old one is
+  gone and "only then retire the previous one" would retire nothing. The previous value
+  therefore moves to a second slot **first**, and the slot is a bounded key component
+  rather than a name suffix — otherwise a reference called `venue_key_previous` would
+  address the previous slot of `venue_key` and a rotation would destroy an unrelated
+  secret. The outcome reports **whether working material is still obtainable**, because
+  that is what an operator is about to ask.
+- **Three facts were measured that no document carries.** The oversize failure is
+  **1783 `RPC_X_BAD_STUB_DATA`**, which `CredWriteW` documents nowhere — code matching
+  the documented list would file the one failure the ceiling exists to cause under
+  "unknown". An **RSA-4096 private key in PEM form is 3324 bytes and does not fit** the
+  2560-byte ceiling at all; Ed25519 is 122. And the blob encoding had to be **UTF-8**
+  rather than the obvious UTF-16: under UTF-16 an ASCII secret encodes to twice its
+  length, so a 2560-character key would satisfy the domain and be refused by the
+  platform. An API key is ASCII. **A test found that, not a review.**
+- **The leak gate covers the four surfaces the contract said nothing covered** —
+  an exception's `str`, `repr` and `args`; a traceback with chained causes and notes;
+  standard output and error; and the process command line, read from a **real child
+  process** so it is what the operating system recorded rather than what a test believes
+  it passed.
+- **GLOBIN still holds no credentials.** The required set is empty, and empty because
+  nothing has needed one. Collecting and validating one is Phase 029's.
+
+### A host now says what it is capable of, and refuses to guess
+
+- **Native architecture is separated from process architecture**, and only
+  `IsWow64Process2` may answer the first. Microsoft documents `GetNativeSystemInfo` as
+  reporting an ARM64 host "as if the system is x86", and its own Remarks route the
+  question elsewhere — so where the modern API is absent the native architecture is
+  **`UNKNOWN` rather than a guess**. This changed the phase's plan, which had said to
+  fall back.
+- **`IMAGE_FILE_MACHINE_UNKNOWN` is `0` and means *not emulated*.** A mapping written
+  against the constant's name would report every ordinary native host as unmeasured —
+  and this host returns that value on every run, so the mistake would have been
+  permanent rather than rare.
+- **An unmeasurable required capability degrades rather than blocks.** A capability that
+  could not be measured has not been shown to be absent. `IsWow64Process2` arrived in
+  Windows 10 version 1709 and the runtime contract declares a floor of "10", so a
+  supported host may be unable to answer at all — and CI's runner is a legitimate
+  machine that cannot answer everything this one can.
+- **The compatibility fingerprint excludes volatile fields by type, not by filter.** It
+  is computed over a projection with exactly two fields and nowhere to put a timestamp,
+  a process id or a duration. A denylist would be a list somebody must remember to
+  extend, and the failure when they do not is a fingerprint that changes every run.
+- **Every toolchain capability is optional and there is no way to declare one required.**
+  GLOBIN invokes none of them at run time. `pwsh` is not listed at all, because
+  PowerShell 7 is absent here and nothing runs it.
+- **Exit code `24`, deliberately not `10`.** The latter means the host failed the
+  declared contract; the former means it satisfies it and lacks a capability the
+  contract does not describe. A launcher should treat those differently.
+- New command: `globin diagnostics environment`. New check: `environment.capability`.
+  ADR-0073, ADR-0074, ADR-0075.
+
 ### Configuration resolves from four sources in a declared order
 
 - **Precedence is two functions and one assembly point.** `precedence()` orders the

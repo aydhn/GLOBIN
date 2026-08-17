@@ -137,6 +137,9 @@ a future reader can judge whether the reason still holds.
 | [0070](0070-phase-027-widens-to-deliver-the-loopback-diagnostics-surface.md) | Phase 027 widens to deliver the loopback diagnostics surface, over the roadmap's own refusal | Accepted |
 | [0071](0071-configuration-precedence-is-declared-and-an-environment-variable-is-a-derived-name.md) | Configuration precedence is one declared order, and an environment variable is a derived name | Accepted |
 | [0072](0072-the-diagnostics-surface-is-loopback-only-read-only-and-bounded-by-construction.md) | The diagnostics surface is loopback-only by type, read-only, and bounded by construction | Accepted |
+| [0073](0073-phase-028-widens-to-deliver-the-environment-capability-inventory.md) | Phase 028 widens to deliver the environment capability inventory | Accepted |
+| [0074](0074-the-secret-store-is-the-windows-credential-manager-and-rotation-is-constructed.md) | The secret store is the Windows Credential Manager, and rotation is constructed rather than inherited | Accepted |
+| [0075](0075-native-architecture-is-measured-through-one-adapter-and-a-fingerprint-excludes-what-moves.md) | Native architecture is measured through one adapter, and a fingerprint excludes what moves | Accepted |
 
 ## Relationship to other documents
 

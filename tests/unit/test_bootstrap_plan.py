@@ -179,6 +179,10 @@ def test_every_check_identifier_is_stable_and_machine_readable() -> None:
         "project.root",
         "runtime.host",
         "runtime.architecture",
+        # Phase 028. Judged here because it compares against the same parsed
+        # baseline the two checks above use, and because a capability shortfall
+        # should be reported before the interpreter is examined in detail.
+        "environment.capability",
         "python.implementation",
         "python.version",
         "python.environment",
@@ -548,10 +552,18 @@ def test_a_report_with_every_check_passing_is_ready() -> None:
 
 
 def test_a_warning_does_not_stop_a_report_being_ready() -> None:
-    """WARN means the check ran and starting anyway is defensible."""
+    """WARN means the check ran and starting anyway is defensible.
+
+    The warning check is located by name rather than by index. This test held a
+    literal `6` until Phase 028 registered a check ahead of it, at which point
+    the index silently addressed a different check and the report concluded twice
+    about one identifier — a failure whose message named neither this test's
+    subject nor the change that caused it.
+    """
+    identifier = "project.identity"
     outcomes = [passing(name) for name in check_identifiers()]
-    outcomes[6] = CheckOutcome(
-        identifier="project.identity",
+    outcomes[check_identifiers().index(identifier)] = CheckOutcome(
+        identifier=identifier,
         status=CheckStatus.WARN,
         summary="read from the source tree",
         remediation="install it",

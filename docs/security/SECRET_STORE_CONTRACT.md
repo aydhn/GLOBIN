@@ -14,6 +14,13 @@ order in [`../engineering/SOURCE_OF_TRUTH.md`](../engineering/SOURCE_OF_TRUTH.md
 **It decides no mechanism.** It names no library, chooses no store, selects no key
 type and creates no module. Every section states the phase it binds.
 
+> **Phase 028 has since chosen one**, and the choice is recorded in
+> [`SECRET_STORE.md`](SECRET_STORE.md) and
+> [ADR-0074](../adr/0074-the-secret-store-is-the-windows-credential-manager-and-rotation-is-constructed.md)
+> rather than here. This document keeps its original shape deliberately: it states
+> what any store must satisfy, and remains the thing a replacement mechanism would
+> be judged against.
+
 ---
 
 ## Why this exists
@@ -69,9 +76,12 @@ Ordinary configuration carries a reference. It does not carry a value, and a
 validator that meets secret-shaped material in a configuration file refuses it
 rather than accepting and redacting it later.
 
-**The type and module names are Phase 028's**, constrained until then by the
-absent-capability rule: no module under `src/globin/` may carry a
-credential-shaped name while `README.md` says the capability does not exist.
+**The type and module names are Phase 028's**, and it chose `SecretReference` and
+`SecretValue` in `globin.domain.secrets`. The absent-capability rule that had
+constrained them is now narrower rather than lifted: `credential`, `password`,
+`token`, `keyring` and `apikey` remain forbidden as module names because credential
+*handling* is still absent and still Phase 029's, while `secret` is permitted
+because the store exists and `README.md` says so.
 
 ---
 
@@ -232,7 +242,7 @@ reads as a guarantee nobody made.
 | Enterprise persistence roams | A credential written with the roaming scope is visible to that user's sessions on other computers (S-08) |
 | Machine scope is refused | Associating protection with the computer rather than the user makes it readable by **every** account on that computer (S-11) |
 | A prompt-based flow has an expiry | It is deprecated with a removal date, so anything built on it would ship already ending (S-11) |
-| The blob has a ceiling | `CRED_MAX_CREDENTIAL_BLOB_SIZE`, 2560 bytes. Whether a particular encoded key fits **is a measurement Phase 028 owes on the real host**, not something asserted here (S-08, S-15) |
+| The blob has a ceiling | `CRED_MAX_CREDENTIAL_BLOB_SIZE`, 2560 bytes. Phase 028 paid that measurement: 2560 succeeds, 2561 fails with an undocumented status, and an RSA-4096 key in PEM form does **not** fit (`../research/phase_028_sources.md` S-05, S-11) |
 | Memory is not erasable | See below |
 
 **On zeroisation, plainly.** Microsoft's guidance recommends overwriting a secret
@@ -255,7 +265,6 @@ material. It means the material is not at rest in a file this repository can rea
 
 | Question | Phase |
 |---|---|
-| Which store implementation is used, and through which interface | 028 |
 | Where configuration files live, and what profiles exist | 026, delivered — [`../engineering/CONFIGURATION_LAYOUT.md`](../engineering/CONFIGURATION_LAYOUT.md) |
 | Which configuration sources are consulted, and in what order | 027, delivered — [`../CONFIGURATION_POLICY.md`](../CONFIGURATION_POLICY.md) |
 | How a credential is collected and validated before first use | 029 |

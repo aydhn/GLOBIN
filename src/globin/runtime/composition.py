@@ -36,8 +36,9 @@ from globin.adapters.bootstrap import (
     RUNTIME_LOCK,
     DeclaredDependencyProbe,
     FilesystemProjectProbe,
-    NoSecretsRequired,
     ProjectRuntimeTree,
+    StoreBackedSecrets,
+    SystemEnvironmentProbe,
     SystemHostProbe,
     TomlRuntimeBaselineSource,
     find_project_root,
@@ -72,6 +73,11 @@ from globin.adapters.diagnostics_http import (
     ShutdownLiveness,
     TelemetryExposition,
 )
+from globin.adapters.environment import (
+    DECLARED_TOOLCHAIN,
+    PathToolchainProbe,
+    windows_system_api,
+)
 from globin.adapters.health import (
     DiagnosticsStateProbe,
     FilesystemTreeProbe,
@@ -95,6 +101,7 @@ from globin.adapters.runtime_state import (
 )
 from globin.adapters.runtime_state import ProjectRuntimeTree as UserRuntimeTree
 from globin.adapters.runtime_state import render as render_state_document
+from globin.adapters.secrets import windows_credential_store
 from globin.adapters.serialization import JsonCodec
 from globin.adapters.support import ZipArchiveWriter, digest_of
 from globin.adapters.watchdog import (
@@ -838,7 +845,12 @@ def build_bootstrap(
                 lock_file=(root or start) / RUNTIME_LOCK,
                 installed=installed_distributions,
             ),
-            secrets=NoSecretsRequired(),
+            environment=SystemEnvironmentProbe(
+                api=windows_system_api(),
+                toolchain=PathToolchainProbe(),
+                declared=DECLARED_TOOLCHAIN,
+            ),
+            secrets=StoreBackedSecrets(store=windows_credential_store()),
             tree=ProjectRuntimeTree(root=root or start),
             runtime_tree=state.tree,
             state=state.store,

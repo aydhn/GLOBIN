@@ -241,7 +241,8 @@ is a decision rather than a regression.
 | Where configuration files live, what they are called, and what profiles exist | 026, delivered — [`engineering/CONFIGURATION_LAYOUT.md`](engineering/CONFIGURATION_LAYOUT.md) |
 | Which sources are consulted, in what order, and how environment variables and launcher selection fit | 027, delivered — the `Precedence` section above, and [ADR-0071](adr/0071-configuration-precedence-is-declared-and-an-environment-variable-is-a-derived-name.md) |
 | The rules a secret is handled under | 015, delivered — [`security/SECURITY_BASELINE.md`](security/SECURITY_BASELINE.md) |
-| Where a secret is stored, and how it is supplied | 028 |
+| Where a secret is stored, and how it is supplied | 028, delivered — [`security/SECRET_STORE.md`](security/SECRET_STORE.md) |
+| How a credential is collected from an operator, and validated before first use | 029 |
 | What an environment is, and how production, testnet and demo differ | 035 |
 
 Nothing in the configuration model knows about files, environment variables or

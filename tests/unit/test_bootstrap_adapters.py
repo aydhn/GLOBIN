@@ -14,8 +14,8 @@ import pytest
 from globin.adapters.bootstrap import (
     DeclaredDependencyProbe,
     FilesystemProjectProbe,
-    NoSecretsRequired,
     ProjectRuntimeTree,
+    StoreBackedSecrets,
     SystemHostProbe,
     TomlRuntimeBaselineSource,
     distribution_name,
@@ -27,6 +27,7 @@ from globin.adapters.bootstrap import (
     reasons,
     record,
 )
+from globin.adapters.secrets import UnavailableSecretStore
 from globin.domain.bootstrap import (
     CREATED_PATHS,
     MAX_ROOT_SEARCH_DEPTH,
@@ -34,6 +35,8 @@ from globin.domain.bootstrap import (
     RuntimePaths,
     check_identifiers,
 )
+from globin.domain.identifiers import environment_id
+from globin.domain.secrets import SecretKind, SecretReference
 from globin.errors import ConfigurationError
 from tests.support import running_from_the_project_environment
 
@@ -433,10 +436,39 @@ def test_the_installed_set_is_read_through_the_standard_library() -> None:
 
 
 def test_starting_globin_requires_no_secret_because_it_requires_none() -> None:
-    """The honest implementation of a fact, not a stub for a missing store."""
-    readiness = NoSecretsRequired().readiness()
+    """The honest implementation of a fact, not a stub for a missing store.
+
+    Phase 028 replaced `NoSecretsRequired` with a probe backed by the real
+    store, and the behaviour on an empty required set is deliberately identical:
+    a vacuous pass. This asserts that equivalence, because the whole argument for
+    the substitution was that nothing observable changed on a host holding no
+    credentials.
+
+    The store is the unavailable one, which is what CI gets, so this also pins
+    that an absent backend does not turn an empty requirement into a failure.
+    """
+    readiness = StoreBackedSecrets(store=UnavailableSecretStore()).readiness()
     assert readiness.required == ()
     assert readiness.unavailable == ()
+
+
+def test_a_required_reference_that_does_not_resolve_is_reported_not_raised() -> None:
+    """The readiness probe reports; only `require` refuses.
+
+    A start-up check that raised would make an absent credential indistinguishable
+    from a broken bootstrap, and `secrets_outcome` could never produce its
+    "N required reference(s) could not be resolved" summary.
+    """
+    reference = SecretReference(
+        environment=environment_id("paper"),
+        kind=SecretKind.API_KEY,
+        name="absent_here",
+    )
+    readiness = StoreBackedSecrets(
+        store=UnavailableSecretStore(), required=(reference,)
+    ).readiness()
+    assert readiness.required == ("absent_here",)
+    assert readiness.unavailable == ("absent_here",)
 
 
 # ---------------------------------------------------------------------------

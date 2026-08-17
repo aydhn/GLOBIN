@@ -36,7 +36,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TextIO
 
-from globin.adapters.bootstrap import build, find_project_root
+from globin.adapters.bootstrap import (
+    RUNTIME_CONTRACT_PATH,
+    SystemEnvironmentProbe,
+    TomlRuntimeBaselineSource,
+    build,
+    find_project_root,
+)
+from globin.adapters.environment import (
+    DECLARED_TOOLCHAIN,
+    PathToolchainProbe,
+    windows_system_api,
+)
 from globin.adapters.health import snapshot_document
 from globin.adapters.identifiers import new_run_id
 from globin.adapters.observability import new_correlation_id
@@ -58,6 +69,12 @@ from globin.domain.diagnostics_http import (
     content_type_for,
     policy_problems,
     route_paths,
+)
+from globin.domain.environment import (
+    CapabilityReason,
+    EnvironmentCapabilitySnapshot,
+    EnvironmentCompatibility,
+    compatibility_fingerprint,
 )
 from globin.domain.health import RuntimeHealthSnapshot, RuntimeHealthState
 from globin.domain.metrics import declared_series, metrics
@@ -106,6 +123,15 @@ fail for the single reason — the port is already taken — that means everythi
 working.
 """
 
+ENVIRONMENT: Final[str] = "environment"
+"""Report what this host is capable of, and whether that is enough. Reads only.
+
+Distinct from ``doctor``, which judges this host against the whole start-up
+contract and reports fifteen checks. This reports the capability half in full —
+the process and native architectures, the emulation state, every declared tool,
+and the compatibility fingerprint — which ``doctor`` reduces to one line.
+"""
+
 VERSION: Final[str] = "--version"
 JSON_FLAG: Final[str] = "--json"
 PROFILE_FLAG: Final[str] = "--profile"
@@ -134,6 +160,7 @@ DIAGNOSTICS_SUBCOMMANDS: Final[tuple[str, ...]] = (
     WATCHDOG,
     TELEMETRY,
     ENDPOINT,
+    ENVIRONMENT,
 )
 """What may follow ``diagnostics``. ``snapshot`` is the default.
 
@@ -166,6 +193,9 @@ Commands:
   diagnostics endpoint  Report the loopback diagnostics surface: whether it is
                         enabled, where it would bind, which routes answer, and
                         every bound it runs inside. Binds nothing.
+  diagnostics environment  Report this host's capabilities: process and native
+                        architecture, emulation, declared toolchain, and the
+                        compatibility fingerprint. Publishes no path.
 
 Options:
   --json              Write the machine-readable document to standard output,
@@ -196,6 +226,7 @@ Exit codes:
   21  the runtime state could not be written
   22  a diagnostic could not be produced, which is not a health verdict
   23  the watchdog ended this process, which did not stop when asked
+  24  this host satisfies the runtime contract and lacks a required capability
 """
 
 
@@ -700,6 +731,8 @@ def _diagnostics(
         return _telemetry(config, invocation, out=out, err=err)
     if invocation.command.endswith(ENDPOINT):
         return _endpoint(config, invocation, out=out, err=err)
+    if invocation.command.endswith(ENVIRONMENT):
+        return _environment(invocation, out=out, err=err, start=start)
     wants_memory = invocation.command.endswith(MEMORY)
     # Standard error, always. Under `--json` standard output carries the
     # document and nothing else, and a log record printed beside it would
@@ -955,6 +988,98 @@ def _endpoint(
     else:
         print(human, end="", file=out)
     return int(ExitCode.OK if not problems else ExitCode.CONFIGURATION_INVALID)
+
+
+def _environment(
+    invocation: Invocation,
+    *,
+    out: TextIO,
+    err: TextIO,
+    start: Path | None,
+) -> int:
+    """Report what this host is capable of, and whether that is enough.
+
+    Args:
+        invocation: What was asked for.
+        out: Where the answer goes.
+        err: Where human text goes under ``--json``.
+        start: Where to begin the project-root search.
+
+    Returns:
+        :attr:`~globin.domain.bootstrap.ExitCode.OK` when the host is ready or
+        merely degraded,
+        :attr:`~globin.domain.bootstrap.ExitCode.ENVIRONMENT_INCOMPATIBLE` when a
+        required capability is absent, and
+        :attr:`~globin.domain.bootstrap.ExitCode.UNMEASURED` when the contract
+        could not be read at all.
+
+    **A degraded host exits ``0``.** The three verdicts do not map onto three
+    codes here, for the reason ``capability_outcome`` gives: degradation is a
+    host that works and should be improved, and a command that failed on it
+    would fail on CI's runner every run. ``UNMEASURED`` is separate because not
+    having read the contract is not a verdict about a host.
+
+    **It publishes no path and no toolchain location.** The snapshot type has no
+    field for either, so this is a property of what it is handed rather than of
+    what it chooses to print.
+    """
+    root = find_project_root((start or Path.cwd()).resolve())
+    try:
+        baseline = TomlRuntimeBaselineSource(
+            path=(root or (start or Path.cwd())) / RUNTIME_CONTRACT_PATH,
+        ).baseline()
+    except ConfigurationError as problem:
+        print(f"environment  unmeasured ({problem})", file=err if invocation.as_json else out)
+        return int(ExitCode.UNMEASURED)
+
+    snapshot = SystemEnvironmentProbe(
+        api=windows_system_api(),
+        toolchain=PathToolchainProbe(),
+        declared=DECLARED_TOOLCHAIN,
+    ).snapshot(baseline)
+    human = _environment_text(snapshot)
+    if invocation.as_json:
+        print(
+            json.dumps(snapshot.as_record(), sort_keys=True, separators=(",", ":")),
+            file=out,
+        )
+        print(human, end="", file=err)
+    else:
+        print(human, end="", file=out)
+    if snapshot.compatibility() is EnvironmentCompatibility.BLOCKED:
+        return int(ExitCode.ENVIRONMENT_INCOMPATIBLE)
+    return int(ExitCode.OK)
+
+
+def _environment_text(snapshot: EnvironmentCapabilitySnapshot) -> str:
+    """The human rendering of the environment report.
+
+    Args:
+        snapshot: What the capability probes reported.
+
+    Returns:
+        The text, ending in a newline.
+
+    Takes the **snapshot** rather than the rendered mapping, which the other
+    ``_*_text`` functions in this module take. That is a deliberate departure and
+    a stronger guarantee rather than a weaker one: both renderings still derive
+    from one value, and this one reads typed fields instead of indexing a
+    ``dict[str, object]`` — which would need either a cast or an ``assert``, and
+    ``assert`` is forbidden under ``src/`` because ``python -O`` strips it.
+    """
+    lines = [
+        f"environment  {snapshot.compatibility().value}  "
+        f"({compatibility_fingerprint(snapshot.projection())})",
+        f"  machine    process {snapshot.architecture.process.value}  "
+        f"native {snapshot.architecture.native.value}  "
+        f"{snapshot.architecture.emulation.value}",
+    ]
+    lines.extend(
+        f"  {check.status.value:<13} {check.identifier}"
+        + ("" if check.reason is CapabilityReason.SATISFIED else f"  [{check.reason.value}]")
+        for check in snapshot.checks
+    )
+    return "\n".join(lines) + "\n"
 
 
 def _route_answers(surface: DiagnosticsHttpConfig, route: DiagnosticsRoute) -> bool:

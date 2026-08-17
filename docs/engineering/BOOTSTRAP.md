@@ -177,7 +177,6 @@ the phase that owns it:
 |---|---|
 | Which configuration files exist, and what profiles they describe | Phase 026 |
 | Which sources are consulted, and in what order | Phase 027 |
-| Whether the local secret store holds a reference | Phase 028 |
 | Collecting and validating a credential | Phase 029 |
 | The wider health-check suite a long-running process needs | Phase 030 |
 
@@ -186,7 +185,14 @@ credential — so the set of references a start-up must resolve is empty and the
 claim over it is true. Its summary says that is why, because a vacuous truth and
 a skipped check look identical in a log and mean opposite things.
 
-Nothing under `src/globin/` carries a credential-shaped name.
+Since Phase 028 that check asks a **real store** rather than a placeholder, and
+the behaviour on an empty required set is deliberately unchanged — a vacuous pass.
+What changed is that the set can now be filled in, which is Phase 029's. See
+[`../security/SECRET_STORE.md`](../security/SECRET_STORE.md).
+
+Nothing under `src/globin/` carries a name for a capability that does not exist:
+`credential`, `password`, `token`, `keyring` and `apikey` are all still forbidden,
+because credential *handling* remains Phase 029's.
 [`../security/SECRET_STORE_CONTRACT.md`](../security/SECRET_STORE_CONTRACT.md)
 §1 gives the reference type to Phase 028 and forbids the name until `README.md`
 says the capability exists; a contract test enforces it.

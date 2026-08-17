@@ -42,6 +42,8 @@ from importlib import metadata
 from pathlib import Path
 from typing import Final
 
+from globin.application.environment import snapshot_from
+from globin.application.secrets import readiness
 from globin.domain.bootstrap import (
     CREATED_PATHS,
     MAX_ROOT_SEARCH_DEPTH,
@@ -61,8 +63,12 @@ from globin.domain.bootstrap import (
     recorded_inside,
     recorded_outside,
 )
+from globin.domain.environment import EnvironmentCapabilitySnapshot
 from globin.domain.observability import redact
+from globin.domain.secrets import SecretReference
 from globin.errors import ConfigurationError
+from globin.ports.environment import ToolchainProbe, WindowsSystemApi
+from globin.ports.secrets import SecretStore
 from globin.project_contract import PACKAGE_NAME
 
 RUNTIME_CONTRACT_PATH: Final[str] = "docs/engineering/runtime-contract.toml"
@@ -643,28 +649,78 @@ def installed_distributions() -> frozenset[str]:
 
 
 @dataclass(frozen=True, slots=True)
-class NoSecretsRequired:
-    """Reports that starting GLOBIN requires no secret, because it does not.
+class StoreBackedSecrets:
+    """Reports readiness by asking the real store about the required references.
 
-    GLOBIN reaches no exchange, opens no authenticated connection and holds no
-    credential, so the set of references a start-up must resolve is genuinely
-    empty. This is the honest implementation of that fact rather than a stub: the
-    port is satisfied, the check is vacuously true, and its summary says which of
-    the two it is.
+    Args:
+        store: The local secret store.
+        required: The references a start-up must resolve. **Empty today**, and
+            empty because GLOBIN holds no credentials rather than by omission —
+            it reaches no exchange and opens no authenticated connection, so the
+            set is genuinely nothing.
 
-    Phase 028 implements the store and Phase 029 the credential flow; both
-    replace this class rather than modify it, which is what the port is for.
-    ``docs/security/SECRET_STORE_CONTRACT.md`` §1 is why nothing here is named
-    after a credential.
+    Phase 028 replaced :class:`NoSecretsRequired` with this, which is what the
+    port existed for. The behaviour with an empty ``required`` set is identical
+    to what that class did — a vacuous pass — so nothing observable changed on a
+    host with no credentials, and everything changed for the phase that fills
+    the set in.
+
+    **Populating** ``required`` **is Phase 029's**, not this one's. That phase
+    defines credential collection and validation, and with it the question of
+    which references a start-up genuinely needs; declaring one here would be
+    asserting a requirement nothing has established.
     """
+
+    store: SecretStore
+    required: tuple[SecretReference, ...] = ()
 
     def readiness(self) -> SecretReadiness:
         """Read the state of the required secret references.
 
         Returns:
-            An empty requirement, and therefore an empty shortfall.
+            The readiness, naming the required references and any that did not
+            resolve. No value is read, returned or held — resolution is asked
+            for its *outcome* only.
         """
-        return SecretReadiness()
+        return readiness(self.store, self.required)
+
+
+@dataclass(frozen=True, slots=True)
+class SystemEnvironmentProbe:
+    """Measures this host's capabilities through the architecture and toolchain probes.
+
+    Args:
+        api: How to ask the operating system about processor architecture.
+        toolchain: How to ask whether an executable resolves.
+        declared: Which executables to look for, and why each is listed.
+
+    A thin seam. Every judgement lives in
+    :mod:`globin.application.environment` and every observation in
+    :mod:`globin.adapters.environment`; this exists so that
+    :class:`~globin.application.bootstrap.BootstrapPipeline` holds one port for
+    the question rather than three, and so that a test can substitute the whole
+    capability answer without assembling two fakes.
+    """
+
+    api: WindowsSystemApi
+    toolchain: ToolchainProbe
+    declared: tuple[tuple[str, str], ...]
+
+    def snapshot(self, baseline: RuntimeBaseline) -> EnvironmentCapabilitySnapshot:
+        """Measure every declared capability against the contract.
+
+        Args:
+            baseline: The contract, as the run already parsed it.
+
+        Returns:
+            The snapshot.
+        """
+        return snapshot_from(
+            api=self.api,
+            probe=self.toolchain,
+            baseline=baseline,
+            declared_toolchain=self.declared,
+        )
 
 
 @dataclass(frozen=True, slots=True)

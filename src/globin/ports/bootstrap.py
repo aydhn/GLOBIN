@@ -32,6 +32,7 @@ from globin.domain.bootstrap import (
     RuntimePaths,
     SecretReadiness,
 )
+from globin.domain.environment import EnvironmentCapabilitySnapshot
 
 
 class RuntimeBaselineSource(Protocol):
@@ -117,6 +118,26 @@ class DependencyProbe(Protocol):
 
         No resolver runs and no index is consulted. Start-up must work without a
         network, so the only question asked here is the local one.
+        """
+        ...
+
+
+class EnvironmentProbe(Protocol):
+    """Reports what this host is capable of, beyond what the contract declares."""
+
+    def snapshot(self, baseline: RuntimeBaseline) -> EnvironmentCapabilitySnapshot:
+        """Measure every declared capability.
+
+        Args:
+            baseline: The contract, for the architecture it requires.
+
+        Returns:
+            The snapshot, from which a verdict and a fingerprint follow.
+
+        Takes the baseline rather than reading it, so that this probe and
+        :class:`RuntimeBaselineSource` cannot disagree about what was declared —
+        there is one read of ``runtime-contract.toml`` per run and every check
+        judges against the same parse.
         """
         ...
 

@@ -36,6 +36,8 @@ that certifies — and the one criterion it could not — is in
 | When am I finished? | [`docs/engineering/DEFINITION_OF_DONE.md`](docs/engineering/DEFINITION_OF_DONE.md) |
 | Which document wins a conflict? | [`docs/engineering/SOURCE_OF_TRUTH.md`](docs/engineering/SOURCE_OF_TRUTH.md) |
 | Where does this file go? | [`docs/engineering/REPOSITORY_LAYOUT.md`](docs/engineering/REPOSITORY_LAYOUT.md) |
+| What must a host be capable of, and what does a compatibility fingerprint mean? | [`docs/engineering/ENVIRONMENT_CAPABILITY.md`](docs/engineering/ENVIRONMENT_CAPABILITY.md), [ADR-0075](docs/adr/0075-native-architecture-is-measured-through-one-adapter-and-a-fingerprint-excludes-what-moves.md) |
+| Where does a secret actually live, and what will never display one? | [`docs/security/SECRET_STORE.md`](docs/security/SECRET_STORE.md), [ADR-0074](docs/adr/0074-the-secret-store-is-the-windows-credential-manager-and-rotation-is-constructed.md) |
 | How does a running GLOBIN answer questions about itself over HTTP? | [`docs/engineering/DIAGNOSTICS_ENDPOINT.md`](docs/engineering/DIAGNOSTICS_ENDPOINT.md), [ADR-0072](docs/adr/0072-the-diagnostics-surface-is-loopback-only-read-only-and-bounded-by-construction.md) |
 | How do I write documentation? | [`docs/engineering/DOCUMENTATION_STANDARD.md`](docs/engineering/DOCUMENTATION_STANDARD.md) |
 | How is the system structured? | [`docs/architecture/README.md`](docs/architecture/README.md) |
@@ -536,6 +538,37 @@ offered is supported is to serve Prometheus text 0.0.4. Exactly **one module** m
 a socket, and `tests/architecture/test_library_discipline.py` fails if a second one does
 or if that one spells any address at all. Details:
 [`docs/engineering/DIAGNOSTICS_ENDPOINT.md`](docs/engineering/DIAGNOSTICS_ENDPOINT.md).
+
+Phase 028 gave that process **somewhere to keep a credential**, and gave the host a
+**capability inventory**.
+
+```bash
+.venv\Scripts\globin.exe diagnostics environment --json
+```
+
+The store is the **Windows Credential Manager** through `ctypes`, costing no new
+dependency. A **reference is not a value**: the first is ordinary data, the second
+has no string form, no `__dict__`, no encoder and no hash. One key builder folds
+case, because the platform's target names collide **silently** -- a credential
+written under one spelling is returned for another with no error at all. Rotation
+moves the previous value aside **before** writing the new one, because a Windows
+write *replaces* and there would otherwise be nothing left to retire. **GLOBIN still
+holds no credentials**; it now has somewhere to put one, which is different.
+
+Two measured facts the documentation does not carry: the oversize failure is an
+**undocumented** `RPC_X_BAD_STUB_DATA`, and an **RSA-4096 key in PEM form does not
+fit** the 2560-byte ceiling. Ed25519 is 122 bytes.
+
+The inventory separates **native** from **process** architecture, and only
+`IsWow64Process2` may answer the first -- Microsoft documents `GetNativeSystemInfo`
+as reporting an ARM64 host *as if it were x86*, so where the modern API is absent
+the answer is `UNKNOWN` rather than a guess. **An unmeasurable required capability
+degrades rather than blocks**, which is what keeps CI's runner from going red for
+ever. Exit code **24**, and it is deliberately not `10`: that means the host failed
+the declared contract, this means it satisfies it and lacks a capability.
+
+**Six libraries are now absent-safe.** `advapi32` and `kernel32` join the four, each
+reached through one factory in one adapter, each with an architecture tripwire.
 
 **Do not widen the bind address for remote access.** The type will not let you, and the
 supported shape is a separate authenticated, TLS-capable collector that scrapes

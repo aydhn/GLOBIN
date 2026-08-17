@@ -33,10 +33,33 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-027 are complete. Phase 028 is next and has not started.**
-> Nothing beyond Phase 027 is implemented. GLOBIN does not trade, does not
-> connect to any exchange, and has no credentials. See
-> [`README.md`](README.md).
+> **Phases 001-028 are complete. Phase 029 is next and has not started.**
+> Nothing beyond Phase 028 is implemented. GLOBIN does not trade, does not
+> connect to any exchange, and **holds no credentials** -- it now has somewhere to
+> put one, which is a different thing. See [`README.md`](README.md).
+>
+> **Phase 028 built the secret store, and measured what Windows would not tell it.**
+> The Credential Manager, reached through `ctypes` with no new dependency: a reference
+> is ordinary data and a value has no string form, no encoder, no `__dict__` and no
+> hash. One key builder folds case, because the platform's target names are
+> case-insensitive and the collision is **silent** -- a credential written under one
+> spelling is returned for another with no error. Rotation is constructed rather than
+> inherited: a Windows write *replaces*, so the previous value is moved aside before
+> the new one lands, or step 3 would retire something already gone. Two facts the
+> documentation does not carry were measured: the oversize failure is an **undocumented**
+> `RPC_X_BAD_STUB_DATA`, and an **RSA-4096 key in PEM form does not fit** the 2560-byte
+> ceiling at all. See [`docs/security/SECRET_STORE.md`](docs/security/SECRET_STORE.md).
+>
+> **Alongside it, and as the twelfth scope amendment, the environment capability
+> inventory.** Native architecture is separated from process architecture, and only
+> `IsWow64Process2` may answer the first -- Microsoft documents `GetNativeSystemInfo`
+> as reporting an ARM64 host *as if it were x86*, so where the modern API is absent the
+> answer is **`UNKNOWN` rather than a guess**. An unmeasurable required capability
+> **degrades rather than blocks**, which is what keeps a supported host startable.
+> The compatibility fingerprint excludes volatile fields **by type**: it is computed
+> over a projection with nowhere to put a timestamp, rather than over a snapshot with a
+> denylist somebody must remember to extend. See
+> [`docs/engineering/ENVIRONMENT_CAPABILITY.md`](docs/engineering/ENVIRONMENT_CAPABILITY.md).
 >
 > **Phase 026 gave configuration a place to live, and gave GLOBIN a way to measure
 > itself.** `config/` holds a base document and four profiles, and **nothing
@@ -126,7 +149,7 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Ten have been made. Each cost an ADR, and each is
+> **Scope amendments.** Twelve have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
 > unchanged by all ten.
@@ -370,7 +393,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 025 | TA-Lib Native Library Provisioning | Provision the native TA-Lib dependency required by the Python wrapper on Windows, with a documented fallback, measured on this host rather than read off a filename; and, as the ninth scope amendment, give the running application its watchdog -- a monotonic heartbeat registry, a suspect threshold distinct from a confirmed stall, bounded and redacted stall evidence, a graceful shutdown request and a bounded escalation to a hard exit. | Complete |
 | 026 | Configuration File Layout and Profiles | Define on-disk configuration locations and the paper, demo, testnet and live profile structure; and, as the tenth scope amendment, give the running application its telemetry foundation -- a provider-neutral metric contract, cardinality bounded by construction, span context propagation, a bounded and failure-safe export path, and two provider bridges that are absent without breaking anything. | Complete |
 | 027 | Environment Variable and Profile Resolution | Implement deterministic precedence between defaults, files, environment variables and launcher selection; and, as the eleventh scope amendment, give the running application its loopback diagnostics surface -- liveness, readiness, a redacted runtime health projection and a Prometheus/OpenMetrics scrape, bounded and read-only, on an address a value type refuses to widen. | Complete |
-| 028 | Local Secret Storage Mechanism | Implement the approved local secret store so credentials never reach the repository or plain configuration. | Planned |
+| 028 | Local Secret Storage Mechanism | Implement the approved local secret store so credentials never reach the repository or plain configuration; and, as the twelfth scope amendment, deliver the environment capability inventory -- native versus process architecture, emulation state, bounded toolchain discovery, and a compatibility fingerprint that excludes everything volatile. | Complete |
 | 029 | Credential Prompting and Validation Flow | Define interactive credential collection, format validation and permission verification before use. | Planned |
 | 030 | Bootstrap Health Check Suite | Implement the preflight checks that must pass before any long-running GLOBIN process starts. | Planned |
 | 031 | Offline and Degraded Installation Handling | Define behaviour when the network, GPU or optional native components are unavailable. | Planned |

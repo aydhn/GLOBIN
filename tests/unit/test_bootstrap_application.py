@@ -32,6 +32,17 @@ from globin.domain.bootstrap import (
     recorded_outside,
 )
 from globin.domain.configuration import ConfigLayer, config_layer
+from globin.domain.environment import (
+    ArchitectureCapability,
+    CapabilityCategory,
+    CapabilityCheck,
+    CapabilityReason,
+    CapabilitySeverity,
+    CapabilityStatus,
+    EmulationState,
+    EnvironmentCapabilitySnapshot,
+    MachineArchitecture,
+)
 from globin.domain.identifiers import RunId
 from globin.domain.runtime_state import (
     RuntimeArea,
@@ -143,6 +154,63 @@ class _Secrets:
 
 
 @dataclass(frozen=True, slots=True)
+class _Environment:
+    """Supplies a capability snapshot, defaulting to a host with nothing wrong.
+
+    The default is a single supported required check rather than an empty
+    snapshot. An empty one is also `READY` — `compatibility_of` says so — but it
+    would be READY *vacuously*, and a fixture whose healthiness comes from having
+    measured nothing cannot distinguish a passing check from a missing one.
+    """
+
+    snapshot_value: EnvironmentCapabilitySnapshot | None = None
+
+    def snapshot(self, baseline: RuntimeBaseline) -> EnvironmentCapabilitySnapshot:
+        del baseline
+        if self.snapshot_value is not None:
+            return self.snapshot_value
+        return EnvironmentCapabilitySnapshot(
+            checks=(
+                CapabilityCheck(
+                    identifier="environment.architecture.native",
+                    category=CapabilityCategory.ARCHITECTURE,
+                    severity=CapabilitySeverity.REQUIRED,
+                    status=CapabilityStatus.SUPPORTED,
+                    observed="amd64",
+                    expected="amd64",
+                ),
+            ),
+            architecture=ArchitectureCapability(
+                process=MachineArchitecture.AMD64,
+                native=MachineArchitecture.AMD64,
+                emulation=EmulationState.NATIVE,
+            ),
+        )
+
+
+def blocked_environment() -> EnvironmentCapabilitySnapshot:
+    """A host whose native architecture is not the declared one."""
+    return EnvironmentCapabilitySnapshot(
+        checks=(
+            CapabilityCheck(
+                identifier="environment.architecture.native",
+                category=CapabilityCategory.ARCHITECTURE,
+                severity=CapabilitySeverity.REQUIRED,
+                status=CapabilityStatus.UNSUPPORTED,
+                reason=CapabilityReason.ARCHITECTURE_MISMATCH,
+                observed="arm64",
+                expected="amd64",
+            ),
+        ),
+        architecture=ArchitectureCapability(
+            process=MachineArchitecture.ARM64,
+            native=MachineArchitecture.ARM64,
+            emulation=EmulationState.NATIVE,
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class _Tree:
     """Prepares the runtime tree, and records that it was asked to."""
 
@@ -238,6 +306,7 @@ def pipeline(**overrides: object) -> BootstrapPipeline:
         "host": _Host(),
         "project": _Project(),
         "dependencies": _Dependencies(),
+        "environment": _Environment(),
         "secrets": _Secrets(),
         "tree": _Tree(),
         "runtime_tree": _RuntimeTree(),

@@ -9,6 +9,7 @@ wrote — the second, independent mechanism the adapter's docstring promises.
 """
 
 import ast
+import json
 import tomllib
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from globin.domain.bootstrap import (
     check_identifiers,
     checks,
 )
+from globin.domain.environment import FINGERPRINT_LENGTH
 from globin.runtime.composition import build_bootstrap
 from tests.support import REPO_ROOT, running_from_the_project_environment
 from tools.quality.evidence.redaction import describe, scan
@@ -61,6 +63,7 @@ EXPECTED_CODES: dict[str, int] = {
     # rather than letting it exit, so nothing in `globin.runtime.cli` can produce
     # this and a launcher seeing it knows the run did not choose its own ending.
     "WATCHDOG_STALLED": 23,
+    "ENVIRONMENT_INCOMPATIBLE": 24,
 }
 
 #: Which check answers for which failure class. A launcher that saw code 12 must
@@ -81,6 +84,7 @@ EXPECTED_MAPPING: dict[str, str] = {
     "state.persistence": "RUNTIME_PERSISTENCE_FAILED",
     "state.previous_run": "RUNTIME_STATE_CORRUPT",
     "instance.lock": "INSTANCE_ALREADY_ACTIVE",
+    "environment.capability": "ENVIRONMENT_INCOMPATIBLE",
     "secrets.required": "SECRETS_UNREADY",
     "bootstrap.ready": "GATE_FAILED",
 }
@@ -188,11 +192,23 @@ def test_every_identifier_is_a_lower_case_dotted_pair() -> None:
 def test_no_module_under_the_package_carries_a_credential_shaped_name() -> None:
     """`docs/security/SECRET_STORE_CONTRACT.md` §1, checked rather than remembered.
 
-    The store is Phase 028's and the credential flow Phase 029's. Until `README.md`
-    says the capability exists, nothing here may be named as though it does — which
-    is why this phase measures secret *readiness* and holds no reference type.
+    **Phase 028 narrowed this rule rather than removing it, and the narrowing is
+    the point.** The rule was always conditional — "until `README.md` says the
+    capability exists, nothing here may be named as though it does" — and this is
+    the phase that makes the store exist. So `secret` left the list, `README.md`
+    gained a maturity row pointing at the evidence, and the four
+    `globin.*.secrets` modules are now legitimate.
+
+    Everything else stays forbidden, because everything else is still absent.
+    `credential` in particular remains listed: `ABSENT_CAPABILITIES` in
+    `test_documentation_contract.py` still pairs *credential handling* with that
+    fragment, Phase 029 owns collection and validation, and a module named for it
+    would be claiming a capability nothing has built.
+
+    The two halves are deliberately different words for deliberately different
+    things: this phase stores material it is given, and has no way to obtain any.
     """
-    forbidden = ("secret", "credential", "password", "token", "keyring", "apikey")
+    forbidden = ("credential", "password", "token", "keyring", "apikey")
     offenders = [
         path.relative_to(REPO_ROOT).as_posix()
         for path in sorted((REPO_ROOT / "src" / "globin").rglob("*.py"))
@@ -311,3 +327,40 @@ def test_the_adapter_does_not_import_the_verification_tooling() -> None:
         for alias in node.names
     }
     assert not any(name.startswith("tools") for name in imported)
+
+
+def test_the_manifest_carries_the_environment_snapshot_and_its_fingerprint(
+    manifest_text: str,
+) -> None:
+    """Phase 028's evidence, in the document every other observation already reaches.
+
+    A separate `.globin/environment/` manifest was not built, deliberately: the
+    capability snapshot is a fact *about this start-up*, and the bootstrap
+    manifest is where this repository already records those. A second artefact
+    would need its own schema, its own digest and its own reader for a section
+    that fits in the one that exists.
+
+    The fingerprint is what makes the section worth publishing — two runs on an
+    unchanged host produce the same value, so a reader comparing two manifests
+    learns whether the environment moved without reading five checks.
+    """
+    observed = json.loads(manifest_text)["observed"]
+    environment = observed["environment"]
+    assert environment is not None
+    assert environment["compatibility"] in {"ready", "degraded", "blocked"}
+    assert len(environment["fingerprint"]) == FINGERPRINT_LENGTH
+    assert environment["architecture"].keys() == {"process", "native", "emulation"}
+    assert all(set(entry) == {"name", "present"} for entry in environment["toolchain"])
+
+
+def test_the_environment_section_publishes_no_path(manifest_text: str) -> None:
+    """The privacy property, asserted on real published bytes rather than a type.
+
+    `test_the_snapshot_has_no_field_that_could_hold_a_path` asserts it
+    structurally; this asserts it about what a run actually wrote, which is the
+    thing an operator would send to somebody.
+    """
+    section = json.dumps(json.loads(manifest_text)["observed"]["environment"])
+    assert ":\\" not in section
+    assert ":/" not in section
+    assert "/Users/" not in section

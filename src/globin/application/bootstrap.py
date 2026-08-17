@@ -44,6 +44,7 @@ from globin.domain.bootstrap import (
     RuntimePaths,
     SecretReadiness,
     architecture_outcome,
+    capability_outcome,
     configuration_outcome,
     context_fingerprint,
     dependency_outcome,
@@ -58,6 +59,7 @@ from globin.domain.bootstrap import (
     version_outcome,
 )
 from globin.domain.configuration import GlobinConfig
+from globin.domain.environment import EnvironmentCapabilitySnapshot
 from globin.domain.runtime_state import (
     LIFECYCLE_FILE,
     LifecycleRecord,
@@ -72,6 +74,7 @@ from globin.domain.runtime_state import (
 from globin.errors import ConfigurationError, GlobinError
 from globin.ports.bootstrap import (
     DependencyProbe,
+    EnvironmentProbe,
     HostProbe,
     ProjectProbe,
     RuntimeBaselineSource,
@@ -94,6 +97,7 @@ a replace.
 UNMEASURED_REMEDIATION: dict[str, str] = {
     "runtime.host": "Fix the declaration this check reads, then run again.",
     "runtime.architecture": "Fix the declaration this check reads, then run again.",
+    "environment.capability": "Fix the declaration this check reads, then run again.",
     "python.implementation": "Fix the declaration this check reads, then run again.",
     "python.version": "Fix the declaration this check reads, then run again.",
     "python.environment": "Fix the declaration this check reads, then run again.",
@@ -125,6 +129,10 @@ class BootstrapPipeline:
         host: Observes the machine and the interpreter.
         project: Locates the project and reads its identity.
         dependencies: Reports what is declared, locked and installed.
+        environment: Reports what this host is capable of, beyond what the
+            contract declares. Separate from ``host`` because the two answer
+            different questions: one reads the machine's identity, the other
+            judges its fitness.
         secrets: Reports whether required references resolve.
         tree: Prepares the declared tree inside the project.
         runtime_tree: Resolves and prepares the user-local mutable tree. Separate
@@ -148,6 +156,7 @@ class BootstrapPipeline:
     host: HostProbe
     project: ProjectProbe
     dependencies: DependencyProbe
+    environment: EnvironmentProbe
     secrets: SecretProbe
     tree: RuntimeTree
     runtime_tree: RuntimeTreeSource
@@ -264,14 +273,21 @@ class _RunState:
     config_problem: str = ""
     runtime_ready: bool = False
     previous_run: LifecycleRecord | None = None
+    environment: EnvironmentCapabilitySnapshot | None = None
 
     def observed(self) -> dict[str, object]:
         """The facts this run measured, in the shape the evidence carries.
 
         Returns:
-            Host, interpreter, project, dependency and secret sections. Absent
-            measurements are recorded as ``None`` rather than omitted, so that a
-            reader can tell "not measured" from "measured as nothing".
+            Host, interpreter, project, dependency, secret, environment and
+            runtime sections. Absent measurements are recorded as ``None``
+            rather than omitted, so that a reader can tell "not measured" from
+            "measured as nothing".
+
+        The ``environment`` section carries the capability snapshot's own record,
+        which includes the compatibility fingerprint. It is safe to publish for
+        the reason the whole snapshot is: no type in that chain has a field for a
+        path, so there is no branch in which one could appear here.
         """
         return {
             "host": None if self.host_facts is None else _host_record(self.host_facts),
@@ -289,6 +305,7 @@ class _RunState:
             "paths": self.paths.declared(),
             "dependencies": self.dependency_readiness.as_record(),
             "secrets": self.secret_readiness.as_record(),
+            "environment": (None if self.environment is None else self.environment.as_record()),
             "runtime": {
                 "root": self.runtime_root.as_record(),
                 "usable": self.runtime_ready,
@@ -450,6 +467,27 @@ def _architecture_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOu
         return _unmeasured("runtime.architecture", state.baseline_problem)
     baseline, host, _interpreter = observed
     return architecture_outcome(host, baseline)
+
+
+def _capability_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
+    """Measure this host's capabilities and judge them.
+
+    Args:
+        pipeline: The pipeline, for its environment probe.
+        state: The run state, for the baseline and to record the snapshot.
+
+    Returns:
+        The outcome of ``environment.capability``.
+
+    Unmeasured when the baseline could not be read, because every capability
+    here is judged *against* the declaration and a probe with nothing to compare
+    against would be reporting on a host rather than on its fitness.
+    """
+    baseline = _baseline_of(pipeline, state)
+    if baseline is None:
+        return _unmeasured("environment.capability", state.baseline_problem)
+    state.environment = pipeline.environment.snapshot(baseline)
+    return capability_outcome(state.environment)
 
 
 def _implementation_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
@@ -718,6 +756,7 @@ def steps() -> tuple[Callable[[BootstrapPipeline, _RunState], CheckOutcome], ...
         _root_step,
         _host_step,
         _architecture_step,
+        _capability_step,
         _implementation_step,
         _version_step,
         _environment_step,

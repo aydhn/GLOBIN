@@ -374,6 +374,8 @@ class ReadinessReason(StrEnum):
     STOPPING = "stopping"
     CONFIGURATION_INVALID = "configuration_invalid"
     DEPENDENCY_UNREADY = "dependency_unready"
+    ENVIRONMENT_INCOMPATIBLE = "environment_incompatible"
+    SECRETS_UNREADY = "secrets_unready"
     UNKNOWN = "unknown"
 
 
