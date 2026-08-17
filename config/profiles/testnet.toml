@@ -1,0 +1,34 @@
+# ---------------------------------------------------------------------------
+# GLOBIN profile: testnet
+#
+# Binance's testnet: separate infrastructure, its own keys, periodic resets.
+#
+# THIS DOCUMENT SETS NOTHING, AND THAT IS THE DELIVERABLE RATHER THAN A SHORTFALL.
+# GLOBIN does not trade, hold credentials or reach any venue, so there is no
+# setting that differs between the four profiles *for a reason anybody could
+# defend today*. Writing different numbers into them would be inventing a
+# difference in order to justify the files, and it would encode a belief about how
+# the four differ in a document nobody would think to look in.
+#
+# A PROFILE NAMES A DOCUMENT. IT DOES NOT NAME AN ENVIRONMENT. What an environment
+# *is*, and how production, testnet and demo differ, is Phase 035; which
+# product/environment pairs are usable is Phase 036. That boundary is not a
+# convention here -- it is structural. `as_config` refuses every key outside
+# `known_keys()`, and not one of those keys can say anything about a venue, a URL
+# or a product, so **this document is incapable of asserting what an environment
+# is** even if somebody tried.
+#
+# Testnet has its own credentials and its own base URLs, and it does not offer
+# every product production does. None of that is expressible here yet, and
+# `config/` is the wrong place for the credentials half regardless -- Phase 028
+# owns where a secret lives.
+#
+# No secret, credential or reference to one belongs in this tree. See
+# `config/globin.toml` and `docs/security/SECURITY_BASELINE.md`.
+# ---------------------------------------------------------------------------
+
+[logging]
+
+[diagnostics]
+
+[watchdog]

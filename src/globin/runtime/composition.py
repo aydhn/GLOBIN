@@ -105,6 +105,7 @@ from globin.domain.bootstrap import (
     RuntimePaths,
 )
 from globin.domain.clock import MonotonicReading
+from globin.domain.config_layout import ConfigLayout, ConfigRole, resolve_profile
 from globin.domain.configuration import GlobinConfig, default_config
 from globin.domain.diagnostics import MAXIMUM_BACKUP_COUNT
 from globin.domain.runtime_state import (
@@ -138,14 +139,40 @@ A float because :meth:`threading.Event.wait` takes seconds as a float, and the
 one place the conversion happens is here rather than at the call site.
 """
 
-DEFAULT_PROFILE: Final[str] = "default"
-"""The profile name recorded until Phase 026 defines any.
+PROFILES: Final[tuple[str, ...]] = ("paper", "demo", "testnet", "live")
+"""Every profile this installation declares, in listing order.
 
-A literal rather than a lookup, and named rather than left blank, because the
-instance record has a field for it and an empty one would read as "no profile"
-rather than as "profiles do not exist yet". Phase 026 decides what a profile is
-and Phase 027 decides how one is selected; this is what the field says until
-then."""
+The four names are `ROADMAP.md` row 026's and nowhere else's. A fifth is a roadmap
+edit rather than a value somebody passes, and
+`tests/contract/test_configuration_layout_contract.py` compares this tuple against
+that row in both directions.
+
+**They live here rather than in the domain layer, and that is a rule rather than a
+preference.** Three of them -- `demo`, `testnet`, `live` -- are venue vocabulary,
+and `tests/architecture/test_identifier_discipline.py` refuses venue vocabulary as
+a live constant anywhere under `globin.domain`. That refusal is right: a set of
+environment names compiled into the innermost layer would answer, quietly and in
+the wrong place, the question Phase 035 exists to ask. So
+`globin.domain.config_layout` bounds the *shape* of a profile name and this
+constant supplies the *instances*, which is `identifiers.py`'s kinds-not-instances
+discipline applied to a second subject.
+
+Listing order, not precedence. `paper` is first because it is the default, and the
+rest follow the roadmap's own sentence."""
+
+DEFAULT_PROFILE: Final[str] = "paper"
+"""The profile assumed when nothing has selected one.
+
+Phase 022 recorded `"default"` here as a placeholder for a concept that did not
+exist yet. It exists now, so this is one of the four rather than a fifth name that
+is not a profile.
+
+**`paper`, and it must never be `live`.** ADR-0006's "never downgraded to
+production" read in the other direction means never silently *upgraded* to it
+either, and a default is the quietest upgrade there is. Phase 027 owns how a real
+selection arrives -- environment variable, launcher argument, precedence between
+them -- and until then this is what the instance record and every health snapshot
+carry."""
 
 
 def build_architecture_review(repo_root: Path) -> ArchitectureReview:
@@ -190,6 +217,68 @@ def build_configuration(sources: Sequence[ConfigurationSource] | None = None) ->
     :func:`build_architecture_review` has.
     """
     return ConfigurationResolution(sources=() if sources is None else tuple(sources)).run()
+
+
+def build_config_layout() -> ConfigLayout:
+    """Where GLOBIN's configuration documents sit, relative to the project root.
+
+    Returns:
+        The declared :class:`~globin.domain.config_layout.ConfigLayout`.
+
+    A builder rather than a constant, on the rule every layer package here obeys:
+    constructing a dataclass is a call, and a call at import is refused. It reaches
+    no filesystem and joins nothing to a root -- it returns *spellings*, and
+    :func:`configuration_document` is what turns one into a path.
+    """
+    return ConfigLayout()
+
+
+def configuration_document(
+    repo_root: Path, role: ConfigRole, profile: str, layout: ConfigLayout | None = None
+) -> Path:
+    """Where one configuration document would be, on this filesystem.
+
+    Args:
+        repo_root: The discovered project root.
+        role: Which of the four documents.
+        profile: Which profile.
+        layout: The layout to read, defaulting to the declared one.
+
+    Returns:
+        An absolute path. **It is not checked for existence**, deliberately:
+        whether a missing document is fatal or an empty layer is Phase 027's
+        question, and answering it here by returning ``None`` would settle it.
+
+    Raises:
+        ValidationError: If the profile name is not canonical.
+
+    The one place a project-relative spelling meets a real root, which is the same
+    division `RuntimePaths` draws between a declared segment and a resolved
+    location.
+    """
+    declared = build_config_layout() if layout is None else layout
+    return repo_root / Path(declared.document_for(role, profile))
+
+
+def resolve_declared_profile(name: str) -> str:
+    """Resolve a profile name against the profiles this installation declares.
+
+    Args:
+        name: The candidate spelling, from wherever the caller obtained it.
+
+    Returns:
+        The declared spelling it names.
+
+    Raises:
+        ConfigurationError: If it names none of them.
+
+    Supplies :data:`PROFILES` so that the domain keeps bounding the *shape* of a
+    name while the composition root owns the *set*. Where the candidate came from
+    -- an environment variable, a launcher argument, a flag, or the precedence
+    between them -- is Phase 027's, and this function deliberately takes it as an
+    argument rather than reading anything.
+    """
+    return resolve_profile(name, PROFILES)
 
 
 def build_clock() -> Clock:

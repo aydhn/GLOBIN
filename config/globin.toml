@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+# GLOBIN base configuration.
+#
+# Applies whatever profile is selected. A profile document may then replace any
+# value here; nothing here can replace a profile.
+#
+# WHY THIS FILE SETS NOTHING. Every setting GLOBIN has already declares a default
+# in `src/globin/domain/configuration.py`, and `docs/CONFIGURATION_POLICY.md`
+# refuses a setting that cannot resolve without a file. So an empty document is
+# not an unfinished one -- it is the identity element that policy describes:
+# "A source with nothing to say still returns a layer." Writing a value here to
+# make the file look busy would be restating a default in a second place, which is
+# exactly the drift `SOURCE_OF_TRUTH.md` exists to prevent.
+#
+# WHAT MAY NEVER GO IN THIS TREE. No API key, no secret, no token, no credential
+# of any kind, and no reference to one. `docs/security/SECURITY_BASELINE.md` is
+# absolute about it: a secret lives outside the tree, in an OS-protected store,
+# and is referred to by name rather than by value. Phase 028 builds that store.
+# This file is committed and world-readable; treat it as a public document,
+# because it is one.
+#
+# WHICH DOCUMENTS ARE READ, AND IN WHAT ORDER, IS NOT SETTLED HERE. Phase 026
+# defines where documents live and what they are called. Phase 027 defines
+# precedence between defaults, files, environment variables and launcher
+# selection -- so today nothing loads this file, and `build_configuration` still
+# resolves the declared defaults. That is the roadmap's own split rather than an
+# omission. See `docs/engineering/CONFIGURATION_LAYOUT.md`.
+#
+# The sections below are the three the model declares. Their keys and permitted
+# values are in `docs/CONFIGURATION_POLICY.md`, which is compared against the code
+# in both directions by a contract test.
+# ---------------------------------------------------------------------------
+
+[logging]
+
+[diagnostics]
+
+[watchdog]

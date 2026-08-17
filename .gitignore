@@ -84,6 +84,24 @@ htmlcov/
 .tox/
 .nox/
 
+# --- The operator's own configuration, never the repository's ---------------
+# Phase 026 puts GLOBIN's configuration in `config/`, and the committed half of
+# that tree is reviewable on purpose: a document that will one day select live
+# trading must be visible in a diff. `config/local/` is the other half -- an
+# operator's own overrides, which belong to the machine rather than to the
+# project.
+#
+# THIS IS DEFENCE IN DEPTH, NOT A LICENCE. `docs/security/SECURITY_BASELINE.md`
+# says a secret never arrives through configuration at all, and Phase 028 stores
+# a reference rather than a value. The rule is here anyway, before the directory
+# exists, for the reason stated at the top of this file: what Git records once, it
+# records permanently.
+#
+# ANCHORED WITH A LEADING SLASH, deliberately. A bare `local/` would match at
+# every depth, which is exactly how Phase 018 silently lost `tools/quality/wheels/`
+# to an unanchored `wheels/`.
+/config/local/
+
 # --- Runtime output directories owned by later phases -----------------------
 # Market data, model binaries, optimisation studies and logs are large,
 # regenerable and/or account-specific. They are local state, never source.

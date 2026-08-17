@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# GLOBIN profile: demo
+#
+# Binance's demo mode: production infrastructure, virtual balances, Spot
+# only.
+#
+# THIS DOCUMENT SETS NOTHING, AND THAT IS THE DELIVERABLE RATHER THAN A SHORTFALL.
+# GLOBIN does not trade, hold credentials or reach any venue, so there is no
+# setting that differs between the four profiles *for a reason anybody could
+# defend today*. Writing different numbers into them would be inventing a
+# difference in order to justify the files, and it would encode a belief about how
+# the four differ in a document nobody would think to look in.
+#
+# A PROFILE NAMES A DOCUMENT. IT DOES NOT NAME AN ENVIRONMENT. What an environment
+# *is*, and how production, testnet and demo differ, is Phase 035; which
+# product/environment pairs are usable is Phase 036. That boundary is not a
+# convention here -- it is structural. `as_config` refuses every key outside
+# `known_keys()`, and not one of those keys can say anything about a venue, a URL
+# or a product, so **this document is incapable of asserting what an environment
+# is** even if somebody tried.
+#
+# Note that demo mode runs on PRODUCTION infrastructure with virtual balances,
+# which makes it unlike testnet in a way that matters. `MEMORY.md` records the
+# three non-production concepts as distinct; Phase 035 is where that
+# distinction acquires behaviour rather than a filename.
+#
+# No secret, credential or reference to one belongs in this tree. See
+# `config/globin.toml` and `docs/security/SECURITY_BASELINE.md`.
+# ---------------------------------------------------------------------------
+
+[logging]
+
+[diagnostics]
+
+[watchdog]
