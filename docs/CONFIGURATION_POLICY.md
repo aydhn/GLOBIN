@@ -213,7 +213,7 @@ is a decision rather than a regression.
 
 | Question | Phase |
 |---|---|
-| Where configuration files live, what they are called, and what profiles exist | 026 |
+| Where configuration files live, what they are called, and what profiles exist | 026, delivered — [`engineering/CONFIGURATION_LAYOUT.md`](engineering/CONFIGURATION_LAYOUT.md) |
 | Which sources are consulted, in what order, and how environment variables and launcher selection fit | 027 |
 | The rules a secret is handled under | 015, delivered — [`security/SECURITY_BASELINE.md`](security/SECURITY_BASELINE.md) |
 | Where a secret is stored, and how it is supplied | 028 |
@@ -221,8 +221,11 @@ is a decision rather than a regression.
 
 Nothing in the configuration model knows about files, environment variables or
 the machine it runs on. A source is handed a path; it never searches for one,
-and it holds no default location. That is why the `config/` directory still does
-not exist — creating it would settle Phase 026's question by accident.
+and it holds no default location. **Phase 026 answered where documents live
+without weakening that**: `config/` exists and
+[`engineering/CONFIGURATION_LAYOUT.md`](engineering/CONFIGURATION_LAYOUT.md)
+*computes* a spelling from a layout and a profile rather than looking anything
+up, because a search order is a precedence and precedence is Phase 027's.
 
 ---
 

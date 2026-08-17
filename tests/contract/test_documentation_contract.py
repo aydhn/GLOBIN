@@ -77,6 +77,9 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/engineering/REPOSITORY_LAYOUT.md",
     "docs/engineering/DOCUMENTATION_STANDARD.md",
     "docs/engineering/QUALITY_GATES.md",
+    "docs/engineering/RUNTIME_TELEMETRY.md",
+    "docs/engineering/CONFIGURATION_LAYOUT.md",
+    "docs/TELEMETRY_POLICY.md",
     "docs/engineering/STATIC_ANALYSIS.md",
     "docs/engineering/CI_SECURITY.md",
     "docs/adr/README.md",
@@ -131,6 +134,7 @@ REQUIRED_DOCS: tuple[str, ...] = (
     # a list required to be complete and quietly is not reads as a guarantee.
     "docs/research/phase_024_sources.md",
     "docs/research/phase_025_sources.md",
+    "docs/research/phase_026_sources.md",
     "docs/engineering/GPU_BENEFIT.md",
     "docs/engineering/RUNTIME_HEALTH.md",
     "docs/engineering/SUPPORT_BUNDLE.md",

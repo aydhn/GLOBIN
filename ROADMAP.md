@@ -33,10 +33,30 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-025 are complete. Phase 026 is next and has not started.**
-> Nothing beyond Phase 025 is implemented. GLOBIN does not trade, does not
+> **Phases 001-026 are complete. Phase 027 is next and has not started.**
+> Nothing beyond Phase 026 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and has no credentials. See
 > [`README.md`](README.md).
+>
+> **Phase 026 gave configuration a place to live, and gave GLOBIN a way to measure
+> itself.** `config/` holds a base document and four profiles, and **nothing
+> searches** -- given a layout and a profile the candidate documents are a pure
+> function of the two, because a search order *is* a precedence and precedence is
+> Phase 027's. A profile names a **document**, not an environment: `as_config`
+> refuses every key outside the register, so a profile document is structurally
+> incapable of asserting what an environment is. The four set nothing, and a
+> contract test asserts they fold to exactly the declared defaults.
+>
+> **Alongside it, and as the tenth scope amendment, the telemetry foundation.**
+> Every attribute key declares a bounded value set, so the most series a metric can
+> produce is a **product computable when the descriptor is written** -- a descriptor
+> that could exceed its own budget cannot be constructed. Export is off by default
+> and "off" is an object graph rather than a flag: no exporter, queue, pump or
+> thread exists, so opening no socket is structural. The Prometheus listener binds
+> `127.0.0.1` as a **literal** with no address setting, because the library's own
+> default is every interface. See
+> [`docs/engineering/RUNTIME_TELEMETRY.md`](docs/engineering/RUNTIME_TELEMETRY.md)
+> and [`docs/engineering/CONFIGURATION_LAYOUT.md`](docs/engineering/CONFIGURATION_LAYOUT.md).
 >
 > **Phase 022 verified the scientific stack, and gave GLOBIN somewhere to live.**
 > `python -m tools.quality stack` recomputes what
@@ -85,7 +105,7 @@ the contract:
 > what Windows offers.
 > [`docs/security/SECRET_STORE_CONTRACT.md`](docs/security/SECRET_STORE_CONTRACT.md)
 > records the measured limits. **No store is implemented and no mechanism is
-> chosen** — that remains Phases 026 to 029.
+> chosen** — that remains Phases 027 to 029.
 >
 > **Phase 016 closed the first band and cut `v0.1.0`.** What that certifies, and
 > the one criterion it could not, are in
@@ -106,10 +126,10 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Nine have been made. Each cost an ADR, and each is
+> **Scope amendments.** Ten have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
-> unchanged by all nine.
+> unchanged by all ten.
 >
 > This count said *seven* while listing eight from Phase 024 until Phase 025
 > repaired it. Nothing tests it, which is why it drifted and why it is worth
@@ -250,6 +270,34 @@ the contract:
 > records that, and the three courses the conflict was surfaced with, on the owner's
 > decision. A tenth amendment inherits nothing from this one and must additionally
 > say whether it too collides with a title.
+>
+> **Tenth.** Phase 026 still delivers the configuration file layout and the paper,
+> demo, testnet and live profile structure its title names, and now also gives the
+> running application its telemetry foundation: a provider-neutral typed contract, a
+> metric registry whose cardinality is bounded by construction rather than policed at
+> runtime, span values with `contextvars` propagation, a bounded and failure-safe
+> delivery path, two provider bridges, a fourth configuration section and a read-only
+> command.
+>
+> **It scores one of four, and it is the second consecutive amendment to collide with
+> a phase title.** Restating ADR-0021's test in full: nothing is deferred and no other
+> title changes, but work is displaced -- parts of 280, 282 and 315 arrive here -- and
+> the two halves do not need each other. Phase 280 owns this work **by its title**,
+> *Operational Metrics Collection*. The ninth collided with a title too, and two in a
+> row is materially worse than a repeat of an earlier shape;
+> [ADR-0067](docs/adr/0067-phase-026-widens-to-deliver-the-telemetry-foundation.md)
+> says so rather than treating it as normalised. What it can say in return: **it
+> overlaps no completed phase**, and the collision with 280 is refused rather than
+> rebuilt -- that phase's verb is *collect*, this phase's are *declare*, *bound* and
+> *record*, and collection, retention, dashboards and alerting are absent by design
+> with their owning phases named.
+>
+> **The signal ADR-0064 named has fired.** That record said a tenth amendment before
+> the band closes at Phase 032 would be evidence the roadmap is being treated as a
+> backlog, and that the right response is to question the roadmap's granularity rather
+> than to write an eleventh argument. **Phase 032 must therefore examine whether Phases
+> 017-032 were drawn at a granularity that describes the work, with all ten amendments
+> in front of it.** An eleventh before then is not another argument to be weighed.
 
 ---
 
@@ -296,7 +344,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 023 | NVIDIA Driver and CUDA Capability Detection | Detect GPU presence, driver version, compute capability and CUDA availability without assuming any of them; and, as the seventh scope amendment, give the running application its diagnostics -- a bounded log file in the runtime tree, a lifecycle event vocabulary, the process fault hooks, `faulthandler`, and a bridge for standard-library records. | Complete |
 | 024 | GPU Runtime Verification Harness | Build a harness that proves which workloads actually benefit from GPU execution on this host; and, as the eighth scope amendment, give the running application its health surface -- a typed runtime health snapshot, process and host resource diagnostics, bounded thread and memory introspection, and a redacted, self-validating support bundle. | Complete |
 | 025 | TA-Lib Native Library Provisioning | Provision the native TA-Lib dependency required by the Python wrapper on Windows, with a documented fallback, measured on this host rather than read off a filename; and, as the ninth scope amendment, give the running application its watchdog -- a monotonic heartbeat registry, a suspect threshold distinct from a confirmed stall, bounded and redacted stall evidence, a graceful shutdown request and a bounded escalation to a hard exit. | Complete |
-| 026 | Configuration File Layout and Profiles | Define on-disk configuration locations and the paper, demo, testnet and live profile structure. | Planned |
+| 026 | Configuration File Layout and Profiles | Define on-disk configuration locations and the paper, demo, testnet and live profile structure; and, as the tenth scope amendment, give the running application its telemetry foundation -- a provider-neutral metric contract, cardinality bounded by construction, span context propagation, a bounded and failure-safe export path, and two provider bridges that are absent without breaking anything. | Complete |
 | 027 | Environment Variable and Profile Resolution | Implement deterministic precedence between defaults, files, environment variables and launcher selection. | Planned |
 | 028 | Local Secret Storage Mechanism | Implement the approved local secret store so credentials never reach the repository or plain configuration. | Planned |
 | 029 | Credential Prompting and Validation Flow | Define interactive credential collection, format validation and permission verification before use. | Planned |

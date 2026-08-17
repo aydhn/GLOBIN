@@ -89,6 +89,8 @@ GLOBIN/
 │   ├── unit/            One unit, dependencies substituted
 │   ├── property/        Invariants over generated input (Hypothesis)
 │   └── integration/     Several components together, still local
+├── config/              GLOBIN's own configuration; four profiles, none set yet
+├── pylock.toml          The runtime dependencies, resolved and hash-pinned
 ├── pylock.dev.toml      The development toolchain, resolved and hash-pinned
 │                        NOTE: a running GLOBIN's mutable state is NOT in this
 │                        tree. It is user-local; see RUNTIME_FILESYSTEM.md.
@@ -471,6 +473,40 @@ anywhere. `memory` is a separate verb rather than a flag, because the allocator
 tracer costs the whole process while it runs. Details:
 [`docs/engineering/RUNTIME_HEALTH.md`](docs/engineering/RUNTIME_HEALTH.md) and
 [`docs/engineering/SUPPORT_BUNDLE.md`](docs/engineering/SUPPORT_BUNDLE.md).
+
+Phase 025 gave that process a **watchdog**, and Phase 026 gave it **telemetry**.
+
+```bash
+.venv\Scripts\globin.exe diagnostics watchdog
+```
+
+```bash
+.venv\Scripts\globin.exe diagnostics telemetry --json
+```
+
+The watchdog's heartbeat is a **sequence, not a timestamp**, because a component
+looping inside a wedged call rewrites a timestamp for ever; its escalation deadline
+runs **from the stall, not from the request**, so a slow capture cannot postpone
+death. Exit code 23.
+
+Telemetry's central rule is that **cardinality is arithmetic rather than a hope**:
+every attribute key declares a bounded value set, so the most series a metric family
+can produce is a product computable when the descriptor is written, and a descriptor
+that could exceed its own budget **cannot be constructed**. Every value is an integer
+-- durations in nanoseconds, ratios in parts per million -- with a `2**53` ceiling
+that is **not Python's limit** but every other JSON reader's. **Export is off by
+default and "off" is an object graph rather than a flag**: no exporter, queue, pump
+or thread exists, so opening no socket is structural. The Prometheus listener binds
+`127.0.0.1` as a **literal** with no address setting, because the library's own
+default is `0.0.0.0`. Details:
+[`docs/engineering/RUNTIME_TELEMETRY.md`](docs/engineering/RUNTIME_TELEMETRY.md),
+[`docs/TELEMETRY_POLICY.md`](docs/TELEMETRY_POLICY.md) and
+[`docs/engineering/CONFIGURATION_LAYOUT.md`](docs/engineering/CONFIGURATION_LAYOUT.md).
+
+**Four libraries are now absent-safe, not one.** `psutil`, `opentelemetry`,
+`prometheus_client` -- each reached through one factory in one adapter, each with its
+own architecture tripwire, because the CI `quality` job installs none of them. Do not
+add a second import site for any of them; add a factory.
 
 `psutil` is the third runtime dependency and the **first this repository imports**.
 It is reached through one factory in `globin/adapters/health.py` and nowhere else,

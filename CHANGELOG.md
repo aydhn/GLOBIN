@@ -19,6 +19,134 @@ can be opened and read.
 
 ## [Unreleased]
 
+### Configuration has a place to live, and four profiles that name documents
+
+- **`config/` exists**, holding a base document, four profiles and a Git-ignored
+  `config/local/` for an operator's own overrides. It is a **third** kind of
+  location: `.globin/` is evidence about this repository and the user-local tree is
+  state about this machine, and every area of that tree is documented *safe to
+  delete* — an authored document there would be the first un-deletable thing in a
+  tree whose whole design rests on disposability. Configuration is authored operator
+  intent, and a document that will one day select live trading must be diffable.
+- **Nothing searches.** Given a layout and a profile the candidate documents are a
+  pure function of the two: no upward walk, no fallback chain, no
+  first-one-that-exists. Each of those is a *precedence* decision and precedence is
+  Phase 027's, so `documents_for` returns a **mapping** rather than a sequence — a
+  tuple has an order and a reader would read that order as the precedence nobody has
+  chosen yet.
+- **A profile names a document, not an environment.** `as_config` refuses every key
+  outside the register, so a profile document is structurally incapable of asserting
+  what an environment is. Phase 035 still owns that question.
+- **The four documents set nothing, and that is the deliverable.** GLOBIN does not
+  trade, so no setting differs between them for a reason anybody could defend today;
+  a contract test folds all five over the declared defaults and asserts the result
+  **is** the declared defaults. The day one sets a value, that test fails.
+- **A tripwire refused the obvious design and was right.** The first version put a
+  four-member `Profile` enum in the domain layer; `demo`, `testnet` and `live` are
+  venue vocabulary, which `test_identifier_discipline.py` forbids there — because a
+  set of environment names in the innermost layer answers Phase 035's question
+  quietly and in the wrong place. The domain now bounds a profile name's *shape* and
+  `composition.PROFILES` names the instances.
+- `DEFAULT_PROFILE` changes from `"default"` to `"paper"`, so `run/instance.json`
+  and every health snapshot record a different value. It must never be `live`:
+  ADR-0006's "never downgraded to production" read in the direction nobody writes
+  down.
+- **`build_configuration` still passes no sources, deliberately.** Phase 026 defines
+  where documents live; Phase 027 implements precedence.
+
+### GLOBIN can measure itself, and cardinality is arithmetic rather than a hope
+
+- **A provider-neutral telemetry contract.** Counters, gauges and histograms with
+  canonical `globin.*` names; nothing under `domain`, `ports` or `application` names
+  OpenTelemetry or Prometheus, and an architecture test enforces one import site per
+  library on the real import graph.
+- **Every attribute key declares a bounded value set**, so the most series a family
+  can produce is a product computable when the descriptor is written — and a
+  descriptor that could exceed its own budget **cannot be constructed**. The runtime
+  budget check still exists and is provably unreachable for a correct registry: a
+  property test asserts it never fires, and a unit test reaches it only by
+  pre-filling a family by hand.
+- **Two denylists, disjoint, and the disjointness is asserted.** `is_sensitive` is
+  reused from the logging module and answers *would this value be a secret*; a second
+  list answers *would it be unbounded*. An order id is not a secret and is fatal as a
+  label. Two shape rules catch the rest without enumerating spellings: a key equal to
+  `id` or ending `_id`, and any key ending `_at`, `_ms`, `_ns` or `_time`.
+- **A credential-shaped attribute is refused where a log field is substituted**, and
+  the contradiction with ADR-0025 is deliberate: a log field is a leaf, so
+  substituting loses one datum, while an attribute is a *dimension*, so substituting
+  merges two series under a name that means nothing.
+- **Every value is an integer.** A duration is nanoseconds — which costs nothing,
+  since `MonotonicReading.since` already returns them — and a ratio is parts per
+  million. The ceiling is `2**53 - 1`, and **that is not Python's limit**: every JSON
+  reader that is not Python holds numbers as doubles and silently drops low bits past
+  it, which is the corruption the float ban prevents arriving through the integer
+  door.
+- **Spans, with the one context variable ADR-0026 permits.** That record refuses
+  `contextvars` for the *correlation id* and it stays refused; the span scope holds a
+  `SpanContext` and nothing else, is an instance attribute rather than a module
+  global, and never touches a `Logger`. A tripwire asserts both.
+- **Async propagation is tested with no event loop, and that is a finding.** Starting
+  one fails here: Windows' `ProactorEventLoop` builds its self-pipe from
+  `socket.socketpair()`, whose fallback calls `connect()`, which the offline guard
+  refuses. The mechanism a task uses is `contextvars.copy_context()`, so that is what
+  the tests exercise — identical behaviour, no socket, no marker.
+- **Delivery is bounded and retirement is permanent.** The queue drops the *oldest*,
+  because during an incident the observation most worth having is the one that just
+  happened. The state machine has one edge into `STOPPED` and **none out**, so
+  "GLOBIN never hammers a dead endpoint" is a property of the graph. A batch is
+  consumed only on `DELIVERED` — a first version restored only on backpressure, which
+  made a transient failure lose data silently.
+- **Export is off by default, and "off" is an object graph rather than a flag**: no
+  exporter, queue, pump or thread is constructed, so opening no socket is structural.
+- **The Prometheus listener binds `127.0.0.1` as a literal and nothing can widen
+  it.** `start_http_server` defaults its address to `0.0.0.0` — measured on the
+  installed package, because the published documentation does not state it at all —
+  which is the class of mitigation this repository refuses to leave to memory. There
+  is no address setting, and a tripwire forbids every other route to a listener.
+- `globin diagnostics telemetry` reports what the registry declares and what the
+  configuration would do. It records nothing, starts nothing and binds nothing, and
+  returns `OK` even when export is retired: a dropped observation is a fact about the
+  observation rather than about the work. Exit code 24 stays free.
+
+### Four runtime dependencies, and what they actually cost
+
+- `opentelemetry-api`, `opentelemetry-sdk`, `opentelemetry-exporter-otlp-proto-http`
+  and `prometheus-client`, each with a written six-question review. **`pylock.toml`
+  goes from eleven distributions to twenty-six**, measured with
+  `pip install --dry-run --ignore-installed` on the pinned interpreter before the
+  choice was confirmed rather than after.
+- Only two arrivals are compiled and neither needs a compiler: `charset-normalizer`
+  publishes a native `cp314` wheel and `protobuf` a `cp310-abi3` one — a stable-ABI
+  wheel serving 3.14 through a tag that does not name it, which is the Phase 018
+  lesson from the other side.
+- **A trap worth recording:** `opentelemetry-api` required `importlib-metadata`
+  unconditionally through 1.41.0 and dropped it at 1.42.0, in the same release that
+  raised `requires_python`. A review written from memory would have declared a
+  dependency this repository does not take.
+- `Apache-2.0 AND BSD-2-Clause` had to be written into `DEPENDENCY_POLICY.md`
+  **verbatim**: the compound rule reads as though it covers any expression whose
+  components are permitted, but the contract test looks for the recorded licence as a
+  literal string. A compound is permitted by being *named*, one at a time.
+- Neither provider library enters `stack-contract.toml`, because that contract feeds
+  the forbidden-import tripwire and listing an *adopted* library would forbid the
+  adapter that imports it. The gap and its fix are recorded in ADR-0068.
+- **No `DELIVERED_PHASE` constant rose**, and the reason is written down because the
+  reflex is to bump them: both are floors bounding registers whose lowest entries name
+  phases 045 and 097.
+
+### The tenth scope amendment, and the signal it confirms
+
+- Phase 026 delivers its roadmap title **and** the telemetry foundation. It scores
+  one of four against ADR-0021 and is the **second consecutive** amendment to collide
+  with a phase title — Phase 280, *Operational Metrics Collection*. ADR-0067 says so
+  rather than treating it as normalised.
+- ADR-0064 predicted that a tenth amendment before Phase 032 would be evidence the
+  roadmap is being treated as a backlog. **It has happened**, and the response is
+  recorded rather than deferred: Phase 032 must examine whether Phases 017-032 were
+  drawn at a granularity that describes the work, with all ten amendments in front of
+  it.
+- ADR-0067, ADR-0068 and ADR-0069.
+
 ### The native TA-Lib library, provisioned and proved present
 
 - **`ta-lib` is a declared, locked runtime dependency**, and the wheel carries the

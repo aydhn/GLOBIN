@@ -131,6 +131,9 @@ a future reader can judge whether the reason still holds.
 | [0064](0064-phase-025-widens-to-deliver-the-runtime-watchdog.md) | Phase 025 widens to deliver the runtime watchdog alongside TA-Lib, and this is the ninth amendment | Accepted |
 | [0065](0065-liveness-is-monotonic-and-escalation-is-bounded-from-the-stall.md) | Liveness is a monotonic sequence rather than a timestamp, and escalation is bounded from the stall rather than from the request | Accepted |
 | [0066](0066-a-stack-may-be-published-once-its-paths-are-reduced-and-it-stays-out-of-a-bundle.md) | A stack may be published once its paths are reduced and it stays out of a support bundle | Accepted |
+| [0067](0067-phase-026-widens-to-deliver-the-telemetry-foundation.md) | Phase 026 widens to deliver the telemetry foundation, and this is the tenth amendment | Accepted |
+| [0068](0068-telemetry-is-provider-neutral-and-cardinality-is-bounded-by-construction.md) | Telemetry is provider-neutral, and cardinality is bounded by construction rather than policed at runtime | Accepted |
+| [0069](0069-configuration-is-derived-rather-than-searched-and-a-profile-names-a-document.md) | Configuration is derived rather than searched, and a profile names a document rather than an environment | Accepted |
 
 ## Relationship to other documents
 
