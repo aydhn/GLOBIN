@@ -103,7 +103,7 @@ classifiers = [
 # `prometheus-client` is also the first dependency that can BIND A SOCKET. Its
 # `start_http_server` defaults to `0.0.0.0`, which is every interface rather than
 # this machine; `globin.adapters.telemetry_prometheus` passes `127.0.0.1` as a
-# literal and exposes no setting that could widen it. See ADR-0069.
+# literal and exposes no setting that could widen it. See ADR-0068.
 dependencies = [
     "numpy>=2.5.2",
     "opentelemetry-api>=1.44.0",
@@ -519,26 +519,41 @@ ignore_missing_imports = true
 module = ["torch"]
 ignore_missing_imports = true
 
-# NO OVERRIDE FOR `opentelemetry` OR `prometheus_client` YET, AND THE ABSENCE IS
-# THE RULE THIS FILE ALREADY STATES RATHER THAN AN OVERSIGHT.
+# `opentelemetry` is the sixth override, and it shares exactly ONE half of psutil's
+# reason while contradicting the other -- which is why it is its own block.
 #
-# Phase 026 declares both in `project.dependencies`, so a reader arriving here
-# expecting a sixth and seventh block has read the dependency list correctly. They
-# are not here because `warn_unused_configs = true` and NOTHING IMPORTS THEM YET:
-# mypy reports an override nothing matches, which is the same argument the numpy
-# block makes about a `numpy.*` wildcard -- the pattern stays exactly as wide as
-# the imports that exist.
+# The half it shares: the CI `quality` job installs neither the API nor the SDK, so
+# without this line mypy reports `import-not-found` there and passes locally. That
+# is the worst of both answers, and this file has now recorded it six times.
 #
-# They arrive in the same diff as `globin.adapters.telemetry_otel` and
-# `globin.adapters.telemetry_prometheus`, for psutil's first reason: the CI
-# `quality` job installs neither library, so without an override mypy reports
-# `import-not-found` there while passing locally -- the worst of both answers.
+# It is worth recording that the earlier version of this comment PREDICTED this
+# exact failure and it happened anyway. The overrides were deliberately withheld
+# while nothing imported the libraries -- correctly, because `warn_unused_configs`
+# reports an override nothing matches -- with a note saying they must arrive in the
+# same diff as the adapters. The adapters arrived; the overrides did not; CI failed
+# on both interpreters while the local gate passed. **A note about a future edit is
+# not a mechanism**, and the only mechanism here is that the CI job runs at all.
 #
-# When they arrive they will NOT carry psutil's second reason. Both projects ship
-# `py.typed`, so on a machine that has them installed the surface is genuinely
-# checkable and there is no untyped region to name and no stub distribution to
-# decline. That makes them CI-absence exemptions only, and it makes them removable
-# the day the `quality` job installs the runtime lock.
+# The half it does NOT share, and the reason this comment is not psutil's: the
+# OpenTelemetry packages DO ship `py.typed`. On a machine that has them installed
+# the surface is genuinely checkable, so unlike psutil there is no untyped region
+# here and no stub distribution to decline. This is therefore purely a CI-absence
+# exemption, and it should be REMOVED rather than kept the day the `quality` job
+# installs the runtime lock -- at which point mypy starts checking the mapping in
+# `globin.adapters.telemetry_otel` for real.
+[[tool.mypy.overrides]]
+module = ["opentelemetry"]
+ignore_missing_imports = true
+
+# `prometheus_client` is the seventh, and its reason is the same shape as the one
+# above rather than psutil's: absent in CI, and typed when present.
+#
+# Note the spelling. The distribution is `prometheus-client` and the import is
+# `prometheus_client`; mypy matches the IMPORT name, which is the same
+# distribution/import split `talib` has.
+[[tool.mypy.overrides]]
+module = ["prometheus_client"]
+ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
 # coverage
