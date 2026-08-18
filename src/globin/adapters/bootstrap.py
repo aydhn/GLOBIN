@@ -690,29 +690,6 @@ class DeclaredDependencyProbe:
             return ()
         return tuple(item for item in dependencies if isinstance(item, str))
 
-    def _declared(self) -> set[str]:
-        """Every distribution ``project.dependencies`` names.
-
-        Returns:
-            Their normalised names.
-        """
-        try:
-            with self.project_file.open("rb") as handle:
-                document = tomllib.load(handle)
-        except (OSError, tomllib.TOMLDecodeError):
-            return set()
-        project = document.get("project")
-        if not isinstance(project, dict):
-            return set()
-        dependencies = project.get("dependencies")
-        if not isinstance(dependencies, list):
-            return set()
-        return {
-            distribution_name(entry)
-            for entry in dependencies
-            if isinstance(entry, str) and distribution_name(entry)
-        }
-
 
 def installed_distributions() -> frozenset[str]:
     """Every distribution this interpreter can import metadata for.
