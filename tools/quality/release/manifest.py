@@ -39,7 +39,7 @@ SCHEMA: Final[str] = "globin.release.manifest"
 """Identifies what kind of document this is, so a governance manifest fed to this
 reader is refused by name rather than by a missing key."""
 
-SCHEMA_VERSION: Final[int] = 1
+SCHEMA_VERSION: Final[int] = 2
 """Bumped whenever the document changes shape, and inside the digested payload so
 that a canonicalisation change cannot collide with an older digest."""
 

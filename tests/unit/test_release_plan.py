@@ -35,6 +35,47 @@ status = "PASS"
 reason = "Asserted by a contract test."
 """
 
+#: The foundation matrix, which every evaluator below is exercised against. Phase
+#: 032 made those evaluators take a `MatrixSpec` so one implementation could
+#: answer for two bands; these tests still ask about the foundation one, so the
+#: spec is named once here rather than at thirty call sites.
+FND = plan.MATRICES[0]
+
+#: A minimal, valid environment declaration. `parse_declaration` reads every
+#: matrix in `MATRICES`, so a test exercising the *foundation* half still has to
+#: supply one -- and supplying a minimal one rather than the repository's real
+#: file keeps these tests about the parser instead of about this band's criteria.
+ENVIRONMENT_DECLARATION = """\
+schema = 1
+
+[[criterion]]
+id = "ENV-A-01"
+category = "host-baseline"
+requirement = "A requirement."
+evidence = ["pyproject.toml"]
+blocking = true
+status = "PASS"
+reason = "A reason."
+"""
+
+
+def parse_one(foundation: str) -> plan.Contract:
+    """Parse a contract from one foundation declaration.
+
+    Args:
+        foundation: The foundation matrix's TOML.
+
+    Returns:
+        The contract, with a minimal environment matrix alongside it.
+    """
+    return plan.parse_declaration(
+        {
+            FND.declaration: foundation,
+            plan.MATRICES[1].declaration: ENVIRONMENT_DECLARATION,
+        }
+    )
+
+
 RELEASE_NOTES = """\
 changelog:
   categories:
@@ -220,17 +261,17 @@ def test_identifiers_used_once_each_are_not_reported() -> None:
 
 @pytest.mark.parametrize("identifier", ["FND-A-1", "FND-Q-01", "fnd-a-01", "A-01", "FND-A-001"])
 def test_an_identifier_outside_the_declared_shape_is_reported(identifier: str) -> None:
-    assert plan.malformed_identifiers((criterion(identifier),)) == (identifier,)
+    assert plan.malformed_identifiers(FND, (criterion(identifier),)) == (identifier,)
 
 
 def test_a_well_formed_identifier_is_not_reported() -> None:
-    assert plan.malformed_identifiers((criterion("FND-P-05"),)) == ()
+    assert plan.malformed_identifiers(FND, (criterion("FND-P-05"),)) == ()
 
 
 def test_a_category_letter_follows_the_declared_order() -> None:
-    assert plan.category_letter("repository-foundation") == "A"
-    assert plan.category_letter("release-readiness") == "P"
-    assert plan.category_letter("invented") == ""
+    assert plan.category_letter(FND, "repository-foundation") == "A"
+    assert plan.category_letter(FND, "release-readiness") == "P"
+    assert plan.category_letter(FND, "invented") == ""
 
 
 def test_an_identifier_filed_under_the_wrong_category_is_reported() -> None:
@@ -239,32 +280,33 @@ def test_an_identifier_filed_under_the_wrong_category_is_reported() -> None:
     Two spellings of one fact need a check that they agree.
     """
     misfiled = criterion("FND-A-01", category="release-readiness")
-    assert plan.misfiled_identifiers((misfiled,)) == (
+    assert plan.misfiled_identifiers(FND, (misfiled,)) == (
         "FND-A-01 is filed under 'release-readiness', whose criteria are numbered FND-P-NN",
     )
 
 
 def test_an_identifier_matching_its_category_is_not_reported() -> None:
-    assert plan.misfiled_identifiers((criterion("FND-A-01"),)) == ()
+    assert plan.misfiled_identifiers(FND, (criterion("FND-A-01"),)) == ()
 
 
 def test_an_unknown_category_is_reported() -> None:
-    assert plan.unknown_categories((criterion(category="invented"),)) == ("invented",)
+    assert plan.unknown_categories(FND, (criterion(category="invented"),)) == ("invented",)
 
 
 def test_every_declared_category_absent_from_the_criteria_is_reported() -> None:
     """A category with no criteria claims coverage the matrix does not have."""
-    empty = plan.empty_categories((criterion(),))
+    empty = plan.empty_categories(FND, (criterion(),))
     assert "repository-foundation" not in empty
-    assert len(empty) == len(plan.CATEGORIES) - 1
+    assert len(empty) == len(plan.FOUNDATION_CATEGORIES) - 1
 
 
 def test_a_populated_matrix_leaves_no_category_empty() -> None:
     criteria = tuple(
-        criterion(f"FND-{plan.category_letter(name)}-01", category=name) for name in plan.CATEGORIES
+        criterion(f"FND-{plan.category_letter(FND, name)}-01", category=name)
+        for name in plan.FOUNDATION_CATEGORIES
     )
-    assert plan.empty_categories(criteria) == ()
-    assert plan.misfiled_identifiers(criteria) == ()
+    assert plan.empty_categories(FND, criteria) == ()
+    assert plan.misfiled_identifiers(FND, criteria) == ()
 
 
 @pytest.mark.parametrize("status", [Status.FAIL, Status.BLOCKED, Status.NOT_APPLICABLE])
@@ -301,27 +343,35 @@ def test_a_criterion_answered_by_a_command_alone_is_accepted() -> None:
 
 
 def test_a_well_formed_declaration_is_read() -> None:
-    contract = plan.parse_declaration(DECLARATION)
+    contract = parse_one(DECLARATION)
     assert contract.version_source == "src/globin/__init__.py"
     assert contract.changelog == "CHANGELOG.md"
-    assert len(contract.criteria) == 1
-    assert contract.criteria[0].status is Status.PASS
-    assert contract.criteria[0].blocking is True
+    # `criteria` spans every matrix since Phase 032, so the foundation half is
+    # read from its own `Matrix` rather than by position across the whole set.
+    foundation = contract.matrices[0]
+    assert foundation.spec is FND
+    assert len(foundation.criteria) == 1
+    assert foundation.criteria[0].status is Status.PASS
+    assert foundation.criteria[0].blocking is True
+    assert len(contract.criteria) == 2
 
 
 def test_the_documents_a_release_requires_are_listed_in_a_stable_order() -> None:
-    contract = plan.parse_declaration(DECLARATION)
+    contract = parse_one(DECLARATION)
     assert contract.documents() == (
         "CHANGELOG.md",
         ".github/release.yml",
         "docs/release/RELEASE_POLICY.md",
-        "docs/release/FOUNDATION_ACCEPTANCE.md",
+        # One acceptance document per band matrix, in band order. Taken from the
+        # specs rather than written out, so a twenty-first band does not need
+        # this test edited -- only `MATRICES`.
+        *(spec.document for spec in plan.MATRICES),
     )
 
 
 def test_text_that_is_not_toml_is_refused_with_the_file_named() -> None:
     with pytest.raises(ReleaseError, match="not valid TOML"):
-        plan.parse_declaration("schema = = 1")
+        parse_one("schema = = 1")
 
 
 def test_a_declaration_of_another_schema_version_is_refused() -> None:
@@ -331,25 +381,25 @@ def test_a_declaration_of_another_schema_version_is_refused() -> None:
     never seen.
     """
     with pytest.raises(ReleaseError, match="schema"):
-        plan.parse_declaration(DECLARATION.replace("schema = 1", "schema = 2"))
+        parse_one(DECLARATION.replace("schema = 1", "schema = 2"))
 
 
 def test_a_declaration_with_no_criteria_is_refused() -> None:
     """An empty matrix certifies nothing while looking like certification."""
     text = DECLARATION.split("[[criterion]]")[0]
     with pytest.raises(ReleaseError, match="no criteria"):
-        plan.parse_declaration(text)
+        parse_one(text)
 
 
 def test_a_declaration_with_no_release_table_is_refused() -> None:
     with pytest.raises(ReleaseError, match=r"\[release\]"):
-        plan.parse_declaration(DECLARATION.replace("[release]", "[unrelated]"))
+        parse_one(DECLARATION.replace("[release]", "[unrelated]"))
 
 
 def test_a_status_outside_the_vocabulary_is_refused_and_the_permitted_set_is_named() -> None:
     text = DECLARATION.replace('status = "PASS"', 'status = "WARN"')
     with pytest.raises(ReleaseError, match="permitted: BLOCKED, FAIL, NOT_APPLICABLE, PASS"):
-        plan.parse_declaration(text)
+        parse_one(text)
 
 
 def test_a_missing_blocking_flag_is_refused_rather_than_defaulted() -> None:
@@ -360,13 +410,13 @@ def test_a_missing_blocking_flag_is_refused_rather_than_defaulted() -> None:
     """
     text = DECLARATION.replace("blocking = true\n", "")
     with pytest.raises(ReleaseError, match="blocking must be true or false"):
-        plan.parse_declaration(text)
+        parse_one(text)
 
 
 def test_a_blocking_flag_that_is_not_a_boolean_is_refused() -> None:
     text = DECLARATION.replace("blocking = true", 'blocking = "yes"')
     with pytest.raises(ReleaseError, match="must be true or false"):
-        plan.parse_declaration(text)
+        parse_one(text)
 
 
 @pytest.mark.parametrize("field", ["id", "category", "requirement", "reason"])
@@ -375,22 +425,22 @@ def test_a_criterion_missing_a_required_string_is_refused(field: str) -> None:
         line for line in DECLARATION.splitlines() if not line.startswith(f"{field} = ")
     )
     with pytest.raises(ReleaseError, match=field):
-        plan.parse_declaration(text)
+        parse_one(text)
 
 
 def test_an_empty_reason_is_refused() -> None:
     """A PASS nobody justified cannot be argued with when it stops holding."""
     text = DECLARATION.replace('reason = "Asserted by a contract test."', 'reason = "  "')
     with pytest.raises(ReleaseError, match="reason"):
-        plan.parse_declaration(text)
+        parse_one(text)
 
 
 def test_evidence_holding_something_that_is_not_a_string_is_refused() -> None:
     text = DECLARATION.replace('evidence = ["src/globin/project_contract.py"]', "evidence = [7]")
     with pytest.raises(ReleaseError, match="expected a string"):
-        plan.parse_declaration(text)
+        parse_one(text)
 
 
 def test_a_criterion_array_that_is_not_an_array_of_tables_is_refused() -> None:
     with pytest.raises(ReleaseError, match="array of tables"):
-        plan.read_declaration({"schema": 1, "release": {}, "criterion": "not a list"})
+        plan.parse_matrix('schema = 1\ncriterion = "not a list"\n', FND)

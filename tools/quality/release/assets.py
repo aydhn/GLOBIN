@@ -46,7 +46,21 @@ be identical and would have to be checked.
 CHECKSUM_FILE: Final[str] = "SHA256SUMS"
 """Digests for every other asset. Never for itself."""
 
-PUBLISHED: Final[tuple[str, ...]] = (ACCEPTANCE_FILE, MANIFEST_FILE, SBOM_FILE)
+ENVIRONMENT_ACCEPTANCE_FILE: Final[str] = "environment-acceptance.json"
+"""The environment band's matrix as the gate read it, added by Phase 032.
+
+A second file rather than a section of the first, matching the declarations it
+comes from: a release freezes each band's certification separately, and a reader
+asking whether the environment band passed should not have to parse a document
+that also answers for a band frozen two releases ago.
+"""
+
+PUBLISHED: Final[tuple[str, ...]] = (
+    ACCEPTANCE_FILE,
+    ENVIRONMENT_ACCEPTANCE_FILE,
+    MANIFEST_FILE,
+    SBOM_FILE,
+)
 """Every asset carrying content, in a stable order.
 
 :data:`CHECKSUM_FILE` is deliberately not a member: it describes this set, so

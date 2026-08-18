@@ -23,39 +23,98 @@ import pytest
 from globin.project_contract import REQUIRED_GIT_BRANCH
 from tools.quality.commands import COMMANDS, MUTATING_COMMANDS, find
 from tools.quality.release import assets, gate, manifest
-from tools.quality.release.plan import CATEGORIES, CONFIGURATION_FILE, Status, parse_declaration
+from tools.quality.release.plan import (
+    FOUNDATION_CATEGORIES,
+    MATRICES,
+    Matrix,
+    Status,
+    parse_declaration,
+)
 from tools.quality.release.plan import category_letter as letter_for
 
-#: A criterion row in the prose matrix:
-#: ``| `FND-A-01` | A requirement. | yes | `PASS` |``
-CRITERION_ROW_RE = re.compile(
-    r"^\|\s*`(?P<id>FND-[A-P]-\d{2})`\s*\|\s*(?P<requirement>[^|]+?)\s*\|"
-    r"\s*(?P<blocking>yes|no)\s*\|\s*`(?P<status>[A-Z_]+)`\s*\|",
-    re.MULTILINE,
-)
+
+def criterion_row_pattern(spec: Any) -> re.Pattern[str]:
+    """A criterion row in one matrix's prose half.
+
+    Args:
+        spec: The matrix.
+
+    Returns:
+        A pattern matching ``| `FND-A-01` | A requirement. | yes | `PASS` |``,
+        with the prefix and letter range this matrix actually uses.
+
+    Built from the spec for the reason `criterion_id_pattern` is: a thirteen
+    category matrix must not accept a row filed under a fourteenth letter.
+    """
+    return re.compile(
+        rf"^\|\s*`(?P<id>{spec.prefix}-[A-{spec.last_letter()}]-\d{{2}})`\s*\|"
+        r"\s*(?P<requirement>[^|]+?)\s*\|"
+        r"\s*(?P<blocking>yes|no)\s*\|\s*`(?P<status>[A-Z_]+)`\s*\|",
+        re.MULTILINE,
+    )
+
 
 #: The headline counts: ``| `PASS` | 53 |``
 COUNT_ROW_RE = re.compile(r"^\|\s*`(?P<status>[A-Z_]+)`\s*\|\s*(?P<count>\d+)\s*\|", re.MULTILINE)
 
-#: The sentence stating the size of the matrix.
+#: The sentence stating the size of the matrix. The category count is spelled
+#: rather than digitised, following the repository's own convention, so the
+#: word is captured and compared against a length rather than parsed as a number.
 TOTAL_RE = re.compile(
-    r"\*\*(?P<total>\d+) criteria across sixteen categories\. (?P<blocking>\d+) are blocking\.\*\*"
+    r"\*\*(?P<total>\d+) criteria across (?P<categories>[a-z-]+) categories\. "
+    r"(?P<blocking>\d+) are blocking\.\*\*"
 )
 
-ACCEPTANCE_DOCUMENT = "docs/release/FOUNDATION_ACCEPTANCE.md"
+#: Spelled cardinals, far enough to cover any band's category count.
+SPELLED_CATEGORIES: dict[str, int] = {
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+}
+
 POLICY_DOCUMENT = "docs/release/RELEASE_POLICY.md"
 
 
 @pytest.fixture(scope="module")
 def declaration(repo_root: Path) -> Any:
-    """The real acceptance declaration, parsed."""
-    return parse_declaration((repo_root / CONFIGURATION_FILE).read_text(encoding="utf-8"))
+    """The real acceptance declarations, parsed — every band, as the gate reads them.
+
+    Phase 032 made `parse_declaration` take one text per matrix rather than a
+    single string, because a release now certifies two bands. Reading them from
+    `MATRICES` rather than naming the files keeps this fixture correct when a
+    twenty-first band is added.
+    """
+    return parse_declaration(
+        {
+            spec.declaration: (repo_root / spec.declaration).read_text(encoding="utf-8")
+            for spec in MATRICES
+        }
+    )
 
 
-@pytest.fixture(scope="module")
-def acceptance(repo_root: Path) -> str:
-    """The prose matrix."""
-    return (repo_root / ACCEPTANCE_DOCUMENT).read_text(encoding="utf-8")
+@pytest.fixture(params=MATRICES, ids=lambda spec: spec.prefix)
+def matrix(request: pytest.FixtureRequest, declaration: Any) -> Matrix:
+    """One band's matrix, once per declared band.
+
+    Parametrised rather than written twice, which is the property that matters:
+    a twenty-first band inherits every assertion below by appearing in
+    `MATRICES`, and cannot be added without them.
+    """
+    spec = request.param
+    found = next(entry for entry in declaration.matrices if entry.spec is spec)
+    assert isinstance(found, Matrix)
+    return found
+
+
+@pytest.fixture
+def acceptance(repo_root: Path, matrix: Matrix) -> str:
+    """The prose half of the matrix under test."""
+    return (repo_root / matrix.spec.document).read_text(encoding="utf-8")
 
 
 @pytest.fixture(scope="module")
@@ -82,11 +141,14 @@ def test_the_criterion_row_reader_finds_its_own_failing_case() -> None:
             "| not a row | x | y | z |",
         ]
     )
-    rows = [match.groupdict() for match in CRITERION_ROW_RE.finditer(document)]
+    pattern = criterion_row_pattern(MATRICES[0])
+    rows = [match.groupdict() for match in pattern.finditer(document)]
     assert [row["id"] for row in rows] == ["FND-A-01", "FND-P-05"]
     assert rows[0]["blocking"] == "yes"
     assert rows[1]["status"] == "BLOCKED"
-    assert CRITERION_ROW_RE.search("| `FND-Z-01` | x | yes | `PASS` |") is None
+    assert pattern.search("| `FND-Z-01` | x | yes | `PASS` |") is None
+    # And the environment matrix's pattern refuses a letter past its own last.
+    assert criterion_row_pattern(MATRICES[1]).search("| `ENV-P-01` | x | yes | `PASS` |") is None
 
 
 def test_the_count_reader_finds_its_own_failing_case() -> None:
@@ -103,17 +165,30 @@ def test_the_declaration_parses(declaration: Any) -> None:
     assert declaration.criteria
 
 
-def test_every_category_carries_at_least_one_criterion(declaration: Any) -> None:
+def test_every_category_carries_at_least_one_criterion(matrix: Any) -> None:
     """A category with no criteria claims coverage the matrix does not have."""
-    used = {criterion.category for criterion in declaration.criteria}
-    assert used == set(CATEGORIES), f"categories with no criteria: {sorted(set(CATEGORIES) - used)}"
+    declared = set(matrix.spec.categories)
+    used = {criterion.category for criterion in matrix.criteria}
+    assert used == declared, (
+        f"{matrix.spec.prefix}: categories with no criteria: {sorted(declared - used)}"
+    )
 
 
-def test_every_identifier_is_unique_and_matches_its_category(declaration: Any) -> None:
-    identifiers = [criterion.identifier for criterion in declaration.criteria]
+def test_the_foundation_categories_are_still_the_sixteen_that_were_frozen() -> None:
+    """`v0.1.0` was cut against these, and a released record is never repaired.
+
+    The parametrised assertion above would be satisfied by *any* self-consistent
+    set, so this pins the one that was published.
+    """
+    assert MATRICES[0].categories is FOUNDATION_CATEGORIES
+    assert len(FOUNDATION_CATEGORIES) == 16
+
+
+def test_every_identifier_is_unique_and_matches_its_category(matrix: Any) -> None:
+    identifiers = [criterion.identifier for criterion in matrix.criteria]
     assert len(identifiers) == len(set(identifiers))
-    for criterion in declaration.criteria:
-        expected = f"FND-{letter_for(criterion.category)}-"
+    for criterion in matrix.criteria:
+        expected = f"{matrix.spec.prefix}-{letter_for(matrix.spec, criterion.category)}-"
         assert criterion.identifier.startswith(expected), (
             f"{criterion.identifier} is filed under {criterion.category!r}"
         )
@@ -177,28 +252,32 @@ def test_the_declared_documents_exist(repo_root: Path, declaration: Any) -> None
 # ---------------------------------------------------------------------------
 
 
-def test_the_document_lists_every_declared_criterion(acceptance: str, declaration: Any) -> None:
-    documented = {match.group("id") for match in CRITERION_ROW_RE.finditer(acceptance)}
-    declared = {criterion.identifier for criterion in declaration.criteria}
+def test_the_document_lists_every_declared_criterion(acceptance: str, matrix: Any) -> None:
+    documented = {
+        match.group("id") for match in criterion_row_pattern(matrix.spec).finditer(acceptance)
+    }
+    declared = {criterion.identifier for criterion in matrix.criteria}
     assert declared - documented == set(), (
-        f"declared but absent from {ACCEPTANCE_DOCUMENT}: {sorted(declared - documented)}"
+        f"declared but absent from {matrix.spec.document}: {sorted(declared - documented)}"
     )
 
 
-def test_the_document_invents_no_criterion(acceptance: str, declaration: Any) -> None:
+def test_the_document_invents_no_criterion(acceptance: str, matrix: Any) -> None:
     """A row the reader sees and the gate never reads enforces nothing."""
-    documented = {match.group("id") for match in CRITERION_ROW_RE.finditer(acceptance)}
-    declared = {criterion.identifier for criterion in declaration.criteria}
+    documented = {
+        match.group("id") for match in criterion_row_pattern(matrix.spec).finditer(acceptance)
+    }
+    declared = {criterion.identifier for criterion in matrix.criteria}
     assert documented - declared == set(), (
         f"documented but not declared: {sorted(documented - declared)}"
     )
 
 
 def test_each_documented_row_states_the_declared_status_and_blocking_flag(
-    acceptance: str, declaration: Any
+    acceptance: str, matrix: Any
 ) -> None:
-    by_id = {criterion.identifier: criterion for criterion in declaration.criteria}
-    for match in CRITERION_ROW_RE.finditer(acceptance):
+    by_id = {criterion.identifier: criterion for criterion in matrix.criteria}
+    for match in criterion_row_pattern(matrix.spec).finditer(acceptance):
         criterion = by_id[match.group("id")]
         assert match.group("status") == criterion.status.value, (
             f"{criterion.identifier}: document says {match.group('status')}, "
@@ -211,11 +290,9 @@ def test_each_documented_row_states_the_declared_status_and_blocking_flag(
         )
 
 
-def test_each_documented_row_states_the_declared_requirement(
-    acceptance: str, declaration: Any
-) -> None:
-    by_id = {criterion.identifier: criterion for criterion in declaration.criteria}
-    for match in CRITERION_ROW_RE.finditer(acceptance):
+def test_each_documented_row_states_the_declared_requirement(acceptance: str, matrix: Any) -> None:
+    by_id = {criterion.identifier: criterion for criterion in matrix.criteria}
+    for match in criterion_row_pattern(matrix.spec).finditer(acceptance):
         criterion = by_id[match.group("id")]
         assert match.group("requirement") == criterion.requirement.strip(), (
             f"{criterion.identifier}: the document and the declaration word the "
@@ -223,39 +300,46 @@ def test_each_documented_row_states_the_declared_requirement(
         )
 
 
-def test_the_headline_totals_match_the_declaration(acceptance: str, declaration: Any) -> None:
+def test_the_headline_totals_match_the_declaration(acceptance: str, matrix: Any) -> None:
     """A hand-maintained number is a number that goes stale.
 
     The regular expression failing to match is itself a failure, so removing the claim to avoid
     maintaining it is not available without editing this test.
     """
     stated = TOTAL_RE.search(acceptance)
-    assert stated is not None, f"{ACCEPTANCE_DOCUMENT} no longer states how many criteria exist"
-    assert int(stated.group("total")) == len(declaration.criteria)
+    assert stated is not None, f"{matrix.spec.document} no longer states how many criteria exist"
+    assert int(stated.group("total")) == len(matrix.criteria)
     assert int(stated.group("blocking")) == sum(
-        1 for criterion in declaration.criteria if criterion.blocking
+        1 for criterion in matrix.criteria if criterion.blocking
     )
+    # The category count is spelled, so it is compared as a word rather than
+    # parsed as a number -- the convention this repository writes counts under.
+    spelled = stated.group("categories")
+    assert spelled in SPELLED_CATEGORIES, (
+        f"{matrix.spec.document} spells its category count {spelled!r}"
+    )
+    assert SPELLED_CATEGORIES[spelled] == len(matrix.spec.categories)
 
 
-def test_the_status_counts_match_the_declaration(acceptance: str, declaration: Any) -> None:
+def test_the_status_counts_match_the_declaration(acceptance: str, matrix: Any) -> None:
     section = acceptance[acceptance.index("## Result") : acceptance.index("## The matrix")]
     documented = {
         match.group("status"): int(match.group("count")) for match in COUNT_ROW_RE.finditer(section)
     }
     actual = {status.value: 0 for status in Status}
-    for criterion in declaration.criteria:
+    for criterion in matrix.criteria:
         actual[criterion.status.value] += 1
     assert documented == actual
 
 
-def test_the_document_names_every_category_the_code_declares(acceptance: str) -> None:
-    """Sixteen categories, and the document is where a reader learns what they are.
+def test_the_document_names_every_category_the_code_declares(acceptance: str, matrix: Any) -> None:
+    """The document is where a reader learns what the categories are.
 
     One missing would be a group nobody reviewing the matrix looks for.
     """
-    for category in CATEGORIES:
-        expected = f"### {letter_for(category)} — "
-        assert expected in acceptance, f"{ACCEPTANCE_DOCUMENT} has no section for {category!r}"
+    for category in matrix.spec.categories:
+        expected = f"### {letter_for(matrix.spec, category)} — "
+        assert expected in acceptance, f"{matrix.spec.document} has no section for {category!r}"
 
 
 # ---------------------------------------------------------------------------

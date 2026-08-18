@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from tools.quality.release import assets, gate, manifest
-from tools.quality.release.plan import CATEGORIES, category_letter
+from tools.quality.release.plan import FOUNDATION_CATEGORIES, MATRICES, category_letter
 
 VERSION_SOURCE = 'from x import y\n\n__version__ = "0.1.0"\n'
 
@@ -72,10 +72,10 @@ policy = "docs/release/RELEASE_POLICY.md"
 acceptance = "docs/release/FOUNDATION_ACCEPTANCE.md"
 """
     blocks = []
-    for index, category in enumerate(CATEGORIES):
+    for index, category in enumerate(FOUNDATION_CATEGORIES):
         blocks.append(f"""
 [[criterion]]
-id = "FND-{category_letter(category)}-01"
+id = "FND-{category_letter(MATRICES[0], category)}-01"
 category = "{category}"
 requirement = "A requirement for {category}."
 evidence = ["CHANGELOG.md"]
@@ -86,23 +86,53 @@ reason = "A recorded reason."
     return header + "".join(blocks) + extra
 
 
+def environment_declaration() -> str:
+    """A complete, valid environment matrix, with one criterion per category.
+
+    Returns:
+        The TOML text.
+
+    The gate reads every entry of `MATRICES`, so a tree carrying only the
+    foundation matrix is an incomplete tree rather than a smaller one. This is
+    generated from the spec for the same reason the foundation one is: a
+    fourteenth category must not need this file edited.
+    """
+    spec = MATRICES[1]
+    blocks = ["schema = 1\n"]
+    for category in spec.categories:
+        blocks.append(f"""
+[[criterion]]
+id = "{spec.prefix}-{category_letter(spec, category)}-01"
+category = "{category}"
+requirement = "A requirement for {category}."
+evidence = ["CHANGELOG.md"]
+blocking = true
+status = "PASS"
+reason = "A recorded reason."
+""")
+    return "".join(blocks)
+
+
 def build_tree(root: Path, *, declaration_text: str | None = None, **replacements: str) -> None:
     """Write a repository the gate can read.
 
     Args:
         root: Where to build it.
-        declaration_text: The acceptance declaration. Defaults to a valid one.
+        declaration_text: The foundation acceptance declaration. Defaults to a
+            valid one.
         replacements: Path-to-contents overrides, for tests that break one file.
     """
     files: dict[str, str] = {
         "docs/engineering/foundation-acceptance.toml": (
             declaration() if declaration_text is None else declaration_text
         ),
+        "docs/engineering/environment-acceptance.toml": environment_declaration(),
         "src/globin/__init__.py": VERSION_SOURCE,
         "CHANGELOG.md": CHANGELOG,
         ".github/release.yml": RELEASE_NOTES,
         "docs/release/RELEASE_POLICY.md": DOCUMENT,
         "docs/release/FOUNDATION_ACCEPTANCE.md": DOCUMENT,
+        "docs/release/ENVIRONMENT_ACCEPTANCE.md": DOCUMENT,
     }
     files.update(replacements)
 
@@ -322,7 +352,7 @@ reason = "A recorded reason."
 def test_a_category_with_no_criteria_fails(tmp_path: Path) -> None:
     """The matrix would claim a capability group it does not cover."""
     text = declaration()
-    marker = f'category = "{CATEGORIES[-1]}"'
+    marker = f'category = "{FOUNDATION_CATEGORIES[-1]}"'
     trimmed = text[: text.rindex("[[criterion]]", 0, text.index(marker))]
     build_tree(tmp_path, declaration_text=trimmed)
     reports = tmp_path / "out"
@@ -370,9 +400,18 @@ def test_a_non_blocking_criterion_that_did_not_pass_does_not_stop_a_release(
     document = read_manifest(reports)
     acceptance = document["acceptance"]
     assert isinstance(acceptance, dict)
-    unresolved = acceptance["unresolved"]
+    # Keyed by matrix prefix since Phase 032, because a total across two bands
+    # answers no question anybody has. The broken criterion is the foundation
+    # matrix's, and the environment one alongside it must stay clean.
+    foundation = acceptance[MATRICES[0].prefix]
+    assert isinstance(foundation, dict)
+    unresolved = foundation["unresolved"]
     assert isinstance(unresolved, list)
     assert len(unresolved) == 1
+
+    environment = acceptance[MATRICES[1].prefix]
+    assert isinstance(environment, dict)
+    assert environment["unresolved"] == []
 
 
 # ---------------------------------------------------------------------------

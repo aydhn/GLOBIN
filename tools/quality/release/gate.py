@@ -65,10 +65,11 @@ from tools.quality.release.manifest import (
 from tools.quality.release.manifest import build as build_manifest
 from tools.quality.release.manifest import render as render_manifest
 from tools.quality.release.plan import (
-    CATEGORIES,
     CONFIGURATION_FILE,
+    MATRICES,
     Contract,
     Criterion,
+    Matrix,
     ReleaseError,
     Status,
     blocking_failures,
@@ -160,12 +161,15 @@ def run_release(
     directory = (base / OUTPUT_DIRECTORY) if reports is None else reports
     directory.mkdir(parents=True, exist_ok=True)
 
-    declared = _read(base, CONFIGURATION_FILE)
-    if declared is None:
-        problem = f"{CONFIGURATION_FILE} could not be read"
-        return _fail_early(directory, base, problem, REASON_DECLARATION_UNREADABLE)
+    texts: dict[str, str] = {}
+    for spec in MATRICES:
+        declared = _read(base, spec.declaration)
+        if declared is None:
+            problem = f"{spec.declaration} could not be read"
+            return _fail_early(directory, base, problem, REASON_DECLARATION_UNREADABLE)
+        texts[spec.declaration] = declared
     try:
-        contract = parse_declaration(declared)
+        contract = parse_declaration(texts)
     except ReleaseError as fault:
         return _fail_early(directory, base, str(fault), REASON_DECLARATION_UNREADABLE)
 
@@ -189,6 +193,7 @@ def run_release(
         "repository": DEFAULT_REPOSITORY,
         "commit": _sha(base),
         "declaration": CONFIGURATION_FILE,
+        "declarations": [spec.declaration for spec in MATRICES],
         "version": version or "unknown",
         "tag": tag or "unknown",
         "version_source": contract.version_source,
@@ -403,37 +408,53 @@ def _check_criteria(
             and the blocking criteria.
         reasons: Mutated with any reason codes raised.
     """
-    criteria = contract.criteria
+    shape: list[str] = []
+    grouping: list[str] = []
 
+    # Duplicates are checked across every matrix at once, and the rest per matrix.
+    # Two bands using one identifier is exactly the collision this catches, and a
+    # per-matrix check would miss it -- while an identifier's *shape* means
+    # nothing without the spec that declares its prefix.
     duplicates = tuple(
         f"criterion identifier {identifier!r} is declared more than once"
-        for identifier in duplicate_identifiers(criteria)
+        for identifier in duplicate_identifiers(contract.criteria)
     )
-    malformed = tuple(
-        f"criterion identifier {identifier!r} does not follow the declared shape"
-        for identifier in malformed_identifiers(criteria)
-    )
-    misfiled = misfiled_identifiers(criteria)
-    findings["criterion_shape"] = _finding((*duplicates, *malformed, *misfiled))
+    shape.extend(duplicates)
     if duplicates:
         reasons.append(REASON_CRITERION_DUPLICATE)
-    if malformed or misfiled:
-        reasons.append(REASON_CRITERION_MALFORMED)
 
-    unknown = tuple(
-        f"criterion category {name!r} is not a declared category"
-        for name in unknown_categories(criteria)
-    )
-    empty = tuple(
-        f"category {name!r} has no criteria, so the matrix claims a capability group it "
-        f"does not cover"
-        for name in empty_categories(criteria)
-    )
-    findings["criterion_categories"] = _finding((*unknown, *empty))
-    if unknown:
-        reasons.append(REASON_CATEGORY_UNKNOWN)
-    if empty:
-        reasons.append(REASON_CATEGORY_EMPTY)
+    for matrix in contract.matrices:
+        spec, entries = matrix.spec, matrix.criteria
+        malformed = tuple(
+            f"{spec.prefix}: criterion identifier {identifier!r} does not follow the declared shape"
+            for identifier in malformed_identifiers(spec, entries)
+        )
+        misfiled = tuple(
+            f"{spec.prefix}: {problem}" for problem in misfiled_identifiers(spec, entries)
+        )
+        shape.extend((*malformed, *misfiled))
+        if malformed or misfiled:
+            reasons.append(REASON_CRITERION_MALFORMED)
+
+        unknown = tuple(
+            f"{spec.prefix}: criterion category {name!r} is not a declared category"
+            for name in unknown_categories(spec, entries)
+        )
+        empty = tuple(
+            f"{spec.prefix}: category {name!r} has no criteria, so the matrix claims a "
+            f"capability group it does not cover"
+            for name in empty_categories(spec, entries)
+        )
+        grouping.extend((*unknown, *empty))
+        if unknown:
+            reasons.append(REASON_CATEGORY_UNKNOWN)
+        if empty:
+            reasons.append(REASON_CATEGORY_EMPTY)
+
+    findings["criterion_shape"] = _finding(tuple(shape))
+    findings["criterion_categories"] = _finding(tuple(grouping))
+
+    criteria = contract.criteria
 
     unbacked = tuple(
         f"criterion {identifier} names neither an evidence path nor a command"
@@ -537,25 +558,43 @@ def _git(root: Path, arguments: Sequence[str], runner: Runner | None) -> str | N
 
 
 def _acceptance(contract: Contract) -> dict[str, object]:
-    """The foundation matrix, as counts and the criteria that did not pass.
+    """Every band matrix, as counts and the criteria that did not pass.
 
     Args:
         contract: The release contract.
 
     Returns:
-        The section, with every list in a stable order.
+        The section, keyed by matrix prefix.
+
+    Keyed by prefix rather than flattened, because a total across two bands
+    answers no question anybody has: a reader wants to know whether *this* band
+    is certified, and the counts of a band frozen two releases ago would dilute
+    it.
+    """
+    return {matrix.spec.prefix: _matrix_acceptance(matrix) for matrix in contract.matrices}
+
+
+def _matrix_acceptance(matrix: Matrix) -> dict[str, object]:
+    """One band matrix, as counts and the criteria that did not pass.
+
+    Args:
+        matrix: The matrix.
+
+    Returns:
+        Its record, with every list in a stable order.
 
     Passing criteria are summarised rather than listed one by one, and the ones
     that did not pass are named in full. A record whose length grows with the
     number of things that are *fine* buries the ones that are not.
     """
+    criteria = matrix.criteria
     counts = {status.value: 0 for status in Status}
-    for criterion in contract.criteria:
+    for criterion in criteria:
         counts[criterion.status.value] += 1
 
     by_category: dict[str, dict[str, object]] = {}
-    for category in CATEGORIES:
-        members = [entry for entry in contract.criteria if entry.category == category]
+    for category in matrix.spec.categories:
+        members = [entry for entry in criteria if entry.category == category]
         by_category[category] = {
             "total": len(members),
             "blocking": sum(1 for entry in members if entry.blocking),
@@ -563,13 +602,15 @@ def _acceptance(contract: Contract) -> dict[str, object]:
         }
 
     return {
-        "total": len(contract.criteria),
-        "blocking": sum(1 for entry in contract.criteria if entry.blocking),
+        "band": matrix.spec.band,
+        "document": matrix.spec.document,
+        "total": len(criteria),
+        "blocking": sum(1 for entry in criteria if entry.blocking),
         "counts": counts,
         "categories": by_category,
         "unresolved": [
             _criterion_document(entry)
-            for entry in sorted(contract.criteria)
+            for entry in sorted(criteria)
             if entry.status is not Status.PASS
         ],
     }
@@ -662,9 +703,19 @@ def _write_assets(
     """
     written: dict[str, bytes] = {}
 
-    rendered = render_manifest(dict(acceptance))
-    (directory / assets.ACCEPTANCE_FILE).write_text(rendered, encoding="utf-8", newline="\n")
-    written[assets.ACCEPTANCE_FILE] = rendered.encode("utf-8")
+    # One asset per band matrix, named by the same table the gate read. A single
+    # combined file would make a reader parse two bands to learn about one.
+    files = {
+        MATRICES[0].prefix: assets.ACCEPTANCE_FILE,
+        MATRICES[1].prefix: assets.ENVIRONMENT_ACCEPTANCE_FILE,
+    }
+    for prefix, name in files.items():
+        section = acceptance.get(prefix)
+        if not isinstance(section, Mapping):  # pragma: no cover -- always a Mapping.
+            continue
+        rendered = render_manifest(dict(section))
+        (directory / name).write_text(rendered, encoding="utf-8", newline="\n")
+        written[name] = rendered.encode("utf-8")
 
     sbom = root / SUPPLY_DIRECTORY / assets.SBOM_FILE
     try:

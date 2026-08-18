@@ -40,6 +40,11 @@ from enum import StrEnum
 from typing import Final
 
 CONFIGURATION_FILE: Final[str] = "docs/engineering/foundation-acceptance.toml"
+"""The first matrix's declaration, kept under the name callers already import.
+
+`tests/contract/test_release_contract.py` asserts this equals
+`MATRICES[0].declaration`, so the two cannot become two spellings of one path.
+"""
 """Where the declaration lives, relative to the repository root."""
 
 SCHEMA: Final[int] = 1
@@ -110,7 +115,7 @@ CATCH_ALL_LABEL: Final[str] = "*"
 #:
 #: Closed, so that a typo becomes a finding rather than a seventeenth category
 #: with one member that nobody notices is orphaned.
-CATEGORIES: Final[tuple[str, ...]] = (
+FOUNDATION_CATEGORIES: Final[tuple[str, ...]] = (
     "repository-foundation",
     "engineering-contract",
     "architecture-boundaries",
@@ -129,8 +134,104 @@ CATEGORIES: Final[tuple[str, ...]] = (
     "release-readiness",
 )
 
-#: A criterion identifier: ``FND``, a category letter, and a two-digit number.
-CRITERION_ID_RE: Final[re.Pattern[str]] = re.compile(r"^FND-[A-P]-\d{2}$")
+#: The thirteen capability groups the environment band (Phases 017-032) is
+#: certified across, in the order they are reported. Closed, for the reason the
+#: foundation set is closed.
+#:
+#: **Grouped by capability rather than by phase, and that is a decision.** The
+#: foundation set happens to run one category per phase because that band's rows
+#: described its work. This band's did not --- eleven consecutive phases
+#: delivered the running application's substrate under rows that describe
+#: provisioning steps, which is the finding
+#: ``docs/engineering/GRANULARITY_REVIEW.md`` records. A matrix organised by
+#: phase would encode that defect and read as a second roadmap.
+ENVIRONMENT_CATEGORIES: Final[tuple[str, ...]] = (
+    "host-baseline",
+    "environment-lifecycle",
+    "dependency-locking",
+    "dependency-materialization",
+    "scientific-stack",
+    "gpu-capability",
+    "application-bootstrap",
+    "runtime-filesystem",
+    "runtime-observability",
+    "configuration-resolution",
+    "secret-custody",
+    "degraded-operation",
+    "band-closure",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class MatrixSpec:
+    """One band's acceptance matrix: which file, which prefix, which categories.
+
+    Args:
+        prefix: The three letters a criterion identifier starts with.
+        band: The phases this matrix certifies, for messages.
+        declaration: The TOML file declaring the criteria.
+        document: The prose half.
+        categories: The closed set a criterion may be filed under.
+
+    Everything band-specific in this module lives here, and nothing else does.
+    The evaluators below take a spec and are otherwise unchanged, which is what
+    lets one evaluator answer for two declarations. A second copy of the rules
+    would be exactly what ``docs/engineering/SOURCE_OF_TRUTH.md`` forbids, and is
+    why this is a dataclass rather than a second module.
+    """
+
+    prefix: str
+    band: str
+    declaration: str
+    document: str
+    categories: tuple[str, ...]
+
+    def last_letter(self) -> str:
+        """The highest category letter this matrix uses.
+
+        Returns:
+            ``P`` for sixteen categories, ``M`` for thirteen.
+        """
+        return chr(ord("A") + len(self.categories) - 1)
+
+
+MATRICES: Final[tuple[MatrixSpec, ...]] = (
+    MatrixSpec(
+        prefix="FND",
+        band="001-016",
+        declaration="docs/engineering/foundation-acceptance.toml",
+        document="docs/release/FOUNDATION_ACCEPTANCE.md",
+        categories=FOUNDATION_CATEGORIES,
+    ),
+    MatrixSpec(
+        prefix="ENV",
+        band="017-032",
+        declaration="docs/engineering/environment-acceptance.toml",
+        document="docs/release/ENVIRONMENT_ACCEPTANCE.md",
+        categories=ENVIRONMENT_CATEGORIES,
+    ),
+)
+"""Every band matrix this gate reads, in band order.
+
+A twenty-first entry is what closing a band looks like from here: one row, one
+declaration file, one document. Nothing in the evaluators has to change.
+"""
+
+
+def criterion_id_pattern(spec: MatrixSpec) -> re.Pattern[str]:
+    """The identifier shape one matrix's criteria must follow.
+
+    Args:
+        spec: The matrix.
+
+    Returns:
+        A pattern matching the prefix, a category letter in range, and a
+        two-digit number.
+
+    Built from the spec rather than written out, so a matrix with thirteen
+    categories cannot accept an identifier filed under a fourteenth letter.
+    """
+    return re.compile(rf"^{spec.prefix}-[A-{spec.last_letter()}]-\d{{2}}$")
 
 
 class ReleaseError(Exception):
@@ -196,6 +297,19 @@ class Criterion:
 
 
 @dataclass(frozen=True, slots=True)
+class Matrix:
+    """One band's criteria, paired with the spec that says how to read them.
+
+    Args:
+        spec: Which matrix this is.
+        criteria: Every criterion it declares, in declaration order.
+    """
+
+    spec: MatrixSpec
+    criteria: tuple[Criterion, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class Contract:
     """The whole release arrangement, as declared.
 
@@ -206,7 +320,14 @@ class Contract:
         release_notes: GitHub's automatic release-notes configuration.
         policy: The document that owns release procedure.
         acceptance: The document that owns the foundation matrix.
-        criteria: Every criterion, in declaration order.
+        matrices: One entry per band matrix, in band order.
+
+    **Only the first declaration carries a ``[release]`` table**, and that is
+    deliberate. Those five paths are one fact about the repository rather than
+    one fact per band, so a second copy of them in a second file is exactly the
+    duplication ``docs/engineering/SOURCE_OF_TRUTH.md`` exists to prevent.
+    :func:`parse_declaration` refuses a second copy by name rather than silently
+    preferring one.
     """
 
     version_source: str
@@ -214,15 +335,35 @@ class Contract:
     release_notes: str
     policy: str
     acceptance: str
-    criteria: tuple[Criterion, ...]
+    matrices: tuple[Matrix, ...]
+
+    @property
+    def criteria(self) -> tuple[Criterion, ...]:
+        """Every criterion across every matrix, in band order.
+
+        Returns:
+            The criteria.
+
+        Kept so that a caller asking a question genuinely about the whole release
+        --- how many criteria are unresolved --- does not have to know how many
+        bands there are. Anything judging an *identifier* uses the per-matrix
+        pairs instead, because a prefix means nothing without its spec.
+        """
+        return tuple(criterion for matrix in self.matrices for criterion in matrix.criteria)
 
     def documents(self) -> tuple[str, ...]:
         """Every document a release requires to be present.
 
         Returns:
-            The paths, in a stable order.
+            The paths, in a stable order: the release-wide three, then one
+            document per band matrix.
         """
-        return (self.changelog, self.release_notes, self.policy, self.acceptance)
+        return (
+            self.changelog,
+            self.release_notes,
+            self.policy,
+            *(matrix.spec.document for matrix in self.matrices),
+        )
 
 
 def read_version(text: str) -> str:
@@ -408,43 +549,47 @@ def duplicate_identifiers(criteria: Sequence[Criterion]) -> tuple[str, ...]:
     return tuple(sorted(identifier for identifier, count in seen.items() if count > 1))
 
 
-def malformed_identifiers(criteria: Sequence[Criterion]) -> tuple[str, ...]:
+def malformed_identifiers(spec: MatrixSpec, criteria: Sequence[Criterion]) -> tuple[str, ...]:
     """Every criterion identifier that does not follow the declared shape.
 
     Args:
+        spec: The matrix these criteria belong to.
         criteria: The declared criteria.
 
     Returns:
         The offending identifiers, sorted.
     """
+    pattern = criterion_id_pattern(spec)
     return tuple(
         sorted(
             criterion.identifier
             for criterion in criteria
-            if CRITERION_ID_RE.fullmatch(criterion.identifier) is None
+            if pattern.fullmatch(criterion.identifier) is None
         )
     )
 
 
-def category_letter(category: str) -> str:
+def category_letter(spec: MatrixSpec, category: str) -> str:
     """The letter a category's criteria are numbered under.
 
     Args:
-        category: One of :data:`CATEGORIES`.
+        spec: The matrix the category belongs to.
+        category: One of ``spec.categories``.
 
     Returns:
-        ``A`` for the first category through ``P`` for the sixteenth, or the
+        ``A`` for the first category through the matrix's last letter, or the
         empty string when the category is not declared.
     """
-    if category not in CATEGORIES:
+    if category not in spec.categories:
         return ""
-    return chr(ord("A") + CATEGORIES.index(category))
+    return chr(ord("A") + spec.categories.index(category))
 
 
-def misfiled_identifiers(criteria: Sequence[Criterion]) -> tuple[str, ...]:
+def misfiled_identifiers(spec: MatrixSpec, criteria: Sequence[Criterion]) -> tuple[str, ...]:
     """Every criterion whose identifier letter disagrees with its category.
 
     Args:
+        spec: The matrix these criteria belong to.
         criteria: The declared criteria.
 
     Returns:
@@ -458,36 +603,38 @@ def misfiled_identifiers(criteria: Sequence[Criterion]) -> tuple[str, ...]:
     """
     problems: list[str] = []
     for criterion in sorted(criteria):
-        expected = category_letter(criterion.category)
+        expected = category_letter(spec, criterion.category)
         if not expected:
             continue
-        if not criterion.identifier.startswith(f"FND-{expected}-"):
+        if not criterion.identifier.startswith(f"{spec.prefix}-{expected}-"):
             problems.append(
                 f"{criterion.identifier} is filed under {criterion.category!r}, "
-                f"whose criteria are numbered FND-{expected}-NN"
+                f"whose criteria are numbered {spec.prefix}-{expected}-NN"
             )
     return tuple(problems)
 
 
-def unknown_categories(criteria: Sequence[Criterion]) -> tuple[str, ...]:
-    """Every category named by a criterion but absent from :data:`CATEGORIES`.
+def unknown_categories(spec: MatrixSpec, criteria: Sequence[Criterion]) -> tuple[str, ...]:
+    """Every category named by a criterion but absent from the matrix's own set.
 
     Args:
+        spec: The matrix these criteria belong to.
         criteria: The declared criteria.
 
     Returns:
         The unknown category names, sorted.
     """
-    known = set(CATEGORIES)
+    known = set(spec.categories)
     return tuple(
         sorted({criterion.category for criterion in criteria if criterion.category not in known})
     )
 
 
-def empty_categories(criteria: Sequence[Criterion]) -> tuple[str, ...]:
+def empty_categories(spec: MatrixSpec, criteria: Sequence[Criterion]) -> tuple[str, ...]:
     """Every declared category no criterion files anything under.
 
     Args:
+        spec: The matrix these criteria belong to.
         criteria: The declared criteria.
 
     Returns:
@@ -498,7 +645,7 @@ def empty_categories(criteria: Sequence[Criterion]) -> tuple[str, ...]:
     cover and does not, which reads from the outside exactly like coverage.
     """
     used = {criterion.category for criterion in criteria}
-    return tuple(category for category in CATEGORIES if category not in used)
+    return tuple(category for category in spec.categories if category not in used)
 
 
 def blocking_failures(criteria: Sequence[Criterion]) -> tuple[str, ...]:
@@ -539,50 +686,80 @@ def unjustified(criteria: Sequence[Criterion]) -> tuple[str, ...]:
     )
 
 
-def parse_declaration(text: str) -> Contract:
-    """Read the release contract from TOML text.
+def parse_matrix(text: str, spec: MatrixSpec) -> tuple[Mapping[str, object], tuple[Criterion, ...]]:
+    """Read one band matrix from TOML text.
 
     Args:
-        text: The contents of ``foundation-acceptance.toml``.
+        text: The contents of the matrix's declaration file.
+        spec: Which matrix it is, used for messages and for the schema check.
 
     Returns:
-        The contract.
+        The parsed document, and its criteria.
 
     Raises:
-        ReleaseError: If the text is not TOML, or the declaration is malformed.
+        ReleaseError: If the text is not TOML, the schema is unsupported, or the
+            file declares no criteria.
+
+    The document is returned alongside the criteria because only the first matrix
+    carries a ``[release]`` table, and the caller is the one that knows whether to
+    look for it.
     """
     try:
         document = tomllib.loads(text)
     except tomllib.TOMLDecodeError as fault:
-        msg = f"{CONFIGURATION_FILE} is not valid TOML: {fault}"
+        msg = f"{spec.declaration} is not valid TOML: {fault}"
         raise ReleaseError(msg) from fault
-    return read_declaration(document)
+
+    schema = document.get("schema")
+    if schema != SCHEMA:
+        msg = (
+            f"{spec.declaration}: this tool reads schema {SCHEMA}, and the file "
+            f"declares {schema!r}. Regenerate it rather than reading it anyway"
+        )
+        raise ReleaseError(msg)
+
+    criteria = tuple(_criterion(entry) for entry in _entries(document, "criterion"))
+    if not criteria:
+        msg = f"{spec.declaration} declares no criteria; an empty matrix certifies nothing"
+        raise ReleaseError(msg)
+    return document, criteria
 
 
-def read_declaration(document: Mapping[str, object]) -> Contract:
-    """Turn a parsed declaration into a contract.
+def parse_declaration(texts: Mapping[str, str]) -> Contract:
+    """Read the release contract from every band matrix's TOML text.
 
     Args:
-        document: The parsed TOML.
+        texts: Each matrix's declaration path mapped to its contents. Every entry
+            of :data:`MATRICES` must be present.
 
     Returns:
         The contract.
 
     Raises:
-        ReleaseError: If the schema is unsupported or any entry is malformed.
+        ReleaseError: If a text is not TOML, a declaration is malformed, a
+            declared matrix is missing from ``texts``, or a matrix after the
+            first carries a ``[release]`` table.
     """
-    schema = document.get("schema")
-    if schema != SCHEMA:
-        msg = (
-            f"{CONFIGURATION_FILE}: this tool reads schema {SCHEMA}, and the file "
-            f"declares {schema!r}. Regenerate it rather than reading it anyway"
-        )
-        raise ReleaseError(msg)
+    matrices: list[Matrix] = []
+    release: Mapping[str, object] | None = None
+    for spec in MATRICES:
+        if spec.declaration not in texts:
+            msg = f"{spec.declaration} was not read, so the {spec.band} matrix cannot be checked"
+            raise ReleaseError(msg)
+        document, criteria = parse_matrix(texts[spec.declaration], spec)
+        if spec is MATRICES[0]:
+            release = _table(document, "release")
+        elif "release" in document:
+            msg = (
+                f"{spec.declaration} carries a [release] table. Those five paths are one "
+                f"fact about the repository rather than one per band, and they are declared "
+                f"in {MATRICES[0].declaration}"
+            )
+            raise ReleaseError(msg)
+        matrices.append(Matrix(spec=spec, criteria=criteria))
 
-    release = _table(document, "release")
-    criteria = tuple(_criterion(entry) for entry in _entries(document, "criterion"))
-    if not criteria:
-        msg = f"{CONFIGURATION_FILE} declares no criteria; an empty matrix certifies nothing"
+    if release is None:  # pragma: no cover -- MATRICES is never empty.
+        msg = "no matrix declared the release table"
         raise ReleaseError(msg)
 
     return Contract(
@@ -591,7 +768,7 @@ def read_declaration(document: Mapping[str, object]) -> Contract:
         release_notes=_text(release, "release_notes", "release"),
         policy=_text(release, "policy", "release"),
         acceptance=_text(release, "acceptance", "release"),
-        criteria=criteria,
+        matrices=tuple(matrices),
     )
 
 

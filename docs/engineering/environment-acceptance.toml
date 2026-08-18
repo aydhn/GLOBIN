@@ -1,0 +1,954 @@
+# ---------------------------------------------------------------------------
+# GLOBIN environment acceptance matrix.
+#
+# The machine-readable half of `docs/release/ENVIRONMENT_ACCEPTANCE.md`. Read by
+# `tools/quality/release/plan.py`; compared against the tree, in both
+# directions, by `tests/contract/test_release_contract.py`.
+#
+# WHAT THIS FILE IS. A record of what the environment band (Phases 017-032) had
+# to satisfy before it could be frozen as `v0.2.0`, and what answers each
+# requirement. It is the same kind of document as `foundation-acceptance.toml`,
+# and everything that file's header says about itself is true of this one.
+#
+# WHY THIS IS A SECOND FILE. `foundation-acceptance.toml` is the record `v0.1.0`
+# was cut against. `RELEASE_POLICY.md` says a published release is never
+# repaired, and appending band-2 criteria to it would make the file that
+# certified `v0.1.0` describe things `v0.1.0` did not contain. Nothing is said
+# twice: `FND-A-01` and `ENV-A-01` state different requirements about different
+# phases with disjoint evidence, so `SOURCE_OF_TRUTH.md`'s rule against a
+# restated rule is not engaged. One evaluator reads both, parameterised by
+# `MatrixSpec`, so the *rules* still live in one place.
+#
+# THERE IS NO `[release]` TABLE HERE, AND THAT IS THE POINT. The version source,
+# the changelog, the release notes and the policy are one fact about the
+# repository rather than one fact per band. They stay declared in
+# `foundation-acceptance.toml`, and `parse_declaration` refuses a second copy of
+# them by name rather than silently preferring one.
+#
+# WHY THE CATEGORIES ARE NOT ONE PER PHASE. The foundation matrix runs one
+# category per phase because that band's rows described its work. This band's did
+# not -- eleven consecutive phases delivered the running application's substrate
+# under rows that describe provisioning steps, which is the finding
+# `GRANULARITY_REVIEW.md` records. A matrix organised by phase would encode that
+# defect and would read as a second roadmap. These thirteen are capability
+# groups, and several of them draw on four phases at once.
+#
+# STATUS VOCABULARY -- four words, and no fifth, unchanged from the foundation
+# matrix:
+#   PASS            met, with evidence that exists
+#   FAIL            not met; a blocking criterion in this state stops a release
+#   BLOCKED         the answer depends on something outside this repository.
+#                   Never a pass: the gate maps it onto the unmeasured verdict,
+#                   which ADR-0045 established outranks a failure.
+#   NOT_APPLICABLE  genuinely out of scope, with the reason recorded
+#
+# IDENTIFIERS. `ENV-<letter>-<NN>`, where the letter is the category's position
+# in `ENVIRONMENT_CATEGORIES` (A for the first, M for the thirteenth). The
+# identifier and the category therefore say the same thing twice, on purpose, and
+# `misfiled_identifiers` checks that the two agree.
+#
+# NOTHING WRITES THIS FILE. It is edited by a person who has read the evidence.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# A -- Host baseline
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-A-01"
+category = "host-baseline"
+requirement = "The supported host and interpreter are declared once, machine-readably."
+evidence = ["docs/engineering/runtime-contract.toml", "docs/engineering/RUNTIME_BASELINE.md"]
+command = "python -m tools.quality runtime"
+blocking = true
+status = "PASS"
+reason = """
+One TOML declares the operating system, its release floor, the interpreter's
+implementation, minor line, patch floor, architecture and width. The gate
+recomputes every one of them against this host rather than trusting a recorded
+verdict.
+"""
+
+[[criterion]]
+id = "ENV-A-02"
+category = "host-baseline"
+requirement = "The host's capabilities are separated from the contract it satisfies."
+evidence = [
+  "src/globin/domain/environment.py",
+  "docs/engineering/ENVIRONMENT_CAPABILITY.md",
+  "tests/unit/test_environment.py",
+]
+blocking = true
+status = "PASS"
+reason = """
+`HOST_UNSUPPORTED` means the host failed the declared contract;
+`ENVIRONMENT_INCOMPATIBLE` means it satisfies the contract and lacks a
+capability the contract does not describe. A launcher branching on the two
+should behave differently, which is why they are two codes.
+"""
+
+[[criterion]]
+id = "ENV-A-03"
+category = "host-baseline"
+requirement = "Native processor architecture is measured through the only API that can tell it apart from the process's."
+evidence = [
+  "src/globin/adapters/environment.py",
+  "docs/adr/0075-native-architecture-is-measured-through-one-adapter-and-a-fingerprint-excludes-what-moves.md",
+]
+blocking = true
+status = "PASS"
+reason = """
+Microsoft documents `GetNativeSystemInfo` as reporting an ARM64 host as if it
+were x86. Only `IsWow64Process2` may answer, and where it is absent the answer
+is `UNKNOWN` rather than a guess.
+"""
+
+[[criterion]]
+id = "ENV-A-04"
+category = "host-baseline"
+requirement = "The compatibility fingerprint excludes volatile fields by type rather than by denylist."
+evidence = ["src/globin/domain/environment.py", "tests/unit/test_environment.py"]
+blocking = false
+status = "PASS"
+reason = """
+It is computed over a projection with nowhere to put a timestamp, rather than
+over a snapshot with a list of exclusions somebody must remember to extend.
+"""
+
+# ---------------------------------------------------------------------------
+# B -- Environment lifecycle
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-B-01"
+category = "environment-lifecycle"
+requirement = "The project environment is built deterministically from a verified interpreter."
+evidence = ["scripts/bootstrap.ps1", "tools/quality/runtime/gate.py"]
+command = "powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1"
+blocking = true
+status = "PASS"
+reason = """
+The contract is checked against the base interpreter before anything is created,
+so pointing the script at the wrong Python produces a refusal rather than a wrong
+environment. Every decision worth getting wrong lives in `tools/quality/runtime/`
+where a test can hold it.
+"""
+
+[[criterion]]
+id = "ENV-B-02"
+category = "environment-lifecycle"
+requirement = "Automation never depends on activating the environment."
+evidence = ["scripts/verify.ps1", "scripts/preflight.ps1", "docs/engineering/RUNTIME_BASELINE.md"]
+blocking = true
+status = "PASS"
+reason = """
+Every script addresses the environment's own interpreter directly, so `PATH`
+order cannot change what runs and no persistent PowerShell execution-policy
+change is ever needed to make automation work.
+"""
+
+[[criterion]]
+id = "ENV-B-03"
+category = "environment-lifecycle"
+requirement = "Divergence from the contract is detected against an accepted baseline, and repair is a classification rather than an action."
+evidence = [
+  "docs/engineering/drift-policy.toml",
+  "docs/engineering/ENVIRONMENT_DRIFT.md",
+  "tools/quality/drift/plan.py",
+]
+command = "python -m tools.quality drift"
+blocking = true
+status = "PASS"
+reason = """
+The contract declares a patch *floor*, so an interpreter that went backwards
+satisfies it; drift is the second measurement that catches exactly that. Every
+recorded repair verdict is recomputed from the action declared beside it, and an
+unrecorded baseline is `unmeasured` rather than clean.
+"""
+
+[[criterion]]
+id = "ENV-B-04"
+category = "environment-lifecycle"
+requirement = "Exactly one fault is repaired in place, and the repair writes only inside the environment."
+evidence = [
+  "tools/quality/drift/gate.py",
+  "docs/adr/0053-drift-is-measured-against-an-accepted-baseline-and-repair-is-a-classification.md",
+]
+blocking = false
+status = "PASS"
+reason = """
+`pyvenv.cfg` is read at interpreter start-up, so an environment that has gained
+access to the machine's global packages is corrected by rewriting one key rather
+than by being destroyed. Everything else names what an operator should run.
+"""
+
+[[criterion]]
+id = "ENV-B-05"
+category = "environment-lifecycle"
+requirement = "The recursive delete that recreation implies cannot be aimed at anything but the declared environment."
+evidence = ["tools/quality/runtime/plan.py", "tests/unit/test_runtime_plan.py"]
+blocking = true
+status = "PASS"
+reason = """
+`deletion_problems` refuses anything that is not exactly the declared environment
+directory at the repository root, and refuses a link outright. No recursive
+delete is ever composed from a variable in a shell script.
+"""
+
+# ---------------------------------------------------------------------------
+# C -- Dependency locking and distribution
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-C-01"
+category = "dependency-locking"
+requirement = "Every dependency is resolved and hash-pinned, and the lock's claims are recomputed rather than believed."
+evidence = ["pylock.toml", "pylock.dev.toml", "docs/engineering/lock-policy.toml"]
+command = "python -m tools.quality lock"
+blocking = true
+status = "PASS"
+reason = """
+The gate does not trust `pip`. pip wrote the lock and labels both `lock` and
+`install -r pylock.toml` experimental, so validating one with the other would
+establish only that pip agrees with itself. Every digest, host, PEP 425 tag and
+declared version is recomputed from the lock's own contents.
+"""
+
+[[criterion]]
+id = "ENV-C-02"
+category = "dependency-locking"
+requirement = "No dependency is declared without a written review."
+evidence = ["docs/engineering/dependency-reviews.toml", "docs/DEPENDENCY_POLICY.md"]
+blocking = true
+status = "PASS"
+reason = """
+Six questions per package, answered before it may be declared. `packaging` was
+adopted at Phase 029 against ADR-0052's earlier refusal, and that reversal is
+recorded rather than quietly taken.
+"""
+
+[[criterion]]
+id = "ENV-C-03"
+category = "dependency-locking"
+requirement = "The running application can see which versions are installed, not merely which distributions."
+evidence = ["src/globin/domain/dependency.py", "src/globin/adapters/dependency.py"]
+blocking = true
+status = "PASS"
+reason = """
+Until Phase 029 a running GLOBIN walked every distribution's metadata and threw
+the version away, so an environment two releases from its lock reported ready. It
+now carries an inventory and a fingerprint, and is the caller that finally sets
+`DEPENDENCY_UNREADY` -- a readiness word declared at Phase 027 that nothing had
+ever set.
+"""
+
+[[criterion]]
+id = "ENV-C-04"
+category = "dependency-locking"
+requirement = "A packaging build produces installable artefacts, and they were installed rather than inspected."
+evidence = ["pyproject.toml", "docs/engineering/QUALITY_GATES.md"]
+command = "python -m build"
+blocking = false
+status = "PASS"
+reason = """
+This closes the deferral `MEMORY.md` and `QUALITY_GATES.md` both carried against
+Phases 017-032, and Phase 032 is the last of them. `build` 1.5.0 with the
+Hatchling backend produced a wheel of 101 members -- holding the package and its
+`.dist-info` and nothing else -- and a source distribution of 654 members
+carrying the whole tree. Installed into a throwaway environment, `globin
+--version` answered its version and `globin bootstrap check` refused at
+`python.environment`: the fail-closed refusal Phase 021 designed, reached from an
+installed artefact rather than from the source tree.
+
+Non-blocking, and the reason is a finding rather than a caveat: building is
+verified, not gated. `hatchling` is absent from `pylock.dev.toml`, so build
+isolation reaches an index, and every command in `QUALITY_GATES.md` runs offline.
+Locking the backend is a dependency review under `DEPENDENCY_POLICY.md`.
+"""
+
+# ---------------------------------------------------------------------------
+# D -- Dependency materialization
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-D-01"
+category = "dependency-materialization"
+requirement = "Every library the programme schedules is known to have a wheel for the pinned interpreter, or its gap is owned."
+evidence = ["docs/engineering/wheel-survey.toml", "docs/engineering/WHEEL_AVAILABILITY.md"]
+command = "python -m tools.quality wheels"
+blocking = true
+status = "PASS"
+reason = """
+Every recorded verdict is recomputed from the wheel filenames recorded beside it,
+so an entry claiming a wheel exists whose own evidence does not support it fails
+without asking anything. A verdict other than `available` must name the phase
+answering for it, and only an unowned gap fails.
+"""
+
+[[criterion]]
+id = "ENV-D-02"
+category = "dependency-materialization"
+requirement = "Whether the lock could be installed offline is answerable without a network, and the fallback is unreachable rather than un-taken."
+evidence = ["tools/quality/materialize/plan.py", "docs/engineering/DEPENDENCY_MATERIALIZATION.md"]
+command = "python -m tools.quality materialize"
+blocking = true
+status = "PASS"
+reason = """
+`plan.py` imports nothing that could reach a network, which makes the offline
+verdict a property rather than a promise. An empty wheelhouse is `unmeasured`
+rather than clean, and a corrupt cached artefact is left in place and reported --
+deleting it would destroy the diagnosis and re-fetching would make the cache a
+network client.
+"""
+
+[[criterion]]
+id = "ENV-D-03"
+category = "dependency-materialization"
+requirement = "The clean room used to test an install cannot touch the developer's environment."
+evidence = [
+  "tools/quality/materialize/cleanroom.py",
+  "tests/integration/test_materialize_cleanroom_end_to_end.py",
+]
+blocking = true
+status = "PASS"
+reason = """
+Held by three independent mechanisms, and a decoy is proved byte-for-byte
+unchanged after both a successful and a failing run.
+"""
+
+[[criterion]]
+id = "ENV-D-04"
+category = "dependency-materialization"
+requirement = "The second PEP 751 reader is the specification's own implementation, not a second hand-written parser."
+evidence = [
+  "src/globin/adapters/dependency.py",
+  "docs/adr/0078-the-second-lock-reader-is-the-reference-implementation-and-a-cache-is-not-a-source-of-trust.md",
+]
+blocking = false
+status = "PASS"
+reason = """
+`packaging.pylock` is a complete PEP 751 implementation and arrived at no cost --
+`packaging` was already in the lock as a transitive. The tripwire now checks the
+delivered Phase 020 parser against the reference rather than against a second
+copy of the same assumptions.
+"""
+
+# ---------------------------------------------------------------------------
+# E -- Scientific stack
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-E-01"
+category = "scientific-stack"
+requirement = "The installed numerical stack is verified to compute correctly, not merely to be present."
+evidence = ["docs/engineering/stack-contract.toml", "docs/engineering/SCIENTIFIC_STACK.md"]
+command = "python -m tools.quality stack"
+blocking = true
+status = "PASS"
+reason = """
+Four registers of a version held against each other, each artefact's own record
+of the wheel it was built from, and seven behaviour probes run against the real
+libraries -- each defending a rule written down elsewhere in this repository.
+"""
+
+[[criterion]]
+id = "ENV-E-02"
+category = "scientific-stack"
+requirement = "Verifying a library is not adopting it."
+evidence = ["tests/architecture/test_stack_discipline.py"]
+blocking = true
+status = "PASS"
+reason = """
+Nothing under `src/globin` imports `numpy` or `pandas`, and the tripwire fails if
+anything starts. Phases 113-128 own the numeric type indicators use, and
+`PRECISION_POLICY.md` rule 1 is a one-way door cheapest to hold now.
+"""
+
+[[criterion]]
+id = "ENV-E-03"
+category = "scientific-stack"
+requirement = "The native TA-Lib question was measured on this host rather than read off a filename."
+evidence = ["docs/engineering/stack-contract.toml", "docs/research/phase_025_sources.md"]
+blocking = false
+status = "PASS"
+reason = """
+`talib.__ta_version__` answers from the C library itself, one 1.5 MB `.pyd` ships
+with no companion DLL, 161 indicators appear across six groups, and `SMA` over
+consecutive integers seeds at `timeperiod - 1`. Three probes recompute all of it.
+"""
+
+# ---------------------------------------------------------------------------
+# F -- GPU capability
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-F-01"
+category = "gpu-capability"
+requirement = "GPU presence, driver, compute capability and CUDA availability are detected without assuming any of them."
+evidence = ["docs/engineering/gpu-contract.toml", "docs/engineering/GPU_CAPABILITY.md"]
+command = "python -m tools.quality gpu"
+blocking = true
+status = "PASS"
+reason = """
+Absence is a state, not a failure: a host with no NVIDIA device records `ABSENT`
+and exits `0`, which is what lets this run on a GPU-less CI runner. `ERROR`
+always fails, because not knowing why differs from knowing why.
+"""
+
+[[criterion]]
+id = "ENV-F-02"
+category = "gpu-capability"
+requirement = "The GPU contract declares an interface and never a baseline."
+evidence = ["docs/engineering/gpu-contract.toml", "docs/research/phase_023_sources.md"]
+blocking = false
+status = "PASS"
+reason = """
+No driver version is committed, so nothing goes red on a driver update. Three
+field names are recorded as forbidden because `nvidia-smi` refuses one outright
+-- and asking breaks the whole query -- and answers two of its own `--version`
+labels with the word *Deprecated*. All four traps were measured on this host.
+"""
+
+[[criterion]]
+id = "ENV-F-03"
+category = "gpu-capability"
+requirement = "Whether a workload benefits from a GPU is measured, and a timing is not treated as evidence of reproducibility."
+evidence = ["docs/engineering/benchmark-contract.toml", "docs/engineering/GPU_BENEFIT.md"]
+command = "python -m tools.quality benchmark"
+blocking = false
+status = "PASS"
+reason = """
+Every verdict is recomputed from recorded nanoseconds against a declared speedup
+threshold. Two traps are handled by construction rather than remembered: a CUDA
+timing that does not synchronise measures submission and reports a speedup of
+hundreds, and a threshold of one would recommend moves that lose once the
+transfer is paid for.
+"""
+
+[[criterion]]
+id = "ENV-F-04"
+category = "gpu-capability"
+requirement = "A CUDA workload's benefit is measured on a device rather than asserted."
+evidence = ["docs/engineering/benchmark-contract.toml"]
+blocking = false
+status = "BLOCKED"
+reason = """
+Every CUDA workload records `unavailable`, naming `torch` and Phase 183. That is
+a measurement rather than a hole -- nothing is stubbed -- but it depends on a
+device and a library outside this repository, which is what `BLOCKED` means.
+ADR-0045 makes it outrank a failure rather than round down to one.
+"""
+
+# ---------------------------------------------------------------------------
+# G -- Application bootstrap
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-G-01"
+category = "application-bootstrap"
+requirement = "One entry point decides whether a GLOBIN process may start, and refuses fail-closed when it may not."
+evidence = ["src/globin/runtime/cli.py", "docs/engineering/BOOTSTRAP.md"]
+command = "python -m globin bootstrap check"
+blocking = true
+status = "PASS"
+reason = """
+`globin` and `python -m globin` reach one `main`, asserted rather than assumed.
+`BootstrapOutcome.__post_init__` refuses to carry a runtime context on a report
+that is not ready, so a caller cannot obtain the context by ignoring the verdict.
+"""
+
+[[criterion]]
+id = "ENV-G-02"
+category = "application-bootstrap"
+requirement = "Every failure class has one exit code, declared once, and the earliest failure is the one reported."
+evidence = ["src/globin/domain/bootstrap.py", "tests/contract/test_bootstrap_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+Each check declares its own code, so no call site can invent a second answer for
+the same failure. `exit_code_for` reports the first failure in dependency order,
+so the code a caller sees names the earliest thing that was wrong rather than an
+arbitrary one, and unmeasured outranks failed.
+"""
+
+[[criterion]]
+id = "ENV-G-03"
+category = "application-bootstrap"
+requirement = "Every preflight check declares whether its answer survives the run."
+evidence = ["src/globin/domain/preflight.py", "docs/engineering/PREFLIGHT_SUITE.md"]
+command = "python -m globin bootstrap preflight"
+blocking = true
+status = "PASS"
+reason = """
+Eleven of the eighteen are stable. `config.valid` is stable because the
+configuration snapshot is immutable, not because the documents are; an operator
+may edit `config/` mid-run and the process is not reading it again. A schedule
+that could not be honoured cannot be constructed, and nothing executes one --
+because no process yet runs long enough for a scheduler to have a caller.
+"""
+
+[[criterion]]
+id = "ENV-G-04"
+category = "application-bootstrap"
+requirement = "The bootstrap evidence is deterministic and carries no secret."
+evidence = ["src/globin/adapters/bootstrap.py", "tests/contract/test_bootstrap_contract.py"]
+command = "python -m globin bootstrap evidence"
+blocking = true
+status = "PASS"
+reason = """
+The manifest carries no timestamp, so two runs on an unchanged host compare. It
+is rendered twice and the two compared before either is written, so
+non-determinism is caught rather than published. The verifier's own credential
+scanner is run over what the product actually wrote, which is a second and
+independent mechanism.
+"""
+
+# ---------------------------------------------------------------------------
+# H -- Runtime filesystem and lifecycle
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-H-01"
+category = "runtime-filesystem"
+requirement = "A running GLOBIN's mutable state is user-local and separate from the repository's evidence."
+evidence = ["src/globin/domain/runtime_state.py", "docs/engineering/RUNTIME_FILESYSTEM.md"]
+blocking = true
+status = "PASS"
+reason = """
+The user-local tree holds state, cache, run, tmp and logs. `.globin/` is evidence
+about this repository, read by CI; the runtime tree is state about this machine.
+No secret, no credential and no bulk data goes in either.
+"""
+
+[[criterion]]
+id = "ENV-H-02"
+category = "runtime-filesystem"
+requirement = "One coordinator per machine is guaranteed by an acquisition, never by the presence of a file."
+evidence = ["src/globin/adapters/runtime_state.py", "tests/integration/test_instance_lock_subprocess.py"]
+blocking = true
+status = "PASS"
+reason = """
+A crashed process leaves a lock file behind, so its existence proves only that
+GLOBIN once ran. Ownership is decided by acquiring an operating-system lock and
+by nothing else, a stale file never blocks a start-up, and it is never deleted on
+a guess. `probe` acquires and releases immediately, so a diagnostic cannot refuse
+to run beside a running GLOBIN.
+"""
+
+[[criterion]]
+id = "ENV-H-03"
+category = "runtime-filesystem"
+requirement = "Every small document is published atomically, and shutdown reaches a fixed order whatever the application did."
+evidence = ["src/globin/adapters/runtime_state.py", "src/globin/application/lifecycle.py"]
+blocking = true
+status = "PASS"
+reason = """
+Encoding happens before anything is opened; the temporary file is created in the
+destination's own directory; flush, fsync, close and replace follow in a fixed
+sequence. Every teardown step runs even if an earlier one failed, and the
+problems are collected and raised once.
+"""
+
+# ---------------------------------------------------------------------------
+# I -- Runtime observability
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-I-01"
+category = "runtime-observability"
+requirement = "The only area appended to is bounded by a validated policy rather than trusted."
+evidence = ["src/globin/domain/diagnostics.py", "docs/engineering/RUNTIME_DIAGNOSTICS.md"]
+blocking = true
+status = "PASS"
+reason = """
+A rotation policy that could not be honoured cannot be constructed. The three
+process fault hooks are installed through an injected registry and put back on
+the way out, and `faulthandler` writes plain text to its own file because a
+native traceback is written by C -- which is exactly why it still works when the
+interpreter cannot.
+"""
+
+[[criterion]]
+id = "ENV-I-02"
+category = "runtime-observability"
+requirement = "A measurement that was not taken is never reported as zero."
+evidence = ["src/globin/domain/health.py", "docs/engineering/RUNTIME_HEALTH.md"]
+command = "python -m globin diagnostics snapshot"
+blocking = true
+status = "PASS"
+reason = """
+Every numeric field carries an `Availability`, and no instantaneous CPU
+percentage is reported because the first call on a process is documented as
+meaningless. An unmeasurability the degradation registry predicted does not make
+a host amber, which is what stops CI -- where `psutil` is absent on every run --
+from reporting `degraded` for ever.
+"""
+
+[[criterion]]
+id = "ENV-I-03"
+category = "runtime-observability"
+requirement = "A support bundle is redacted, self-validating and built from an allowlist."
+evidence = ["src/globin/application/support.py", "docs/engineering/SUPPORT_BUNDLE.md"]
+blocking = true
+status = "PASS"
+reason = """
+The bundle is validated by reopening the finished file and comparing every
+digest, then published atomically. The allowlist is a table with no directory
+walk anywhere, so a new file cannot be swept in by being in the wrong place.
+"""
+
+[[criterion]]
+id = "ENV-I-04"
+category = "runtime-observability"
+requirement = "A heartbeat cannot be satisfied by a component looping inside a wedged call."
+evidence = ["src/globin/domain/watchdog.py", "docs/engineering/RUNTIME_WATCHDOG.md"]
+blocking = true
+status = "PASS"
+reason = """
+The heartbeat is a sequence, not a timestamp -- a component looping inside a
+wedged call rewrites a timestamp for ever. The escalation deadline runs from the
+stall rather than from the request, so a slow capture cannot postpone death.
+"""
+
+[[criterion]]
+id = "ENV-I-05"
+category = "runtime-observability"
+requirement = "Metric cardinality is arithmetic rather than a hope, and export is off by default as an object graph rather than a flag."
+evidence = ["src/globin/domain/telemetry.py", "docs/engineering/RUNTIME_TELEMETRY.md"]
+blocking = true
+status = "PASS"
+reason = """
+Every attribute key declares a bounded value set, so the most series a family can
+produce is a product computable when the descriptor is written, and a descriptor
+that could exceed its own budget cannot be constructed. With export off there is
+no exporter, queue, pump or thread, so opening no socket is structural.
+"""
+
+[[criterion]]
+id = "ENV-I-06"
+category = "runtime-observability"
+requirement = "The diagnostics surface is loopback-only by a type that cannot hold anything else, and read-only."
+evidence = ["src/globin/domain/diagnostics_http.py", "docs/engineering/DIAGNOSTICS_ENDPOINT.md"]
+command = "python -m globin diagnostics endpoint"
+blocking = true
+status = "PASS"
+reason = """
+`LoopbackAddress` refuses anything `ipaddress` does not call loopback, so the
+bind host cannot *hold* a wildcard, a LAN address or a hostname. `GET` and `HEAD`
+only, `send_error` overridden because the standard library otherwise answers
+every other verb with a generic HTML page, and exactly one module may reach a
+socket -- with a tripwire that fails if a second one does or if that one spells
+any address at all.
+"""
+
+# ---------------------------------------------------------------------------
+# J -- Configuration resolution
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-J-01"
+category = "configuration-resolution"
+requirement = "Given a layout and a profile, the candidate documents are a pure function of the two."
+evidence = ["src/globin/domain/config_layout.py", "docs/engineering/CONFIGURATION_LAYOUT.md"]
+blocking = true
+status = "PASS"
+reason = """
+Nothing searches, because a search order *is* a precedence. A profile names a
+document rather than an environment: `as_config` refuses every key outside the
+register, so a profile document is structurally incapable of asserting what an
+environment is.
+"""
+
+[[criterion]]
+id = "ENV-J-02"
+category = "configuration-resolution"
+requirement = "Precedence is declared, and the whole order follows one rule."
+evidence = ["src/globin/domain/configuration.py", "docs/CONFIGURATION_POLICY.md"]
+command = "python -m globin config validate"
+blocking = true
+status = "PASS"
+reason = """
+Narrowness. An explicit document sits above the four computed ones and its
+absence is fatal where theirs is not; a command-line value layer sits above the
+environment and is validated against `known_keys()`. Only keys an operator typed
+enter that layer, or the strongest source would set everything on every run. An
+unrecognised `GLOBIN_` variable is refused, and a credential-shaped one is
+refused before it is read.
+"""
+
+[[criterion]]
+id = "ENV-J-03"
+category = "configuration-resolution"
+requirement = "Configuration explains itself through two fingerprints, and comparison reads digests rather than displays."
+evidence = ["src/globin/domain/config_evidence.py", "docs/engineering/CONFIGURATION_EVIDENCE.md"]
+command = "python -m globin config explain logging.min_severity"
+blocking = true
+status = "PASS"
+reason = """
+The semantic fingerprint excludes origins -- moving a file is not a change -- and
+the evidence one includes them, so a value that began arriving from the
+environment instead of a committed document *is* a change. Two redacted displays
+are always equal, so a drift report built on them would say "unchanged" about
+exactly the fields it could not see. No baseline is `unmeasured`, not clean.
+"""
+
+[[criterion]]
+id = "ENV-J-04"
+category = "configuration-resolution"
+requirement = "The preflight validates what a run will actually use rather than the declared defaults."
+evidence = ["src/globin/application/bootstrap.py", "tests/contract/test_preflight_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+Exit `14` arrives at the gate instead of at start-up. Two defects were found
+rather than built while establishing this: a `ConfigurationError` clause written
+around the whole of the bootstrap silently turned a Phase 021 exit code from `17`
+into `14`, and `tomllib.TOMLDecodeError` is a `ValueError`, so neither `main` nor
+the pipeline caught it -- a path unreachable until an explicit document made it
+reachable.
+"""
+
+# ---------------------------------------------------------------------------
+# K -- Secret custody
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-K-01"
+category = "secret-custody"
+requirement = "A secret reference is ordinary data and a secret value has no string form."
+evidence = ["src/globin/domain/secrets.py", "docs/security/SECRET_STORE.md"]
+blocking = true
+status = "PASS"
+reason = """
+`SecretValue` is not a dataclass: its string, representation and format hooks all
+yield the redaction marker, it has no instance dictionary, no encoder and no
+hash, and its equality is constant-time. A reference is printable and sortable,
+because it identifies a secret and is not one.
+"""
+
+[[criterion]]
+id = "ENV-K-02"
+category = "secret-custody"
+requirement = "The platform's silent collision is closed by one key builder."
+evidence = [
+  "src/globin/domain/secrets.py",
+  "docs/adr/0074-the-secret-store-is-the-windows-credential-manager-and-rotation-is-constructed.md",
+]
+blocking = true
+status = "PASS"
+reason = """
+Windows target names are case-insensitive and the collision is silent -- a
+credential written under one spelling is returned for another with no error at
+all. One builder folds case, so no call site can produce a second spelling.
+"""
+
+[[criterion]]
+id = "ENV-K-03"
+category = "secret-custody"
+requirement = "Rotation is constructed rather than inherited from the platform."
+evidence = ["src/globin/application/secrets.py", "tests/unit/test_secrets.py"]
+blocking = true
+status = "PASS"
+reason = """
+A Windows write *replaces*, so the previous value is moved aside before the new
+one lands. Without that step there would be nothing left to retire.
+"""
+
+[[criterion]]
+id = "ENV-K-04"
+category = "secret-custody"
+requirement = "Collection is interactive only, and a value that cannot be collected safely never exists."
+evidence = ["src/globin/adapters/secret_entry.py", "docs/security/CREDENTIAL_FLOW.md"]
+command = "python -m globin secrets set"
+blocking = true
+status = "PASS"
+reason = """
+A pipe is refused *before* `getpass` is called, because accepting one puts the
+key in shell history. A terminal that cannot suppress echo aborts before the
+operator types anything -- the fallback warns before it reads -- so the value
+never exists rather than existing and being discarded. Whitespace is refused,
+not stripped.
+"""
+
+[[criterion]]
+id = "ENV-K-05"
+category = "secret-custody"
+requirement = "A capability is a recorded state, and no member of the vocabulary means confirmed."
+evidence = [
+  "src/globin/domain/entitlements.py",
+  "docs/adr/0077-a-credential-is-collected-at-a-console-and-a-permission-is-declared-rather-than-verified.md",
+]
+blocking = true
+status = "PASS"
+reason = """
+GLOBIN reaches no venue, so the rule is enforced by there being nothing to write.
+A demanded transfer is `WITHHELD` whatever the declaration says, and it is
+checked before the declaration is consulted; the gate returns without touching
+the store on a refusal.
+"""
+
+[[criterion]]
+id = "ENV-K-06"
+category = "secret-custody"
+requirement = "The two secret mechanisms are disjoint by arithmetic, with no fallback edge between them."
+evidence = ["src/globin/domain/secret_vault.py", "docs/security/SECRET_VAULT.md"]
+blocking = true
+status = "PASS"
+reason = """
+The store takes what fits its ceiling and the vault takes what does not, reading
+the same constant, so no value belongs to both and none to neither.
+`belongs_in_vault` takes no key type: a private key that fits belongs in the
+store, and routing by type would be storage taking an opinion about signing.
+"""
+
+[[criterion]]
+id = "ENV-K-07"
+category = "secret-custody"
+requirement = "The vault's envelope carries its own integrity check, verified before the platform is reached."
+evidence = [
+  "src/globin/domain/secret_vault.py",
+  "docs/adr/0083-a-second-secret-mechanism-is-admitted-by-arithmetic-and-carries-its-own-integrity-check.md",
+]
+blocking = true
+status = "PASS"
+reason = """
+Microsoft documents that the unprotect call may succeed *with corrupted output*
+and says not to rely on a status code to detect tampering. Checking afterwards
+would mean a corrupted plaintext had already existed as a Python string. The
+digest is not a secret fingerprint: DPAPI derives a fresh key per call, so two
+protections of one value differ.
+"""
+
+[[criterion]]
+id = "ENV-K-08"
+category = "secret-custody"
+requirement = "No credential reaches an output stream, and the gate that says so runs over what was actually written."
+evidence = ["src/globin/domain/observability.py", "tests/contract/test_bootstrap_contract.py"]
+command = "python -m tools.quality supply"
+blocking = true
+status = "PASS"
+reason = """
+Redaction is by field *name*, and that limit is stated rather than implied: a
+credential inside an exception message **is** written. Phase 032 closed the
+inverse defect -- a section named for what it described published the string
+`[redacted]` and nothing else for three phases -- and the tripwire that catches
+the next one asserts no published section name trips the redactor.
+"""
+
+# ---------------------------------------------------------------------------
+# L -- Degraded operation
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-L-01"
+category = "degraded-operation"
+requirement = "Every component GLOBIN reaches for is declared with a necessity, and the posture is folded from what each factory actually returned."
+evidence = ["docs/engineering/degradation-contract.toml", "docs/engineering/DEGRADED_OPERATION.md"]
+blocking = true
+status = "PASS"
+reason = """
+Six absent-safe factories each choose between a working implementation and a
+recording stand-in, and which arm they took used to survive nowhere but an
+untyped dictionary inside one command covering two of the six. Three tiers:
+`required` refuses a start, `optional` starts and names what stopped working,
+`opportunistic` changes nothing -- because a capability the registry predicted
+absent must not make a host amber.
+"""
+
+[[criterion]]
+id = "ENV-L-02"
+category = "degraded-operation"
+requirement = "A declared-required component whose question does not yet arise is recorded honestly rather than made to pass."
+evidence = ["src/globin/domain/degradation.py", "tests/architecture/test_degradation_discipline.py"]
+blocking = true
+status = "PASS"
+reason = """
+`advapi32` is declared required and observed not-applicable while nothing needs a
+credential, so the tier is real today without refusing a start for a capability
+no caller uses. The moment a phase registers a required reference, the same
+declaration begins refusing -- nothing has to remember to change a flag.
+"""
+
+[[criterion]]
+id = "ENV-L-03"
+category = "degraded-operation"
+requirement = "The network row is declared rather than probed."
+evidence = ["docs/engineering/degradation-contract.toml", "tests/architecture/test_library_discipline.py"]
+blocking = true
+status = "PASS"
+reason = """
+A reachability probe would be a mechanism with no caller *and* would remove a
+guarantee the architecture tests currently prove, by adding an outbound connect
+to a package that has none. Phase 045 owns measuring it; Phase 297 owns refusing
+a live start on it.
+"""
+
+# ---------------------------------------------------------------------------
+# M -- Band closure
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "ENV-M-01"
+category = "band-closure"
+requirement = "Whether Phases 017-032 were drawn at a granularity that describes the work is answered on the record."
+evidence = ["docs/engineering/GRANULARITY_REVIEW.md", "docs/engineering/scope-amendments.toml"]
+command = "python -m pytest tests/contract/test_granularity_contract.py"
+blocking = true
+status = "PASS"
+reason = """
+`ROADMAP.md` and six ADRs assign this phase the review by name. It is delivered
+as findings: a ledger of every amendment scored against ADR-0021's four
+conditions, a prose half, and a contract test binding every count to its source
+-- the binding being the part that had never existed, which is why the amendment
+count in `ROADMAP.md` drifted twice before anybody noticed.
+"""
+
+[[criterion]]
+id = "ENV-M-02"
+category = "band-closure"
+requirement = "No document defers a question to a phase that has already delivered."
+evidence = ["tests/contract/test_documentation_contract.py"]
+command = "python -m pytest -m contract"
+blocking = true
+status = "PASS"
+reason = """
+Twenty-three documents are now checked where five were. Nine carried the same
+table under a different header -- `| Question | Where |`, `| Question | Owner |`,
+`| Question | Owning phase |`, `| Not registered | Owner |` -- and the parser
+walks from a literal header, so every one of them was invisible and every one had
+drifted. Twenty-three stale rows were corrected. The headers were normalised
+rather than the parser taught a second spelling.
+"""
+
+[[criterion]]
+id = "ENV-M-03"
+category = "band-closure"
+requirement = "The band's documentation agrees with what the band built."
+evidence = ["CLAUDE.md", "MEMORY.md", "docs/release/FOUNDATION_ACCEPTANCE.md"]
+blocking = false
+status = "PASS"
+reason = """
+Four contradictions were found and closed rather than carried: `CLAUDE.md` said
+six libraries were absent-safe and then, twelve lines later, said four while
+listing three; `MEMORY.md` recorded phases 001-030 complete after 031 shipped;
+`FOUNDATION_ACCEPTANCE.md` named the next band by a title that does not exist and
+left three handoff rows unmarked after their phases delivered.
+"""
+
+[[criterion]]
+id = "ENV-M-04"
+category = "band-closure"
+requirement = "The environment band is certified by a matrix the release gate recomputes, not by assertion."
+evidence = ["docs/engineering/environment-acceptance.toml", "tools/quality/release/plan.py"]
+command = "python -m tools.quality release"
+blocking = true
+status = "PASS"
+reason = """
+One evaluator reads two declarations, parameterised by `MatrixSpec`. Nothing in
+`duplicate_identifiers`, `misfiled_identifiers`, `blocking_failures` or their
+neighbours was copied to make this band work, and a twenty-first band is one row
+in `MATRICES`. Only the first declaration carries a `[release]` table, and a
+second copy of it is refused by name.
+"""

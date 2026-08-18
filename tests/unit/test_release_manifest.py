@@ -196,7 +196,12 @@ def test_the_checksum_file_refuses_to_be_one_of_its_own_entries() -> None:
 
 
 def test_a_missing_content_asset_is_reported() -> None:
+    # Named rather than derived from `PUBLISHED`, so that adding an asset makes
+    # this fail and somebody has to look. Phase 032 added the second band's
+    # acceptance record, and this is where that showed up. `missing` sorts, so
+    # `environment-` precedes `foundation-`.
     assert assets.missing({assets.MANIFEST_FILE: b"{}"}) == (
+        assets.ENVIRONMENT_ACCEPTANCE_FILE,
         assets.ACCEPTANCE_FILE,
         assets.SBOM_FILE,
     )

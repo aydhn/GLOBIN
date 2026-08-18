@@ -189,7 +189,8 @@ published after the setting was enabled.
 
 | Asset | What it is |
 |---|---|
-| `foundation-acceptance.json` | The acceptance matrix as the gate read it |
+| `foundation-acceptance.json` | The foundation band's matrix as the gate read it |
+| `environment-acceptance.json` | The environment band's matrix as the gate read it |
 | `release-manifest.json` | What was judged, and what the gate concluded |
 | `sbom.cyclonedx.json` | The dependency inventory, copied from the supply gate |
 | `SHA256SUMS` | Digests for every other asset |
