@@ -25,6 +25,8 @@ from globin.domain.bootstrap import ExitCode
 from globin.domain.entitlements import Grant, GrantDeclaration, GrantSet
 from globin.domain.identifiers import EnvironmentId
 from globin.domain.secrets import (
+    MAX_SECRET_BYTES,
+    PEM_ARMOUR,
     EntryFault,
     EntryProblem,
     SecretEntryOutcome,
@@ -698,3 +700,201 @@ def test_the_provider_option_carries_a_mechanism_and_never_material() -> None:
     )
     assert code == int(ExitCode.USAGE)
     assert "unrecognised argument" in err
+
+
+# ---------------------------------------------------------------------------
+# File-sourced enrollment, which is what makes the vault reachable
+# ---------------------------------------------------------------------------
+
+
+# The armour is built from `PEM_ARMOUR` rather than spelled out, so no literal
+# private-key header appears in this file. `tools/quality/supply/secrets.py`
+# scans tracked content for exactly that shape, and an allowlist entry would
+# have been the other answer -- worse, because a carve-out is a hole somebody
+# has to keep remembering, and reading the constant is what the test is about.
+def _pem(directory: Path, name: str = "key.pem") -> Path:
+    """A PEM-shaped file larger than the credential store's ceiling.
+
+    Args:
+        directory: Where to write it. Outside any checkout.
+        name: The filename.
+
+    Returns:
+        Its path.
+    """
+    body = "\n".join(["A" * 64] * 60)
+    path = directory / name
+    path.write_text(
+        f"{PEM_ARMOUR} PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_a_multiline_key_can_be_enrolled_from_a_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The route that makes the vault reachable at all.
+
+    A PEM key is multi-line by definition, so the interactive rules refuse one
+    whatever its size — `CREDENTIAL_FLOW.md` recorded that "a real PEM key cannot
+    be collected here at all". The vault exists for exactly that material, so
+    without this route it could hold nothing anybody could put in it.
+    """
+    store = _Store()
+    substitute(monkeypatch, store=store)
+    source = _pem(tmp_path)
+    code, out, _ = run(
+        "secrets",
+        "set",
+        "--environment",
+        "paper",
+        "--kind",
+        "private_key",
+        "--name",
+        "venue_signing_key",
+        "--from-file",
+        str(source),
+    )
+    assert code == int(ExitCode.OK)
+    assert "was stored" in out
+
+
+def test_the_enrolled_material_is_larger_than_the_credential_store_accepts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Non-vacuity: the file must be the kind of thing the vault is for.
+
+    A test that enrolled a short string would pass without exercising the reason
+    any of this exists.
+    """
+    store = _Store()
+    substitute(monkeypatch, store=store)
+    source = _pem(tmp_path)
+    assert len(source.read_text(encoding="utf-8").encode("utf-8")) > MAX_SECRET_BYTES
+    run(
+        "secrets",
+        "set",
+        "--environment",
+        "paper",
+        "--kind",
+        "private_key",
+        "--name",
+        "venue_signing_key",
+        "--from-file",
+        str(source),
+    )
+    held = next(iter(store.held.values()))
+    assert len(held.encode("utf-8")) > MAX_SECRET_BYTES
+
+
+def test_a_key_inside_a_checkout_is_refused_at_the_source() -> None:
+    """The only point at which GLOBIN can act on it.
+
+    A private key in a working tree is one `git add -A` from being permanent, and
+    rule 1 of `SECURITY_BASELINE.md` is absolute. GLOBIN cannot delete the file,
+    and pretending it would is worse than refusing to read it.
+    """
+    inside = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    code, _, err = run(
+        "secrets",
+        "set",
+        "--environment",
+        "paper",
+        "--kind",
+        "private_key",
+        "--name",
+        "venue_signing_key",
+        "--from-file",
+        str(inside),
+    )
+    assert code == int(ExitCode.USAGE)
+    assert "inside a GLOBIN checkout" in err
+
+
+def test_the_source_path_is_never_echoed_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A path names a machine and often the person, so no record carries it."""
+    substitute(monkeypatch, store=_Store())
+    source = _pem(tmp_path, "very-distinctive-name.pem")
+    _, out, err = run(
+        "secrets",
+        "set",
+        "--environment",
+        "paper",
+        "--kind",
+        "private_key",
+        "--name",
+        "venue_signing_key",
+        "--from-file",
+        str(source),
+    )
+    assert "very-distinctive-name" not in out + err
+
+
+def test_the_file_contents_are_never_echoed_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reading material is not displaying it, and nothing here blurs the two."""
+    substitute(monkeypatch, store=_Store())
+    source = _pem(tmp_path)
+    _, out, err = run(
+        "secrets",
+        "set",
+        "--environment",
+        "paper",
+        "--kind",
+        "private_key",
+        "--name",
+        "venue_signing_key",
+        "--from-file",
+        str(source),
+    )
+    assert PEM_ARMOUR not in out + err
+    assert "A" * 64 not in out + err
+
+
+def test_a_file_holding_a_forbidden_character_is_refused_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Line breaks are permitted; nothing else is.
+
+    A control character other than a line break means the file is not what the
+    operator thought, and the refusal names the rule rather than the content.
+    """
+    substitute(monkeypatch, store=_Store())
+    source = tmp_path / "odd.pem"
+    source.write_text(f"{PEM_ARMOUR} PRIVATE KEY-----\n\tAAAA\n", encoding="utf-8")
+    code, out, err = run(
+        "secrets",
+        "set",
+        "--environment",
+        "paper",
+        "--kind",
+        "private_key",
+        "--name",
+        "venue_signing_key",
+        "--from-file",
+        str(source),
+    )
+    assert code == int(ExitCode.SECRETS_UNREADY)
+    assert "control_character" in out + err
+
+
+def test_the_option_means_nothing_for_a_verb_that_does_not_write() -> None:
+    """An option that supplies material has no meaning where nothing is stored."""
+    code, _, err = run(
+        "secrets",
+        "verify",
+        "--environment",
+        "paper",
+        "--kind",
+        "api_key",
+        "--name",
+        "venue_key",
+        "--from-file",
+        "somewhere.pem",
+    )
+    assert code == int(ExitCode.USAGE)
+    assert "means nothing" in err

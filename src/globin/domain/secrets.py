@@ -764,6 +764,16 @@ class SecretLocator:
         }
 
 
+LINE_BREAKS: Final[str] = "\r\n"
+"""The two control characters a file-sourced secret may contain.
+
+Named rather than spelled inline, because :func:`file_material_problems` subtracts
+this set from :func:`control_characters` and a reader should see *which* two are
+permitted without decoding an escape. A PEM key is multi-line by definition, so
+without this exemption a real private key could not be enrolled at all — which is
+the state Phase 031 found and fixed.
+"""
+
 PEM_ARMOUR: Final[str] = "-----BEGIN"
 """How a PEM-armoured key announces itself.
 
@@ -911,6 +921,73 @@ def entry_problems(material: str) -> tuple[EntryProblem, ...]:
         else:
             problems.append(EntryProblem.TOO_LARGE)
     return tuple(problems)
+
+
+def file_material_problems(material: str) -> tuple[EntryProblem, ...]:
+    """Judge material read from a file rather than typed at a terminal.
+
+    Args:
+        material: The file's decoded contents.
+
+    Returns:
+        One problem per rule broken, in a fixed order, empty when it is storable.
+
+    **A sibling of :func:`entry_problems` rather than a widening of it**, because
+    the two answer about different acts. Typing is bounded by what a terminal can
+    do; a file is not, and the rules that make sense for one are wrong for the
+    other in both directions.
+
+    Three differences, each with a reason:
+
+    - **Line breaks are permitted.** A PEM key is multi-line by definition, so
+      :func:`entry_problems`' control-character rule refuses one whatever its
+      size — which is exactly why a real private key could not be enrolled at all
+      before Phase 031. Every *other* control character is still refused, because
+      nothing else belongs in key material and one arriving means the file is not
+      what the operator thought.
+    - **A trailing newline is tolerated and stripped.** Every text editor writes
+      one and a PEM file conventionally ends with one; refusing it would refuse
+      the ordinary case. Leading whitespace is still refused, because it is not
+      conventional and it changes the material.
+    - **The bound is :data:`MAX_MATERIAL_BYTES`, not
+      :data:`MAX_SECRET_BYTES`.** A file is how material *too large for the
+      credential store* arrives, so bounding it at the store's ceiling would
+      refuse precisely what the vault exists to hold.
+    """
+    if not material:
+        return (EntryProblem.EMPTY,)
+    trimmed = material.rstrip("\n")
+    if not trimmed:
+        return (EntryProblem.EMPTY,)
+    problems: list[EntryProblem] = []
+    if trimmed != trimmed.strip():
+        problems.append(EntryProblem.SURROUNDING_WHITESPACE)
+    forbidden = set(control_characters()) - set(LINE_BREAKS)
+    if any(character in forbidden for character in trimmed):
+        problems.append(EntryProblem.CONTROL_CHARACTER)
+    if len(trimmed.encode("utf-8")) > MAX_MATERIAL_BYTES:
+        if trimmed.startswith(PEM_ARMOUR):
+            problems.append(EntryProblem.ARMOURED_KEY_TOO_LARGE)
+        else:
+            problems.append(EntryProblem.TOO_LARGE)
+    return tuple(problems)
+
+
+def file_material(text: str) -> str:
+    """The material a file's contents represent.
+
+    Args:
+        text: The file's decoded contents.
+
+    Returns:
+        The contents with a conventional trailing newline removed and nothing
+        else changed.
+
+    Separate from :func:`file_material_problems` so that what is judged and what
+    is stored cannot disagree: a caller checks the first and stores the second,
+    and both apply the same single transformation.
+    """
+    return text.rstrip("\n")
 
 
 @dataclass(frozen=True, slots=True)

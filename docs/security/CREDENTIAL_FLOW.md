@@ -61,6 +61,38 @@ what every earlier invocation got and what it still gets.
 .venv\Scripts\globin.exe secrets verify --environment paper --kind private_key --name venue_signing_key --provider dpapi_vault
 ```
 
+### Enrolling a key that cannot be typed
+
+A PEM private key is multi-line by definition, so the interactive rules refuse one
+whatever its size — this document used to say, correctly, that "a real PEM key
+cannot be collected here at all". The vault exists for exactly that material, so
+Phase 031 added the route that makes it reachable.
+
+```bash
+.venv\Scripts\globin.exe secrets set --environment paper --kind private_key --name venue_signing_key --provider dpapi_vault --from-file C:\keys\venue.pem
+```
+
+`--from-file` carries a **path, never material**. Section 5 forbids an option that
+would place a *value* on a command line; a filename is ordinary data, and the file
+is opened by this process rather than by the shell, so nothing reaches the process
+table or shell history.
+
+Three refusals apply, and one of them is about you rather than about the file:
+
+- **A path inside a GLOBIN checkout is refused.** A private key in a working tree
+  is one `git add -A` from being permanent, and rule 1 of
+  [`SECURITY_BASELINE.md`](SECURITY_BASELINE.md) is absolute about that. Refusing
+  the source is the only point at which GLOBIN can act on it.
+- **Line breaks are permitted and nothing else is.** A control character other
+  than a line break means the file is not what you thought it was.
+- **A trailing newline is tolerated and removed.** Every editor writes one and a
+  PEM file conventionally ends with one; leading whitespace is still refused,
+  because it is not conventional and it changes the key.
+
+**Deleting the source file afterwards is yours to do.** GLOBIN does not delete it,
+does not move it, and does not report where it was — a path names a machine and
+often a person. Nothing here should be read as GLOBIN having tidied up after you.
+
 **A mechanism name is not material**, which is why section 5 permits the option on
 the same reading that permits `--environment` and `--kind`. And a write against a
 mechanism that never accepts one — the environment hand-off — is refused **before

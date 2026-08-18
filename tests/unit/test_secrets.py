@@ -23,12 +23,17 @@ from globin.domain.secrets import (
     MAX_NAME_LENGTH,
     MAX_SECRET_BYTES,
     NAME_ALPHABET,
+    PEM_ARMOUR,
+    EntryProblem,
     SecretKind,
     SecretReference,
     SecretResolution,
     SecretSlot,
     SecretValue,
     StoreFault,
+    entry_problems,
+    file_material,
+    file_material_problems,
     store_key,
 )
 from globin.errors import InternalError, ValidationError
@@ -354,3 +359,95 @@ def test_the_key_builder_refuses_a_reference_that_bypassed_validation() -> None:
     object.__setattr__(reference_, "name", "")
     with pytest.raises(ValidationError, match="incomplete reference"):
         store_key(reference_)
+
+
+# ---------------------------------------------------------------------------
+# Material that arrives from a file rather than from a terminal
+# ---------------------------------------------------------------------------
+
+
+# The armour is built from `PEM_ARMOUR` rather than spelled out, so no literal
+# private-key header appears in this file. `tools/quality/supply/secrets.py`
+# scans tracked content for exactly that shape, and an allowlist entry would
+# have been the other answer -- worse, because a carve-out is a hole somebody
+# has to keep remembering, and reading the constant is what the test is about.
+def pem_key(lines: int = 60) -> str:
+    """A PEM-shaped key of a realistic size.
+
+    Args:
+        lines: How many body lines.
+
+    Returns:
+        The armoured text, with the conventional trailing newline.
+    """
+    body = "\n".join(["A" * 64] * lines)
+    return f"{PEM_ARMOUR} PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n"
+
+
+def test_the_interactive_rules_refuse_a_pem_key_whatever_its_size() -> None:
+    """The state Phase 031 found, asserted so the fix cannot be undone quietly.
+
+    A PEM key is multi-line by definition, so the control-character rule refuses
+    one at a terminal even when it would fit. `CREDENTIAL_FLOW.md` recorded this
+    as "a real PEM key cannot be collected here at all", and it is why the vault
+    needed a second route rather than a bigger prompt.
+    """
+    assert EntryProblem.CONTROL_CHARACTER in entry_problems(pem_key(2))
+
+
+def test_a_pem_key_read_from_a_file_is_storable() -> None:
+    """The route that makes the vault reachable."""
+    assert file_material_problems(pem_key()) == ()
+
+
+def test_a_conventional_trailing_newline_is_tolerated_and_removed() -> None:
+    """Every editor writes one, so refusing it would refuse the ordinary case."""
+    assert file_material_problems("value\n") == ()
+    assert file_material("value\n") == "value"
+
+
+def test_leading_whitespace_is_still_refused() -> None:
+    """Not conventional, and it changes the material."""
+    assert EntryProblem.SURROUNDING_WHITESPACE in file_material_problems("  value\n")
+
+
+def test_a_control_character_other_than_a_line_break_is_still_refused() -> None:
+    """Nothing else belongs in key material.
+
+    One arriving means the file is not what the operator thought it was, which is
+    worth refusing rather than storing.
+    """
+    assert EntryProblem.CONTROL_CHARACTER in file_material_problems("a\tb\n")
+
+
+def test_a_file_holding_only_newlines_is_empty() -> None:
+    """Stripping the conventional newline must not turn nothing into something."""
+    assert file_material_problems("\n\n\n") == (EntryProblem.EMPTY,)
+    assert file_material_problems("") == (EntryProblem.EMPTY,)
+
+
+def test_the_file_bound_is_the_type_ceiling_not_the_store_ceiling() -> None:
+    """A file is how material too large for the store arrives.
+
+    Bounding it at the store's ceiling would refuse precisely what the vault
+    exists to hold.
+    """
+    assert file_material_problems("x" * (MAX_SECRET_BYTES + 1)) == ()
+    assert EntryProblem.TOO_LARGE in file_material_problems("x" * (MAX_MATERIAL_BYTES + 1))
+
+
+def test_an_oversized_armoured_key_is_named_as_one() -> None:
+    """The two too-large problems are distinguished, as they are for a prompt."""
+    oversized = f"{PEM_ARMOUR} PRIVATE KEY-----\n" + "A" * (MAX_MATERIAL_BYTES + 1)
+    assert EntryProblem.ARMOURED_KEY_TOO_LARGE in file_material_problems(oversized)
+
+
+def test_what_is_judged_and_what_is_stored_apply_the_same_transformation() -> None:
+    """A caller checks one function and stores the other's result.
+
+    If they disagreed about the trailing newline, material judged storable would
+    be stored in a different form from the one that was judged.
+    """
+    text = pem_key()
+    assert file_material_problems(text) == ()
+    assert SecretValue(file_material(text)).material() == text.rstrip("\n")

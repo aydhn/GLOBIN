@@ -110,10 +110,15 @@ from globin.domain.observability import redact
 from globin.domain.preflight import PreflightOutcome
 from globin.domain.runtime_state import RuntimeArea
 from globin.domain.secrets import (
+    EntryFault,
+    SecretEntryOutcome,
     SecretKind,
     SecretLocator,
     SecretProviderKind,
     SecretReference,
+    SecretValue,
+    file_material,
+    file_material_problems,
     provider_writable,
 )
 from globin.errors import ConfigurationError, GlobinError, InternalError, ValidationError
@@ -206,6 +211,24 @@ answer that six phases early.
 
 KIND_FLAG: Final[str] = "--kind"
 NAME_FLAG: Final[str] = "--name"
+
+FROM_FILE_FLAG: Final[str] = "--from-file"
+"""Where multi-line key material is read from, instead of being typed.
+
+Added by Phase 031, and it is what makes the vault reachable. A PEM private
+key is multi-line by definition, so ``entry_problems``' control-character rule
+refuses one at a terminal whatever its size -- ``CREDENTIAL_FLOW.md`` records
+that "a real PEM key cannot be collected here at all". The vault exists for
+exactly that material, so without a second route it could hold nothing anybody
+could put in it.
+
+**It carries a path, never material.** ``SECRET_STORE_CONTRACT.md`` §5 forbids
+an option that would place a *value* on a command line; a filename is ordinary
+data, and the file is read by this process rather than by the shell -- so
+nothing reaches the process table or shell history. The path itself is never
+logged, and deleting the source file afterwards is the operator's
+responsibility, which the documentation says rather than implies.
+"""
 
 PROVIDER_FLAG: Final[str] = "--provider"
 """Which mechanism holds the credential being addressed.
@@ -387,6 +410,10 @@ Commands:
   secrets doctor      Report what each mechanism on this host can do.
                       Reads no stored value.
 
+  --from-file PATH    Read multi-line key material from a file instead of
+                      prompting. Only for set and rotate. Refused for a path
+                      inside a checkout. Deleting the file afterwards is
+                      yours to do.
   --provider NAME     Which mechanism holds the credential. One of
                       credential_manager, dpapi_vault, environment. Omitted,
                       the credential manager is used.
@@ -470,6 +497,7 @@ class Invocation:
     kind: str = ""
     name: str = ""
     provider: str = ""
+    from_file: str = ""
     config: str = ""
     overrides: tuple[str, ...] = ()
     field: str = ""
@@ -1732,6 +1760,7 @@ def _parse_secrets(rest: Sequence[str]) -> Invocation:
         kind=options.kind,
         name=options.name,
         provider=options.provider,
+        from_file=options.from_file,
     )
 
 
@@ -1745,10 +1774,11 @@ class _SecretOptions:
     kind: str = ""
     name: str = ""
     provider: str = ""
+    from_file: str = ""
 
 
 def _secret_options(words: Sequence[str], context: str) -> _SecretOptions:
-    """Accept the six options a secrets subcommand may take, and nothing else.
+    """Accept the seven options a secrets subcommand may take, and nothing else.
 
     Args:
         words: The remaining words.
@@ -1781,6 +1811,7 @@ def _secret_options(words: Sequence[str], context: str) -> _SecretOptions:
         KIND_FLAG: "kind",
         NAME_FLAG: "name",
         PROVIDER_FLAG: "provider",
+        FROM_FILE_FLAG: "from_file",
     }
     while remaining:
         word = remaining.pop(0)
@@ -1808,6 +1839,7 @@ def _secret_options(words: Sequence[str], context: str) -> _SecretOptions:
         kind=values.get("kind", ""),
         name=values.get("name", ""),
         provider=values.get("provider", ""),
+        from_file=values.get("from_file", ""),
     )
 
 
@@ -1946,6 +1978,9 @@ def _secrets(
     store = build_secret_store(state, locators=locators)
     register = build_grant_register(state)
 
+    if invocation.from_file and word not in SECRETS_WRITING:
+        msg = f"{FROM_FILE_FLAG} supplies material, so it means nothing for {SECRETS} {word}"
+        raise UsageError(msg)
     if word in SECRETS_WRITING and provider is not None and not provider_writable(provider):
         msg = (
             f"{provider.value} is a hand-off rather than a store and never accepts a "
@@ -1967,7 +2002,7 @@ def _secrets(
         )
     if word == DELETE:
         return _secret_delete(store, reference, out=out, err=err, as_json=invocation.as_json)
-    entry = build_secret_entry(err)
+    entry = _file_entry(invocation.from_file) if invocation.from_file else build_secret_entry(err)
     return _secret_write(entry, store, register, reference, word=word, out=out, err=err)
 
 
@@ -1983,6 +2018,88 @@ def _secret_health(store: SecretStore, *, out: TextIO, err: TextIO, as_json: boo
         print(f"the secret store is unavailable: {fault.value}", file=out)
         print(REMEDIATION[fault], file=err)
     return int(ExitCode.OK if fault is None else ExitCode.SECRETS_UNREADY)
+
+
+def _file_entry(location: str) -> SecretEntry:
+    """A collector that reads one file instead of prompting.
+
+    Args:
+        location: Where the material is.
+
+    Returns:
+        Something satisfying :class:`~globin.ports.secret_entry.SecretEntry`, so
+        that :func:`~globin.application.secrets.set_from_entry` and its rotation
+        sibling are reached unchanged. The route material arrives by is not their
+        concern, and giving them a second entry point would have duplicated the
+        four-step rotation.
+
+    Raises:
+        UsageError: If the path is inside a GLOBIN checkout. A private key in a
+            working tree is one ``git add -A`` from being committed for ever, and
+            ``SECURITY_BASELINE.md`` rule 1 is absolute about that. Refusing the
+            *source* is the only point at which GLOBIN can act on it -- it cannot
+            delete the file, and pretending it will would be worse than saying
+            nothing.
+
+    **The path is never logged and never published.** It reaches this function,
+    is opened, and is discarded; no record carries it, for the reason
+    ``RUNTIME_FILESYSTEM.md`` gives about the runtime root -- a path names a
+    person's machine and often the person.
+    """
+    path = Path(location).expanduser()
+    try:
+        resolved = path.resolve()
+    except OSError as fault:
+        msg = f"that file could not be resolved: {fault.strerror or fault}"
+        raise UsageError(msg) from fault
+    if find_project_root(resolved.parent) is not None:
+        msg = (
+            "that file is inside a GLOBIN checkout, where a key is one commit from "
+            "being permanent; move it outside the repository first"
+        )
+        raise UsageError(msg)
+    return _FileSecretEntry(path=resolved)
+
+
+@dataclass(frozen=True, slots=True)
+class _FileSecretEntry:
+    """Reads material from a file, judged by the file-sourced rules.
+
+    Args:
+        path: Where the material is, already resolved and already refused if it
+            sits inside a checkout.
+
+    Every outcome is a value rather than an exception, because
+    :class:`~globin.ports.secret_entry.SecretEntry` promises that: an unreadable
+    file, an undecodable one and material breaking a rule are all answers a caller
+    reports rather than faults that stop a process.
+    """
+
+    path: Path
+
+    def collect(self, prompt: str) -> SecretEntryOutcome:
+        """Read the file and judge what it holds.
+
+        Args:
+            prompt: What would have been shown at a terminal. Unused here, and
+                deliberately not printed -- there is nobody to prompt, and echoing
+                it would put the reference in the operator's scrollback for no
+                reason.
+
+        Returns:
+            The outcome.
+        """
+        del prompt
+        try:
+            text = self.path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return SecretEntryOutcome(value=None, fault=EntryFault.ENTRY_UNAVAILABLE)
+        problems = file_material_problems(text)
+        if problems:
+            return SecretEntryOutcome(
+                value=None, fault=EntryFault.REFUSED_FORMAT, problems=problems
+            )
+        return SecretEntryOutcome(value=SecretValue(file_material(text)))
 
 
 def _secret_doctor(state: RuntimeState, *, out: TextIO, as_json: bool) -> int:
