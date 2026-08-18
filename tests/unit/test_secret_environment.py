@@ -24,6 +24,7 @@ from globin.adapters.secret_environment import (
 from globin.application.secrets import ProviderRoutedStore
 from globin.domain.identifiers import environment_id
 from globin.domain.secrets import (
+    MAX_MATERIAL_BYTES,
     MAX_SECRET_BYTES,
     SecretKind,
     SecretLocator,
@@ -237,9 +238,26 @@ def test_the_previous_slot_is_always_absent() -> None:
 
 
 def test_material_the_value_type_refuses_is_reported_rather_than_raised() -> None:
-    """Nothing in the port raises for an expected outcome."""
-    oversized = provider(VENUE_HANDOFF_KEY="x" * (MAX_SECRET_BYTES + 1))
+    """Nothing in the port raises for an expected outcome.
+
+    The bound is the *type's* since Phase 031, not the credential store's. A
+    hand-off can carry material larger than the store's ceiling — an operator may
+    hand a process a key that belongs in the vault — so the store's number would
+    be the wrong refusal here.
+    """
+    oversized = provider(VENUE_HANDOFF_KEY="x" * (MAX_MATERIAL_BYTES + 1))
     assert oversized.resolve(REFERENCE).fault is StoreFault.VALUE_TOO_LARGE
+
+
+def test_a_hand_off_may_carry_more_than_the_credential_store_would_accept() -> None:
+    """The mechanisms have different ceilings, and this one is not the store's.
+
+    Refusing at 2560 bytes here would make an environment hand-off unable to
+    deliver exactly the material the vault exists to hold.
+    """
+    large = provider(VENUE_HANDOFF_KEY="x" * (MAX_SECRET_BYTES + 1))
+    resolution = large.resolve(REFERENCE)
+    assert resolution.resolved
 
 
 # ---------------------------------------------------------------------------

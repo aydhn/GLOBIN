@@ -48,6 +48,7 @@ from globin.adapters.secret_vault import (
 from globin.domain.identifiers import environment_id
 from globin.domain.secret_vault import DIGEST_FIELD, PROTECTED_FIELD, vault_filename
 from globin.domain.secrets import (
+    MAX_MATERIAL_BYTES,
     MAX_SECRET_BYTES,
     SecretKind,
     SecretReference,
@@ -593,10 +594,15 @@ def test_material_that_is_not_utf8_is_corrupt_rather_than_raised(tmp_path: Path)
 def test_material_the_value_type_refuses_is_reported_rather_than_raised(
     tmp_path: Path,
 ) -> None:
-    """An envelope holding more than the value type accepts is a fault, not a crash."""
+    """An envelope holding more than the value type accepts is a fault, not a crash.
+
+    The bound is the *type's* since Phase 031, not the credential store's: the
+    vault exists for material the store refuses, so a store-sized ceiling here
+    would refuse the very thing it holds.
+    """
     store, library, _ = vault(tmp_path)
     store.store(REFERENCE, SecretValue(MATERIAL))
-    library.override_output = b"x" * (MAX_SECRET_BYTES + 1)
+    library.override_output = b"x" * (MAX_MATERIAL_BYTES + 1)
     assert store.resolve(REFERENCE).fault is StoreFault.VALUE_TOO_LARGE
 
 
@@ -705,3 +711,37 @@ def test_ciphertext_the_envelope_refuses_is_reported_rather_than_raised(
 
     monkeypatch.setattr(vault_module, "encode_envelope", refuse)
     assert store.store(REFERENCE, SecretValue(MATERIAL)) is StoreFault.VALUE_TOO_LARGE
+
+
+def test_the_vault_holds_material_the_credential_store_refuses(tmp_path: Path) -> None:
+    """The whole reason the vault exists, proved end to end rather than by arithmetic.
+
+    `phase_028_sources.md` S-11 measured an RSA-4096 key in PEM form at 3324
+    bytes against a 2560-byte store ceiling. Until Phase 031 separated the value
+    type's bound from the store's, this test could not even be written: the
+    `SecretValue` constructor refused the material, so the vault was unreachable
+    for its own purpose. Asserting the round trip is what stops that regressing.
+    """
+    material = "x" * 3324
+    assert len(material) > MAX_SECRET_BYTES
+    store, _, _ = vault(tmp_path)
+    assert store.store(REFERENCE, SecretValue(material)) is None
+    resolution = store.resolve(REFERENCE)
+    assert resolution.value is not None
+    assert resolution.value.material() == material
+
+
+def test_the_credential_store_still_refuses_what_exceeds_its_own_ceiling() -> None:
+    """Separating the ceilings must not have widened the store's.
+
+    The narrower bound moved from the type to the mechanism that imposes it; it
+    did not go away. `WindowsCredentialStore.store` re-checks the encoded length
+    and answers with a named fault rather than letting the platform return an
+    undocumented status.
+    """
+    from globin.adapters.secrets import UnavailableSecretStore
+
+    assert MAX_SECRET_BYTES < 32 * 1024
+    oversized = SecretValue("x" * (MAX_SECRET_BYTES + 1))
+    assert oversized.size_bytes() > MAX_SECRET_BYTES
+    assert UnavailableSecretStore().store(REFERENCE, oversized) is StoreFault.BACKEND_UNAVAILABLE

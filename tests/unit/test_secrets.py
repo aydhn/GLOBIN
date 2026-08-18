@@ -19,6 +19,7 @@ from globin.domain.identifiers import environment_id
 from globin.domain.observability import REDACTED
 from globin.domain.secrets import (
     KEY_PREFIX,
+    MAX_MATERIAL_BYTES,
     MAX_NAME_LENGTH,
     MAX_SECRET_BYTES,
     NAME_ALPHABET,
@@ -182,22 +183,46 @@ def test_an_empty_value_is_refused() -> None:
         SecretValue("")
 
 
-def test_a_value_at_the_ceiling_is_accepted_and_one_byte_over_is_not() -> None:
-    """The boundary measured on the real host, as `phase_028_sources.md` S-05 records.
+def test_a_value_at_the_type_ceiling_is_accepted_and_one_byte_over_is_not() -> None:
+    """The type's bound is the widest any mechanism has, not any one mechanism's.
 
-    2560 succeeds and 2561 fails against the platform. The domain refuses the
-    second *before* the platform is reached, which is what turns an undocumented
-    `RPC_X_BAD_STUB_DATA` into a named refusal.
+    Phase 028 put the Credential Manager's 2560 bytes here, which was right while
+    there was one store. Phase 031 added a mechanism whose whole purpose is
+    material that ceiling refuses, so a type enforcing the narrower bound made the
+    vault unreachable: an RSA-4096 PEM key could not be *constructed*, let alone
+    stored. Each mechanism now enforces its own limit and this bounds the type.
     """
-    assert SecretValue("x" * MAX_SECRET_BYTES).size_bytes() == MAX_SECRET_BYTES
+    assert SecretValue("x" * MAX_MATERIAL_BYTES).size_bytes() == MAX_MATERIAL_BYTES
     with pytest.raises(ValidationError, match="exceeds"):
-        SecretValue("x" * (MAX_SECRET_BYTES + 1))
+        SecretValue("x" * (MAX_MATERIAL_BYTES + 1))
 
 
 def test_the_ceiling_is_measured_in_encoded_bytes_not_characters() -> None:
     """A multi-byte character costs what it costs, which is the platform's unit."""
     with pytest.raises(ValidationError):
-        SecretValue("é" * MAX_SECRET_BYTES)
+        SecretValue("é" * MAX_MATERIAL_BYTES)
+
+
+def test_material_the_credential_store_refuses_can_still_be_a_value() -> None:
+    """The regression this separation exists to prevent, stated as a size.
+
+    `phase_028_sources.md` S-11 measured an RSA-4096 key in PEM form at 3324
+    bytes against a 2560-byte store ceiling. That measurement is the reason the
+    vault exists, and until Phase 031 separated the two ceilings the value type
+    refused the very material the vault was built for.
+    """
+    rsa_4096_pem_bytes = 3324
+    assert rsa_4096_pem_bytes > MAX_SECRET_BYTES
+    assert SecretValue("x" * rsa_4096_pem_bytes).size_bytes() == rsa_4096_pem_bytes
+
+
+def test_the_store_ceiling_is_still_the_narrower_of_the_two() -> None:
+    """The two mechanisms stay disjoint by arithmetic, which needs an ordering.
+
+    If the type's bound were the narrower one there would be no material the vault
+    could hold; if they were equal there would be no material it *had* to.
+    """
+    assert MAX_SECRET_BYTES < MAX_MATERIAL_BYTES
 
 
 def test_the_material_is_reachable_for_the_one_caller_that_must_have_it() -> None:

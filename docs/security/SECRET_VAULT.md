@@ -30,7 +30,18 @@ place GLOBIN had to put it.
 | Above 2560 bytes | The vault |
 
 Both read the same constant, so no value belongs to both and none belongs to
-neither. An Ed25519 private key in PKCS#8 PEM form is 122 bytes and lives in the
+neither.
+
+**A ceiling moved to make this work, and it is worth saying where.** Phase 028 put
+the Credential Manager's 2560 bytes on the *value type itself*, which was right
+while there was one store — and became wrong the moment a second mechanism existed
+for material that ceiling refuses. A value type enforcing the narrower bound made
+the vault unreachable for its own purpose: an RSA-4096 PEM key could not be
+**constructed**, let alone stored. So the type now carries the widest bound any
+mechanism has, and **each mechanism enforces its own**: the Credential Manager
+re-checks 2560 bytes on the encoded blob and answers `value_too_large`, which is
+where a store's ceiling belongs. Nothing about what either mechanism accepts
+changed; what changed is which layer says so. An Ed25519 private key in PKCS#8 PEM form is 122 bytes and lives in the
 **store**; nothing routes by key *type*, because which algorithm a key is for is a
 signing concern and signing is Phases 033 onwards.
 

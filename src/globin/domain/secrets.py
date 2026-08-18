@@ -69,6 +69,27 @@ names the reference, while refusing it at the platform yields an undocumented
 error code.
 """
 
+MAX_MATERIAL_BYTES: Final[int] = 32 * 1024
+"""The largest value **any** mechanism GLOBIN has could hold, in UTF-8 bytes.
+
+Distinct from :data:`MAX_SECRET_BYTES`, and Phase 031 is why. Phase 028 put the
+Credential Manager's ceiling on :class:`SecretValue` itself, which was right while
+there was one store -- and became wrong the moment a second mechanism existed for
+material that ceiling *refuses*. A value type enforcing the narrower bound made the
+vault unreachable for its own purpose: an RSA-4096 key in PEM form is 3324 bytes
+(``phase_028_sources.md`` S-11), so it could not be constructed, let alone stored.
+
+**Each mechanism now enforces its own limit, and this one bounds the type.** The
+Credential Manager re-checks :data:`MAX_SECRET_BYTES` on the encoded blob and
+answers :attr:`StoreFault.VALUE_TOO_LARGE`, which is where a store's ceiling
+belongs; the vault bounds its envelope separately. What this constant stops is an
+unbounded string entering the domain at all.
+
+32 KiB is well above any key type Binance documents and well under the envelope's
+own ciphertext bound, so neither limit is the one a caller meets first for a
+realistic value.
+"""
+
 KEY_PREFIX: Final[str] = "GLOBIN"
 """What every store key begins with.
 
@@ -307,10 +328,10 @@ class SecretValue:
             msg = "a secret value cannot be empty"
             raise ValidationError(msg)
         size = len(material.encode("utf-8"))
-        if size > MAX_SECRET_BYTES:
+        if size > MAX_MATERIAL_BYTES:
             msg = (
-                f"a secret value of {size} bytes exceeds the {MAX_SECRET_BYTES}-byte "
-                "limit the credential store imposes"
+                f"a secret value of {size} bytes exceeds the {MAX_MATERIAL_BYTES}-byte "
+                "limit, which is the largest any mechanism GLOBIN has could hold"
             )
             raise ValidationError(msg)
         self._material = material
