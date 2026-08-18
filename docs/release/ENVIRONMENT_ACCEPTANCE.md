@@ -61,11 +61,11 @@ somebody writes them down, and the semantics it acquires in practice are
 
 ## Result
 
-**56 criteria across thirteen categories. 47 are blocking.**
+**61 criteria across thirteen categories. 51 are blocking.**
 
 | Status | Count |
 |---|---|
-| `PASS` | 55 |
+| `PASS` | 60 |
 | `FAIL` | 0 |
 | `BLOCKED` | 1 |
 | `NOT_APPLICABLE` | 0 |
@@ -114,6 +114,11 @@ The reasoning behind each is in the declaration; this table is the index, and
 | `ENV-B-03` | Divergence from the contract is detected against an accepted baseline, and repair is a classification rather than an action. | yes | `PASS` |
 | `ENV-B-04` | Exactly one fault is repaired in place, and the repair writes only inside the environment. | no | `PASS` |
 | `ENV-B-05` | The recursive delete that recreation implies cannot be aimed at anything but the declared environment. | yes | `PASS` |
+| `ENV-B-06` | What would be changed is shown before anything is changed, and showing it changes nothing. | yes | `PASS` |
+| `ENV-B-07` | An interrupted provisioning run cannot be mistaken for a finished one. | yes | `PASS` |
+| `ENV-B-08` | Applying the same plan twice changes nothing the second time. | no | `PASS` |
+| `ENV-B-09` | Exactly one module in the package may start a child process, and it is named. | yes | `PASS` |
+| `ENV-B-10` | What GLOBIN cannot perform is reported with the command that can, rather than attempted. | yes | `PASS` |
 
 ### C — Dependency locking and distribution
 

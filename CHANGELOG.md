@@ -19,6 +19,89 @@ can be opened and read.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-19
+
+The environment baseline. Closes Phases 017-032: a Windows machine can be turned
+into a reproducible GLOBIN host, and every step of doing so is checkable rather
+than asserted. Certified against
+[`docs/release/ENVIRONMENT_ACCEPTANCE.md`](docs/release/ENVIRONMENT_ACCEPTANCE.md).
+
+### The environment band is certified, and the granularity question is answered
+
+- **Sixty-one criteria across thirteen capability groups**, recomputed by the same
+  evaluator that reads the foundation matrix. Nothing in `duplicate_identifiers`,
+  `misfiled_identifiers` or their neighbours was copied to make a second band
+  work; three module constants became a `MatrixSpec` and a twenty-first band is
+  one row. Only the first declaration carries a `[release]` table, and a second
+  copy of those five paths is refused by name.
+- **Grouped by capability rather than by phase, and that is the decision.** The
+  foundation matrix runs one category per phase because that band's rows described
+  its work. This band's did not, which is the review's central finding, so a matrix
+  organised by phase would encode the defect it reports.
+- **The granularity review `ROADMAP.md` and six ADRs assigned to this phase.**
+  Its result is arithmetic rather than argument: across the thirteen scored
+  amendments, *nothing deferred* is met 13/13 and *no phase owns the work* 1/13.
+  **Two of the four conditions carry almost no information**, which is why a four
+  and a one landed in consecutive phases with nothing having changed about how
+  carefully the work was scoped.
+- **The band is not drawn wrong; a subject is missing.** Sixteen rows describe
+  provisioning steps. Eleven consecutive phases delivered those *and* the running
+  application's substrate — filesystem, diagnostics, health, watchdog, telemetry,
+  endpoint, configuration evidence, degradation posture — for which the band has
+  **zero rows**. A widening is visible because somebody must write an ADR; a
+  missing subject produces thirteen of them, each defensible.
+- **The count that drifted twice is now bound to a test.** `ROADMAP.md` said of
+  its own amendment count "Nothing tests it, which is why it drifted." Fourteen
+  assertions now hold the ledger against the roadmap and the decision log in both
+  directions.
+
+### A plan is produced before anything changes
+
+- **Three verbs the surface did not have** — `plan`, `setup`, `repair` — and a
+  plan derived from a bootstrap report and from nothing else, so `plan` and
+  `check` cannot disagree about a host and producing a plan is read-only **by the
+  architecture contract** rather than by promise.
+- **One module in the package may start a process**, named in both directions by a
+  tripwire. `dependency-rules.toml` needed no edit: it has always permitted this.
+  Writing the rule wrong first is recorded — a bare attribute check flagged
+  `HostFacts.system` in seven modules that start nothing.
+- **An interrupted run cannot read as finished.** A claim is written before the
+  first mutation and released only after the last; `ProvisioningOutcome` refuses a
+  re-measurement on an incomplete journal.
+- **An action declares who performs it**, and the packaging forced it: the wheel
+  holds the package and its metadata and nothing else, so an installed GLOBIN has
+  no `tools/` to invoke. What GLOBIN cannot do is reported with the command that
+  can.
+- **No fifth status word, no twenty-sixth exit code, no `verify` verb.**
+  `UNMEASURED` already means what `BLOCKED` means; an incomplete environment is
+  honestly `12`; and `bootstrap preflight` already runs every check and gates.
+  **26 stays free.**
+
+### Fixed
+
+- **A published evidence section that published nothing.** `observed.secrets` in
+  the bootstrap manifest had been the literal string `[redacted]` since Phase 029:
+  redaction matches field names by substring, and `secrets` contains `secret`. The
+  record it hid is a count and reference *names*. Every accurate rename is caught
+  by the same mechanism, so the section is `references` and the manifest schema
+  moved 2 → 3. A tripwire now fails if any observed section name trips the
+  redactor.
+- **Twenty-three stale deferral rows across nine documents.** The check covering
+  them reached five documents out of twenty-three, because nine carried the same
+  table under a different header. The headers were normalised rather than the
+  parser taught a second spelling.
+- **The packaging build deferral, closed with a measurement.** `MEMORY.md` and
+  `QUALITY_GATES.md` both said no build had been run and that Phases 017-032 owned
+  verifying one. The wheel and the source distribution were built, installed into a
+  throwaway environment, and exercised. It is verified and deliberately not gated:
+  `hatchling` is absent from `pylock.dev.toml`, so isolation reaches an index.
+- **Three documents contradicting themselves.** `CLAUDE.md` said six libraries were
+  absent-safe and, twelve lines later, four while listing three. `MEMORY.md`
+  recorded phases 001-030 complete after 031 shipped. `FOUNDATION_ACCEPTANCE.md`
+  named this band by a title that does not exist.
+- **A duplicate action found while testing.** `dependency.install` and
+  `dependency.repair` both answered one check and both ran one command.
+
 ### GLOBIN says what it is running without, and can hold a key that does not fit
 
 - **Six absent-safe factories, and nothing recorded which arm they took.** Each of

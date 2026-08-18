@@ -72,6 +72,9 @@ that certifies — and the one criterion it could not — is in
 | How do I commit? | [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) |
 | How is a version chosen, and a release cut? | [`docs/release/RELEASE_POLICY.md`](docs/release/RELEASE_POLICY.md) |
 | What changed between versions? | [`CHANGELOG.md`](CHANGELOG.md) |
+| Is the *environment* band complete, and on what evidence? | [`docs/release/ENVIRONMENT_ACCEPTANCE.md`](docs/release/ENVIRONMENT_ACCEPTANCE.md), [`docs/engineering/environment-acceptance.toml`](docs/engineering/environment-acceptance.toml) |
+| Were Phases 017-032 drawn at the right granularity? | [`docs/engineering/GRANULARITY_REVIEW.md`](docs/engineering/GRANULARITY_REVIEW.md), [`docs/engineering/scope-amendments.toml`](docs/engineering/scope-amendments.toml) |
+| How does an operator get from a clean clone to a host that starts? | [`docs/engineering/PROVISIONING.md`](docs/engineering/PROVISIONING.md), [ADR-0085](docs/adr/0085-a-plan-is-derived-from-a-report-and-one-module-may-start-a-process.md) |
 | Is the foundation band complete, and on what evidence? | [`docs/release/FOUNDATION_ACCEPTANCE.md`](docs/release/FOUNDATION_ACCEPTANCE.md), [`docs/engineering/foundation-acceptance.toml`](docs/engineering/foundation-acceptance.toml) |
 | What does this term mean? | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
 
@@ -825,6 +828,46 @@ not travel** between accounts or machines, and there is no backup: recovery is
 re-enrolment. Details:
 [`docs/engineering/DEGRADED_OPERATION.md`](docs/engineering/DEGRADED_OPERATION.md) and
 [`docs/security/SECRET_VAULT.md`](docs/security/SECRET_VAULT.md).
+
+
+Phase 032 closed the environment band, and gave the surface a **plan**.
+
+```bash
+.venv\Scripts\globin.exe bootstrap plan
+```
+
+```bash
+.venv\Scripts\globin.exe bootstrap setup
+```
+
+**`setup` is not the cold-start path**, and `PROVISIONING.md` says so first: it is
+installed *into* the environment it would create, so `scripts/bootstrap.ps1` remains
+what makes one. A plan is derived from a bootstrap report and **from nothing else**,
+so `plan` and `check` cannot disagree about a host -- and `plan` is read-only *by the
+layer contract*, because the planner is in `domain` which may perform no I/O.
+
+**One module in the package may now start a process**, and it is named in both
+directions by `tests/architecture/test_process_discipline.py`. The layer contract
+needed no edit -- `subprocess` was always I/O-capable and adapters always could
+perform I/O -- so this is an unbroken property becoming a bounded one. Writing that
+rule wrong first is recorded: a bare attribute check flagged `HostFacts.system` in
+seven modules that start nothing.
+
+**An action declares who performs it**, and the wheel is why: it holds `globin/` and
+its `.dist-info` and nothing else, so an installed GLOBIN has no `tools/` to invoke.
+What GLOBIN cannot do is reported with the exact command that can.
+
+**No fifth status word, no twenty-sixth exit code, no `verify` verb.** `UNMEASURED`
+already means what `BLOCKED` means, an incomplete environment is honestly `12`, and
+`bootstrap preflight` already runs every check and gates -- typing `verify` names the
+replacement. **26 stays free.**
+
+The band closure delivered the **granularity review** `ROADMAP.md` and six ADRs had
+been holding for this phase. Its finding is arithmetic: across thirteen scored
+amendments *nothing deferred* is met 13/13 and *no phase owns the work* 1/13, so two
+of the four conditions carry almost no information. And the band is not drawn wrong
+-- **a subject is missing**: sixteen rows describe provisioning steps while eleven
+phases delivered the runtime substrate, for which the band has no rows at all.
 
 ---
 

@@ -26,7 +26,7 @@ from globin.runtime.cli import (
     render_human,
     render_json,
 )
-from globin.runtime.composition import build_bootstrap
+from globin.runtime.composition import build_bootstrap, project_identity
 from tests.support import REPO_ROOT
 
 # ---------------------------------------------------------------------------
@@ -171,13 +171,37 @@ def test_an_unrecognised_command_is_a_usage_error() -> None:
     assert "unrecognised argument" in err
 
 
-def test_the_version_is_the_one_the_package_declares() -> None:
-    """One source, which ADR-0049 requires and `pyproject.toml` points at."""
-    import globin
+def test_the_version_is_the_one_the_identity_reports() -> None:
+    """One source, which ADR-0049 requires and `pyproject.toml` points at.
+
+    Compared against `project_identity()` rather than against
+    `globin.__version__`, and Phase 032 found out why by being the first phase to
+    move the version. `FilesystemProjectProbe` prefers **installed metadata**
+    because that describes what was installed, and falls back to the package
+    attribute -- so on a development machine with an editable install, the source
+    tree is newer than the metadata until something reinstalls it. That is the
+    designed behaviour and the docstring says so; a test comparing against the
+    attribute asserted the opposite and passed for eleven phases only because the
+    two had never disagreed.
+    """
+    identity = project_identity()
+    assert identity is not None
 
     code, out, _ = run(["--version"])
     assert code == ExitCode.OK
-    assert out.strip() == globin.__version__
+    assert out.strip() == identity.version
+
+
+def test_the_version_says_which_of_the_two_sources_it_came_from() -> None:
+    """The identity says which of its two sources answered.
+
+    A reader deserves to know whether they are being told about the source tree
+    or about what is installed, and the distinction only becomes visible when the
+    two disagree -- which is exactly when it matters.
+    """
+    identity = project_identity()
+    assert identity is not None
+    assert identity.source in {"metadata", "package"}
 
 
 def test_doctor_writes_its_table_to_standard_output() -> None:

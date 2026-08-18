@@ -33,8 +33,11 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-031 are complete. Phase 032 is next and has not started.**
-> Nothing beyond Phase 031 is implemented. GLOBIN does not trade, does not
+> **Phases 001-032 are complete. Phase 033 is next and has not started.**
+> Nothing beyond Phase 032 is implemented. The environment band is closed and
+> frozen as `v0.2.0`; what that certifies, and the one criterion it could not,
+> are in
+> [`docs/release/ENVIRONMENT_ACCEPTANCE.md`](docs/release/ENVIRONMENT_ACCEPTANCE.md). GLOBIN does not trade, does not
 > connect to any exchange, and **holds no credentials** -- it now has somewhere to
 > put one and a way to be handed one, which is still a different thing. See
 > [`README.md`](README.md).
@@ -175,7 +178,7 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Fifteen have been made. Each cost an ADR, and each is
+> **Scope amendments.** Sixteen have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
 > unchanged by all fifteen.
@@ -464,6 +467,35 @@ the contract:
 > carries the whole of it, cites neither the fourteenth's score nor the count, and
 > closes by forbidding a sixteenth from citing any of this.
 
+> **Sixteenth.** Phase 032 still delivers the environment consolidation and phase
+> gate review its title names -- the band certified by a second acceptance matrix
+> that one evaluator recomputes, `v0.2.0` cut against it, and the granularity
+> review this document has been holding since ADR-0064 named the signal.
+> Alongside it, the bootstrap provisioning surface: a plan derived from a report
+> and from nothing else, a network policy that is declared rather than probed, a
+> claim that makes an interrupted run visible, and one bounded process runner.
+>
+> **It scores two of four, and it cites nothing.** ADR-0082 forbade a sixteenth
+> from citing any prior record or the count, so
+> [ADR-0084](docs/adr/0084-phase-032-widens-to-deliver-the-bootstrap-provisioning-surface.md)
+> argues from scratch. *Nothing deferred*: both halves ship together. *The two
+> halves need each other*: a band cannot be certified as producing a reproducible
+> host while the path from a clean clone to a working environment is the one thing
+> no gate recomputes, and five environment-lifecycle criteria became measurements
+> rather than assertions because of it. It fails the other two -- work is
+> displaced, and Phase 291 *Interactive Configuration Wizard* owns part of it by
+> purpose. **No phase owns it by title**, which is the one thing the ninth, tenth
+> and fifteenth could not say.
+>
+> **The review it delivers judges the amendment it is**, and says so rather than
+> working around it. Its central finding is that **two of the four conditions
+> carry almost no information** across this programme -- one met every time, one
+> met once -- and that this band's rows describe provisioning steps while eleven
+> consecutive phases delivered the running application's substrate, for which the
+> band has no rows at all. It proposes no replacement test and rewrites no roadmap
+> row: a review conducted inside a phase it must score is not a disinterested one.
+> Phase 048 inherits both findings and this amendment as evidence.
+
 
 ---
 
@@ -516,7 +548,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 029 | Credential Prompting and Validation Flow | Define interactive credential collection, format validation and permission verification before use; and, as the thirteenth scope amendment, deliver the dependency attestation -- a runtime inventory that can finally see a version, a second PEP 751 reader that is the specification's own, and an offline materialization gate whose network fallback is unreachable rather than un-taken. | Complete |
 | 030 | Bootstrap Health Check Suite | Implement the preflight checks that must pass before any long-running GLOBIN process starts, classifying every check by whether its answer survives the run and declaring the schedule the perishable ones imply; and, as the fourteenth scope amendment, make configuration able to explain itself -- a command-line value layer above the environment, an explicit document whose absence is fatal, per-field provenance, a declared contract version, and a semantic fingerprint separated from the one that sees where a value came from. | Complete |
 | 031 | Offline and Degraded Installation Handling | Define behaviour when the network, GPU or optional native components are unavailable, declaring a necessity per component and folding a posture from what each factory actually returned; and, as the fifteenth scope amendment, deliver the user-scoped secret vault -- a DPAPI-protected envelope for material the credential store's 2560-byte ceiling refuses, admitted by arithmetic, carrying its own integrity check, and with no fallback edge between the two mechanisms. | Complete |
-| 032 | Environment Consolidation and Phase Gate Review | Reconcile the environment band and certify a reproducible host before exchange integration begins. | Planned |
+| 032 | Environment Consolidation and Phase Gate Review | Reconcile the environment band and certify a reproducible host before exchange integration begins, answering on the record whether Phases 017-032 were drawn at a granularity that describes the work; and, as the sixteenth scope amendment, deliver the bootstrap provisioning surface -- a plan derived from a report and from nothing else, a network policy that is declared rather than probed, a claim that makes an interrupted run visible, and one bounded process runner in the one module permitted to start a child. | Complete |
 
 ---
 

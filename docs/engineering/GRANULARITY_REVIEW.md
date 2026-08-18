@@ -32,9 +32,9 @@ to say **nothing displaced, nothing deferred, no phase owns the work, and the tw
 halves need each other**. That restatement is what the programme actually
 applied, so it is what is scored here.
 
-Fifteen amendments have been made. Three predate the test — the first two came
+Sixteen amendments have been made. Three predate the test — the first two came
 before ADR-0021, and the third *is* ADR-0021, which created the test in the act
-of being the amendment that needed one. Twelve are scored.
+of being the amendment that needed one. Thirteen are scored.
 
 ---
 
@@ -54,8 +54,9 @@ of being the amendment that needed one. Twelve are scored.
 | 13 | 029 | [ADR-0076](../adr/0076-phase-029-widens-to-deliver-the-dependency-attestation.md) | 2/4 |
 | 14 | 030 | [ADR-0079](../adr/0079-phase-030-widens-to-deliver-the-configuration-evidence-surface.md) | 4/4 |
 | 15 | 031 | [ADR-0082](../adr/0082-phase-031-widens-to-deliver-the-user-scoped-secret-vault.md) | 1/4 |
+| 16 | 032 | [ADR-0084](../adr/0084-phase-032-widens-to-deliver-the-bootstrap-provisioning-surface.md) | 2/4 |
 
-Mean 1.67 of four.
+Mean 1.69 of four.
 
 ---
 
@@ -65,19 +66,19 @@ This is the review's central result, and it is arithmetic rather than argument.
 
 | Condition | Met |
 |---|:---:|
-| `nothing_displaced` | 1/12 |
-| `nothing_deferred` | 12/12 |
-| `no_phase_owns_it` | 1/12 |
-| `halves_need_each_other` | 6/12 |
+| `nothing_displaced` | 1/13 |
+| `nothing_deferred` | 13/13 |
+| `no_phase_owns_it` | 1/13 |
+| `halves_need_each_other` | 7/13 |
 
 **One condition has never once failed.** Every amendment delivered its titled
-scope in full. Nothing was ever traded away to make room, in twelve consecutive
-applications of a test whose job is to discriminate.
+scope in full. Nothing was ever traded away to make room, in thirteen
+consecutive applications of a test whose job is to discriminate.
 
 **Two conditions have failed all but once**, and the once is the same phase for
 both — Phase 030, the only amendment to score four.
 
-So across twelve amendments the test has one condition that always passes, two
+So across thirteen amendments the test has one condition that always passes, two
 that almost always fail, and one that genuinely varies. Its effective resolution
 is close to a single bit. That is why a four and a one arrived in consecutive
 phases (030 and 031) without anything having changed about how carefully the work
@@ -96,10 +97,10 @@ band's evidence is the same error as the one being diagnosed, and it is Phase
 
 ## Finding 2 — the band is not drawn wrong; a subject is missing
 
-The tempting conclusion from twelve amendments is that the rows are too coarse
+The tempting conclusion from thirteen amendments is that the rows are too coarse
 or too fine. Neither holds.
 
-**The band range and subject are intact.** *Nothing deferred* was met 12/12:
+**The band range and subject are intact.** *Nothing deferred* was met 13/13:
 every phase delivered what its title promised. A band whose rows were too large
 would show deferrals, and there are none.
 
@@ -120,7 +121,7 @@ failure from a brief that describes work an earlier phase already did."
 
 **A missing subject is worse than a widening, because a widening is visible and a
 missing subject is not.** A widening produces an ADR somebody must write and
-defend. A missing subject produces twelve of them, each individually
+defend. A missing subject produces thirteen of them, each individually
 defensible, and the pattern is only visible from where this review stands.
 
 ---
@@ -216,10 +217,11 @@ bands and no stake in either.
 
 **It does not propose a replacement for ADR-0021's test.** See Finding 1.
 
-**It does not excuse the phase that wrote it.** Phase 032 delivers its titled
-scope and makes no amendment, so it has no row in the ledger. That is a fact
-about what shipped rather than a claim to impartiality: a review conducted by a
-phase inside the band it judges is not disinterested however it scores.
+**It does not excuse the phase that wrote it.** Phase 032 is the sixteenth
+amendment, scores two of four, and is in the ledger on the same terms as the
+twelve before it. That this review is written by a phase it must score is stated
+rather than worked around, and it is why no replacement test is proposed and no
+roadmap row is rewritten.
 
 ---
 

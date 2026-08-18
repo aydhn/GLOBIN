@@ -273,6 +273,22 @@ displaces = [292]
 title_collisions = [292]
 overlaps_complete = [28, 29]
 
+[[amendment]]
+ordinal = 16
+ordinal_word = "Sixteenth"
+phase = 32
+scored = true
+record = "docs/adr/0084-phase-032-widens-to-deliver-the-bootstrap-provisioning-surface.md"
+summary = "Phase 032 delivered the bootstrap provisioning surface alongside the environment band closure and this review. The first amendment to fail no title-level collision."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "MET"
+score = 2
+displaces = [291]
+title_collisions = []
+overlaps_complete = []
+
 # ---------------------------------------------------------------------------
 # What a later phase will find partly built.
 #

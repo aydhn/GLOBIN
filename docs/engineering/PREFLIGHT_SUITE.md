@@ -170,7 +170,7 @@ run rather than two renderings of it.
 |---|---|
 | What each check measures and what its exit code means | 021, delivered — [`BOOTSTRAP.md`](BOOTSTRAP.md) |
 | Behaviour when the network, GPU or optional native components are unavailable | 031, delivered — [`DEGRADED_OPERATION.md`](DEGRADED_OPERATION.md) |
-| Whether the band's phases are drawn at the right granularity | 032 |
+| Whether the band's phases are drawn at the right granularity | 032, delivered — [`GRANULARITY_REVIEW.md`](GRANULARITY_REVIEW.md) |
 | Blocking a **live** launch on connectivity, credentials and risk | 297 |
 | A process that runs long enough to need a re-take, and the loop that performs it | 297 and beyond |
 

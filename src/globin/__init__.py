@@ -1,6 +1,6 @@
 """GLOBIN — engineering foundation for a local autonomous Binance Global system.
 
-**Maturity: Phase 31 of 320. This package does not trade.**
+**Maturity: Phase 32 of 320. This package does not trade.**
 
 There is no networking, no authentication, no market-data ingestion, no
 strategy, no backtesting and no machine learning in this package. The phases
@@ -39,7 +39,7 @@ from globin.project_contract import (
 )
 from globin.roadmap import PHASE_BAND_WIDTH, PHASE_BANDS, PhaseBand, band_for_phase
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "CONTRACT",

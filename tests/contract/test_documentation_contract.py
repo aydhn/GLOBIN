@@ -184,6 +184,10 @@ REQUIRED_DOCS: tuple[str, ...] = (
     # them here is what stops the drift the three comments above record from
     # recurring a fourth time.
     "docs/research/phase_031_sources.md",
+    "docs/research/phase_032_sources.md",
+    "docs/release/ENVIRONMENT_ACCEPTANCE.md",
+    "docs/engineering/GRANULARITY_REVIEW.md",
+    "docs/engineering/PROVISIONING.md",
     "docs/engineering/DEGRADED_OPERATION.md",
     "docs/security/SECRET_VAULT.md",
 )

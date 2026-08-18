@@ -81,6 +81,11 @@ While GLOBIN is `0.y.z`:
 
 ### The baseline
 
+`0.2.0` is the environment baseline, closing Phases 017-032. It certifies that a
+Windows machine can be turned into a reproducible GLOBIN host and that each step
+is checkable rather than asserted; see
+[`ENVIRONMENT_ACCEPTANCE.md`](ENVIRONMENT_ACCEPTANCE.md).
+
 `0.1.0` is the foundation baseline, closing Phases 001-016. It was not chosen to
 start a sequence: the version already existed at `src/globin/__init__.py` from
 Phase 001 and had never been released. Phase 016 tagged what was already
@@ -293,9 +298,16 @@ Everything is safe to run twice:
 
 ## From Phase 017 onward
 
-Each phase that delivers capability increments `MINOR` and adds a changelog
-entry under `Unreleased`; the entry moves under a version heading when that
-version is released. Not every phase needs a release — a release is cut when
+Each phase that delivers capability adds a changelog entry under `Unreleased`;
+the entry moves under a version heading when that version is released, and the
+`MINOR` of *that* version reflects the capability added since the previous one.
+
+**Not one increment per phase, and Phase 032 tightened this sentence rather than
+inheriting its ambiguity.** Fifteen capability-delivering phases accumulated under
+one `Unreleased` heading between `0.1.0` and `0.2.0`; read literally the earlier
+wording implied `0.16.0`. Semantic Versioning clause 4 is why neither reading was
+wrong -- under major version zero nothing is constrained -- so the policy now says
+what was actually done. Not every phase needs a release — a release is cut when
 there is a reason to fix a point, such as closing a band, and the band-closing
 consolidation phase is the natural place for one.
 

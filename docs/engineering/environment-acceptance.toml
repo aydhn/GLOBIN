@@ -197,6 +197,102 @@ directory at the repository root, and refuses a link outright. No recursive
 delete is ever composed from a variable in a shell script.
 """
 
+[[criterion]]
+id = "ENV-B-06"
+category = "environment-lifecycle"
+requirement = "What would be changed is shown before anything is changed, and showing it changes nothing."
+evidence = ["src/globin/domain/provisioning.py", "docs/engineering/PROVISIONING.md"]
+command = "python -m globin bootstrap plan"
+blocking = true
+status = "PASS"
+reason = """
+`plan_from` takes a bootstrap report and a policy and has no probes of its own,
+so `plan` and `check` cannot disagree about the host --- they read one report ---
+and producing a plan is read-only **by the architecture contract** rather than by
+promise: the planner is in the domain layer, which may perform no I/O. A
+read-only wiring also hands the surface a runner that refuses anything but the
+three declared version probes, so the property holds in production and not only
+under test.
+"""
+
+[[criterion]]
+id = "ENV-B-07"
+category = "environment-lifecycle"
+requirement = "An interrupted provisioning run cannot be mistaken for a finished one."
+evidence = [
+  "src/globin/application/provisioning.py",
+  "tests/integration/test_provisioning_end_to_end.py",
+]
+blocking = true
+status = "PASS"
+reason = """
+A claim is written before the first mutation and released only after the last one
+completes, so a process ended between them leaves it behind and the next command
+sees it. `ProvisioningOutcome` refuses to carry a re-measurement on an incomplete
+journal, so a caller cannot obtain a clean verdict by ignoring the part that says
+the run did not finish. The claim's contents are deliberately not trusted: reading
+it establishes that a run was interrupted, and the plan is re-derived from a fresh
+measurement rather than rebuilt from a document a process that did not finish
+wrote.
+"""
+
+[[criterion]]
+id = "ENV-B-08"
+category = "environment-lifecycle"
+requirement = "Applying the same plan twice changes nothing the second time."
+evidence = ["tests/integration/test_provisioning_end_to_end.py"]
+command = "python -m globin bootstrap setup"
+blocking = false
+status = "PASS"
+reason = """
+Asserted three independent ways, weakest to strongest: the journal records
+`satisfied` rather than `applied`; the second plan is empty, which is recomputed
+from a fresh measurement rather than taken from the executor's account of itself;
+and the tree is byte-identical. A negative control sits beside them, because a
+fingerprint helper that could only ever report "unchanged" would make the first
+two pass for ever.
+"""
+
+[[criterion]]
+id = "ENV-B-09"
+category = "environment-lifecycle"
+requirement = "Exactly one module in the package may start a child process, and it is named."
+evidence = [
+  "src/globin/adapters/provisioning.py",
+  "tests/architecture/test_process_discipline.py",
+]
+blocking = true
+status = "PASS"
+reason = """
+Nothing under `src/globin` imported `subprocess` before Phase 032.
+`dependency-rules.toml` always permitted it --- the module is I/O-capable and the
+adapters layer may perform I/O --- so this is an unbroken property becoming a
+bounded one rather than a contract being widened. The tripwire runs in both
+directions, so deleting the adapter cannot make it pass more convincingly, and
+`os.system` and its neighbours are refused everywhere including the named module.
+
+Writing it wrong first is recorded rather than tidied away: a bare attribute check
+flagged `HostFacts.system` in seven modules that start nothing, so it matches the
+qualified form and a second test covers the import half.
+"""
+
+[[criterion]]
+id = "ENV-B-10"
+category = "environment-lifecycle"
+requirement = "What GLOBIN cannot perform is reported with the command that can, rather than attempted."
+evidence = ["src/globin/domain/provisioning.py", "tests/contract/test_provisioning_contract.py"]
+blocking = true
+status = "PASS"
+reason = """
+The packaging forced this and `ENV-C-04` is the evidence: the wheel holds
+`globin/` and its `.dist-info` and nothing else, so an installed GLOBIN has no
+`tools/` to invoke and no `scripts/` to run. An executor that shelled out to
+either would work from a source checkout and fail everywhere else, which is worse
+than not trying because it looks correct to whoever wrote it. An action declares
+its performer, the plan shows both kinds, and an action that is the operator's and
+names no command cannot be constructed.
+"""
+
 # ---------------------------------------------------------------------------
 # C -- Dependency locking and distribution
 # ---------------------------------------------------------------------------

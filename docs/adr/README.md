@@ -148,6 +148,8 @@ a future reader can judge whether the reason still holds.
 | [0081](0081-configuration-explains-itself-through-two-fingerprints-and-one-manifest.md) | Configuration explains itself through two fingerprints and one manifest | Accepted |
 | [0082](0082-phase-031-widens-to-deliver-the-user-scoped-secret-vault.md) | Phase 031 widens to deliver the user-scoped secret vault | Accepted |
 | [0083](0083-a-second-secret-mechanism-is-admitted-by-arithmetic-and-carries-its-own-integrity-check.md) | A second secret mechanism is admitted by arithmetic and carries its own integrity check | Accepted |
+| [0084](0084-phase-032-widens-to-deliver-the-bootstrap-provisioning-surface.md) | Phase 032 widens to deliver the bootstrap provisioning surface | Accepted |
+| [0085](0085-a-plan-is-derived-from-a-report-and-one-module-may-start-a-process.md) | A plan is derived from a report, and one module may start a process | Accepted |
 
 ## Relationship to other documents
 
