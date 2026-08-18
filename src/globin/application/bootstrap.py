@@ -303,6 +303,24 @@ class _RunState:
         which includes the compatibility fingerprint. It is safe to publish for
         the reason the whole snapshot is: no type in that chain has a field for a
         path, so there is no branch in which one could appear here.
+
+        **The secret readiness section is called ``references``, and the name is
+        forced.** :func:`globin.domain.observability.redact` runs over the whole
+        of this mapping and matches field names by case-insensitive *substring*,
+        so a section called ``secrets`` is replaced wholesale by ``[redacted]``
+        --- which is what happened from Phase 029 until Phase 032 measured it. The
+        record carries a count and reference *names*, which
+        ``SECURITY_BASELINE.md`` section 1 calls ordinary data, so nothing was
+        being protected; a reader was simply told nothing.
+
+        Renaming rather than excepting the key is the decision. Every accurate
+        alternative is refused by the same mechanism --- ``secret_references``
+        matches ``secret`` and ``credential_references`` matches ``credential``
+        --- and the one name that survives is the one naming the type the record
+        actually holds, :class:`globin.domain.secrets.SecretReference`. The
+        alternative was to teach the redactor an exception, which would weaken a
+        default that every future caller inherits, including callers that will
+        carry real material.
         """
         return {
             "host": None if self.host_facts is None else _host_record(self.host_facts),
@@ -322,7 +340,7 @@ class _RunState:
             "degradation": (
                 self.degradation_report.as_record() if self.degradation_report is not None else {}
             ),
-            "secrets": self.secret_readiness.as_record(),
+            "references": self.secret_readiness.as_record(),
             "entitlements": self.entitlement_readiness.as_record(),
             "environment": (None if self.environment is None else self.environment.as_record()),
             "runtime": {

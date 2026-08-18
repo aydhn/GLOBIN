@@ -145,7 +145,7 @@ venue or place an order. Signing is Phase 038; the product surfaces are Phases
 
 ## 5. Where the boundary is
 
-| Question | Where |
+| Question | Phase |
 |---|---|
 | What every mechanism must satisfy | [`SECRET_STORE_CONTRACT.md`](SECRET_STORE_CONTRACT.md) |
 | The chosen store, and why | [`SECRET_STORE.md`](SECRET_STORE.md) |

@@ -229,11 +229,11 @@ under the ambient decimal context and make it Phase 010's problem retroactively.
 
 ## What this policy does not decide
 
-| Question | Owning phase |
+| Question | Phase |
 |---|---|
 | Where exact decimal arithmetic is mandatory, and how prices round | 010, delivered — [`PRECISION_POLICY.md`](PRECISION_POLICY.md) |
 | Canonical identifiers for runs and orders | 011, delivered — [`IDENTIFIER_POLICY.md`](IDENTIFIER_POLICY.md) |
-| How a timestamp is serialised and how that format may evolve | 012 |
+| How a timestamp is serialised and how that format may evolve | 012, delivered — [`SERIALIZATION_POLICY.md`](SERIALIZATION_POLICY.md) |
 | Server time synchronisation, drift measurement and the response to skew | 040 |
 | Scheduling, intervals and anything that waits | 257-272 |
 

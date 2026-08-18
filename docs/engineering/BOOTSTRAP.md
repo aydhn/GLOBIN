@@ -198,12 +198,12 @@ A check whose subject does not exist would have to report `unmeasured`, and that
 would claim a measurement somebody attempted. These are absent instead, each with
 the phase that owns it:
 
-| Not registered | Owner |
+| Question | Phase |
 |---|---|
-| Which configuration files exist, and what profiles they describe | Phase 026 |
-| Which sources are consulted, and in what order | Phase 027 |
+| Which configuration files exist, and what profiles they describe | 026, delivered — [`CONFIGURATION_LAYOUT.md`](CONFIGURATION_LAYOUT.md) |
+| Which sources are consulted, and in what order | 027, delivered — [`CONFIGURATION_EVIDENCE.md`](CONFIGURATION_EVIDENCE.md) |
 | Declaring which credentials a start-up requires | Phase 038 |
-| The wider health-check suite a long-running process needs | Phase 030 |
+| The wider health-check suite a long-running process needs | 030, delivered — [`PREFLIGHT_SUITE.md`](PREFLIGHT_SUITE.md) |
 
 `secrets.required` **is** registered and passes today, because GLOBIN holds no
 credential — so the set of references a start-up must resolve is empty and the

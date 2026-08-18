@@ -107,7 +107,7 @@ SCHEMA: Final[str] = "globin.bootstrap.manifest"
 """Identifies what kind of document this is, so another manifest fed to this
 reader is refused by name rather than by a missing key."""
 
-SCHEMA_VERSION: Final[int] = 2
+SCHEMA_VERSION: Final[int] = 3
 """Bumped whenever the document changes shape, and inside the digested payload so
 that a canonicalisation change cannot collide with an older digest.
 
@@ -115,7 +115,15 @@ Two since Phase 029, which added a `readiness` word to the verdict and a
 dependency `inventory` to the observed dependencies. `load` already refuses a
 document whose version it does not recognise, with a message telling the reader
 to regenerate it, so the bump is safe by construction rather than by anybody
-remembering to migrate."""
+remembering to migrate.
+
+Three since Phase 032, which renamed the observed `secrets` section to
+`references`. That section had been published as the literal string `[redacted]`
+since Phase 029 -- `redact` matches field names by substring, and `secrets`
+contains `secret` -- so the counts it exists to carry never survived. Renaming is
+what a versioned schema is for; the alternative was an exception inside the
+redactor, which would have weakened a default for every caller in order to fix
+one key."""
 
 PHASE: Final[int] = 21
 """The phase that established this manifest."""

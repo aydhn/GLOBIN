@@ -267,11 +267,11 @@ If you need it somewhere else, recreate it there.
 
 ## What this does not cover
 
-| Question | Owner |
+| Question | Phase |
 |---|---|
-| Which libraries have wheels for the pinned interpreter | Phase 018 |
-| Runtime dependencies, and the lock that must accompany the first one | Phase 021 |
-| Runtime configuration, and credential onboarding | Phases 021-032 |
+| Which libraries have wheels for the pinned interpreter | 018, delivered — [`WHEEL_AVAILABILITY.md`](WHEEL_AVAILABILITY.md) |
+| Runtime dependencies, and the lock that must accompany the first one | 021, delivered — `pylock.toml`, and [`DEPENDENCY_LOCKING.md`](DEPENDENCY_LOCKING.md) |
+| Runtime configuration, and credential onboarding | 026-031, delivered — [`CONFIGURATION_LAYOUT.md`](CONFIGURATION_LAYOUT.md) and [`../security/CREDENTIAL_FLOW.md`](../security/CREDENTIAL_FLOW.md) |
 
 **What `bootstrap` installs changed in Phase 020.** It was the exact versions the
 workflows pin -- seven direct tools, with the forty-two they resolve to left to

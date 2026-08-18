@@ -174,15 +174,15 @@ hiding it in the record.
 
 ## 7. What this does not cover
 
-| Question | Where |
+| Question | Phase |
 |---|---|
-| Whether the lock could be installed offline | [`DEPENDENCY_MATERIALIZATION.md`](DEPENDENCY_MATERIALIZATION.md), Phase 029 |
-| Whether a GPU is present | [`GPU_CAPABILITY.md`](GPU_CAPABILITY.md), Phase 023 |
-| Whether using a GPU pays | [`GPU_BENEFIT.md`](GPU_BENEFIT.md), Phase 024 |
-| Whether this host meets the runtime contract | [`ENVIRONMENT_CAPABILITY.md`](ENVIRONMENT_CAPABILITY.md), Phase 028 |
+| Whether the lock could be installed offline | 029, delivered — [`DEPENDENCY_MATERIALIZATION.md`](DEPENDENCY_MATERIALIZATION.md) |
+| Whether a GPU is present | 023, delivered — [`GPU_CAPABILITY.md`](GPU_CAPABILITY.md) |
+| Whether using a GPU pays | 024, delivered — [`GPU_BENEFIT.md`](GPU_BENEFIT.md) |
+| Whether this host meets the runtime contract | 028, delivered — [`ENVIRONMENT_CAPABILITY.md`](ENVIRONMENT_CAPABILITY.md) |
 | Whether the network is reachable, measured | Phase 045 |
 | Refusing a live start on connectivity | Phase 297 |
-| Re-taking a perishable answer on a schedule | Declared by Phase 030; nothing executes it, because no process runs long enough |
+| Re-taking a perishable answer on a schedule | 030, delivered — [`PREFLIGHT_SUITE.md`](PREFLIGHT_SUITE.md) declares the schedule; nothing executes it, because no process runs long enough |
 
 ---
 

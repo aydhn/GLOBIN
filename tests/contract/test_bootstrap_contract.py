@@ -26,6 +26,7 @@ from globin.domain.bootstrap import (
     checks,
 )
 from globin.domain.environment import FINGERPRINT_LENGTH
+from globin.domain.observability import is_sensitive
 from globin.runtime.composition import build_bootstrap
 from tests.support import REPO_ROOT, running_from_the_project_environment
 from tools.quality.evidence.redaction import describe, scan
@@ -367,3 +368,44 @@ def test_the_environment_section_publishes_no_path(manifest_text: str) -> None:
     assert ":\\" not in section
     assert ":/" not in section
     assert "/Users/" not in section
+
+
+def test_no_published_section_name_is_itself_redacted(manifest_text: str) -> None:
+    """A section whose *name* trips the redactor publishes nothing at all.
+
+    `redact` runs over the whole `observed` mapping and matches field names by
+    case-insensitive substring, replacing the value wholesale. So a section named
+    for what it describes -- `secrets`, `credentials`, `tokens` -- is replaced by
+    the string `[redacted]` however innocuous its contents, and the manifest
+    silently stops carrying the thing the section exists for.
+
+    That is not hypothetical. `observed.secrets` published as `[redacted]` from
+    Phase 029 until Phase 032 measured it, and the record it was hiding is a
+    count and a list of reference *names* -- ordinary data by
+    `SECURITY_BASELINE.md` section 1. Nothing was protected; a reader was told
+    nothing and could not tell the difference.
+
+    This is the general form of that fix. A later phase adding a `credentials` or
+    `token_budget` section is told immediately, rather than publishing a constant
+    for a year.
+    """
+    observed = json.loads(manifest_text)["observed"]
+    offenders = sorted(name for name in observed if is_sensitive(name))
+    assert not offenders, (
+        f"these observed sections are redacted by their own name, so they publish "
+        f"nothing: {offenders}. Rename the section -- note that every obvious "
+        f"alternative is caught too, because the match is a substring."
+    )
+
+
+def test_the_section_name_check_would_catch_the_defect_it_was_written_for() -> None:
+    """Guard the guard.
+
+    The assertion above compares against a set that is empty today, so it would
+    pass just as happily if `is_sensitive` always answered `False`. This pins the
+    original defect and the two renames that look like fixes and are not.
+    """
+    assert is_sensitive("secrets")
+    assert is_sensitive("secret_references")
+    assert is_sensitive("credential_references")
+    assert not is_sensitive("references")

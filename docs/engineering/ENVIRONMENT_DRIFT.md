@@ -246,11 +246,11 @@ catches a transitive package no baseline ever covered.
 
 ## What this does not cover
 
-| Question | Owning phase |
+| Question | Phase |
 |---|---|
-| Which distributions GLOBIN depends on at runtime | 021 |
-| Where configuration files live, and what profiles exist | 026 |
-| Which configuration sources are consulted, and in what order | 027 |
+| Which distributions GLOBIN depends on at runtime | 021, delivered — `pylock.toml`, checked by [`DEPENDENCY_LOCKING.md`](DEPENDENCY_LOCKING.md) |
+| Where configuration files live, and what profiles exist | 026, delivered — [`CONFIGURATION_LAYOUT.md`](CONFIGURATION_LAYOUT.md) |
+| Which configuration sources are consulted, and in what order | 027, delivered — [`../CONFIGURATION_POLICY.md`](../CONFIGURATION_POLICY.md) |
 
 This gate runs no resolver, writes no lockfile and claims no transitive tree. It
 compares the installed version of a tool this repository already declares against

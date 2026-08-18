@@ -343,11 +343,11 @@ so the aggregate treats it as outranking a plain failure, the rule
 
 Recorded here so that their absence is a decision rather than an oversight.
 
-| Deferred | Owning phase |
-|---|---|
-| Packaging build verification | 017-032 |
+**The table is empty.** Phase 032 closed the last row it held, and an empty table
+is left standing rather than deleted so that the next deferral has somewhere
+obvious to go.
 
-Five rows have left this table when the phases owning them delivered. Docstring
+Six rows have left this table when the phases owning them delivered. Docstring
 linting and naming conventions were Phase 013's and are now part of the `D` rules
 in `pyproject.toml`; the `pytest-xdist` question was Phase 014's and was answered
 by `shards`, which partitions the suite by a stable digest rather than by a plugin
@@ -359,8 +359,24 @@ and this table went on naming them against phases 018 and 019 until Phase 018
 noticed and corrected it. *Environment drift detection and repair* was Phase 019's
 and is now the `drift` gate above
 ([ADR-0053](../adr/0053-drift-is-measured-against-an-accepted-baseline-and-repair-is-a-classification.md)).
+*Packaging build verification* was recorded against phases 017-032 and was met by
+Phase 032, the last of them, by building and installing the artefacts rather than
+by reasoning about them. `build` 1.5.0 with the Hatchling backend produced
+`globin-0.1.0-py3-none-any.whl` — 101 members, holding `globin/` and its
+`.dist-info` and nothing else — and `globin-0.1.0.tar.gz`, 654 members, the whole
+tree. Installed into a throwaway environment, `globin --version` answered `0.1.0`
+and `globin bootstrap check` refused at `python.environment`: the fail-closed
+refusal Phase 021 designed, reached from an installed artefact rather than from
+the source tree.
 A deferral that has been met is removed rather than left to read as outstanding —
 including when what met it was a phase other than the one recorded here.
+
+**Building is verified, and is deliberately not a gate.** `python -m build` cannot
+run offline here: `hatchling` is the build backend and is not in `pylock.dev.toml`,
+so build isolation fetches it from an index. Every command in the table above runs
+on an aeroplane, and adding one that does not would make that sentence false. Making
+it recurring means locking the backend, which is a dependency review under
+[`../DEPENDENCY_POLICY.md`](../DEPENDENCY_POLICY.md) rather than a line of tooling.
 
 Phase 004 configures the quality tools it uses and pins the versions it runs
 against. It does not solve dependency management, and nothing here should be

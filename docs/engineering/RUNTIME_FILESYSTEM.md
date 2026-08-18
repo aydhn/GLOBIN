@@ -325,10 +325,10 @@ this deliberately stops short of.
 
 | Question | Phase |
 |---|---|
-| Where configuration files live, and what a profile is | 026 |
-| Which sources set a value, and how environment variables fit | 027 |
-| Where a secret is stored and how it is supplied | 028 |
-| The wider preflight health-check suite | 030 |
+| Where configuration files live, and what a profile is | 026, delivered — [`CONFIGURATION_LAYOUT.md`](CONFIGURATION_LAYOUT.md) |
+| Which sources set a value, and how environment variables fit | 027, delivered — [`../CONFIGURATION_POLICY.md`](../CONFIGURATION_POLICY.md) |
+| Where a secret is stored and how it is supplied | 028, delivered — [`../security/SECRET_STORE.md`](../security/SECRET_STORE.md) |
+| The wider preflight health-check suite | 030, delivered — [`PREFLIGHT_SUITE.md`](PREFLIGHT_SUITE.md) |
 | The long-lived process that owns and supervises subsystems | 257 |
 | Starting and stopping subsystems in dependency order | 262 |
 | Detecting and recovering a hung or dead component | 263 |

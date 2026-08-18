@@ -266,7 +266,7 @@ and fixed:
 
 Phase 016 closes the first band. **Phase 017 may begin.**
 
-The next band — *Phases 017-032, Environment and Tooling* — owns everything Phase
+The next band — *Phases 017-032, Windows Environment, Dependencies and Bootstrap* — owns everything Phase
 016 deliberately did not touch:
 
 The three rows below were written by Phase 016 and amended by Phase 017, which
@@ -281,12 +281,15 @@ follows it, and a plan that has changed is corrected rather than left standing.
 | Windows host requirements, interpreter pinning, and the virtual environment lifecycle | Phase 017 — **delivered** |
 | Wheel availability across the planned stack, against the pinned interpreter | Phase 018 — **delivered** |
 | Environment drift detection, and repair short of recreation | Phase 019 — **delivered** |
-| Dependency resolution and lock files | Phase 020 |
-| Runtime configuration bootstrap | Phases 021-032 |
-| Credential and secret onboarding — the *store*, not the rules | Phases 021-032 |
+| Dependency resolution and lock files | Phase 020 — **delivered** |
+| Runtime configuration bootstrap | Phases 021-030 — **delivered** |
+| Credential and secret onboarding — the *store*, not the rules | Phases 028-031 — **delivered** |
 
-Phase 015 wrote the secret-handling rules and built no secret store; that
-distinction still holds and is the next band's to close.
+Phase 015 wrote the secret-handling rules and built no secret store. That
+distinction is now closed: Phase 028 built the store, Phase 029 the collection
+flow, and Phase 031 a second mechanism for material the store's ceiling refuses.
+**GLOBIN still holds no credential** — it has somewhere to put one, which is a
+different sentence and remains the accurate one.
 
 **What Phase 017 inherits.** A repository whose rules are executable rather than
 advisory, a layered architecture enforced against the real import graph, a suite
@@ -302,7 +305,15 @@ forbidden by [`../../MEMORY.md`](../../MEMORY.md). That a `.venv` exists or is
 managed. That any credential exists anywhere. That anything in this repository
 has ever contacted Binance.
 
-Of those, the second no longer holds: Phase 017 built the environment and the
-gates run under it. The rest stand. In particular **no packaging build has been
-run**, and Phase 017 did not run one — it installs a toolchain into an
-environment, which is not the same thing as building this package.
+Three of those four no longer hold, and the band that closed them is the one this
+section hands off to. Phase 017 built the environment and the gates run under it.
+Phase 028 built the secret store, so a credential *could* exist — though none
+does. And **Phase 032 ran the packaging build**, which was the last of the four
+and the one this document was most emphatic about: the wheel and the source
+distribution were built, installed into a throwaway environment, and exercised.
+The measurements are in
+[`../engineering/QUALITY_GATES.md`](../engineering/QUALITY_GATES.md), beside the
+deferral they close.
+
+**One stands, and it is the one that matters.** Nothing in this repository has
+ever contacted Binance.

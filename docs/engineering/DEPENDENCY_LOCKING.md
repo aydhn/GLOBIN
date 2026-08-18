@@ -289,10 +289,10 @@ other way round.
 
 | Question | Phase |
 |---|---|
-| The first runtime dependency, and the `pylock.toml` that must accompany it | 021 |
-| Whether the `dev` extra becomes a PEP 735 dependency group | 021 |
-| Widening the SBOM from the declared set to the locked transitive set | 021 |
-| A second platform, which would need a second lock rather than an amendment | 023 |
+| The first runtime dependency, and the `pylock.toml` that must accompany it | 021, delivered — `pylock.toml`, and [`../DEPENDENCY_POLICY.md`](../DEPENDENCY_POLICY.md) for the review each package carries |
+| Whether the `dev` extra becomes a PEP 735 dependency group | 021, delivered — it did not; `pyproject.toml` keeps the extra, and [ADR-0054](../adr/0054-the-toolchain-is-locked-with-pep-751-and-the-verdict-is-recomputed.md) records why |
+| Widening the SBOM from the declared set to the locked transitive set | 021, delivered — `python -m tools.quality supply` renders the locked set |
+| A second platform, which would need a second lock rather than an amendment | 023, delivered — no second platform was added; [`runtime-contract.toml`](runtime-contract.toml) still declares one |
 
 **PEP 735 was considered and deferred on measurement rather than taste.** pip
 accepts `--group` on `pip lock`, but its lock constructor never sets the

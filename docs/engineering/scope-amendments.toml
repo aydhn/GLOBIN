@@ -1,0 +1,399 @@
+# ---------------------------------------------------------------------------
+# GLOBIN scope amendment ledger.
+#
+# The machine-readable half of `docs/engineering/GRANULARITY_REVIEW.md`.
+# Compared against `ROADMAP.md` and the decision log, in both directions, by
+# `tests/contract/test_granularity_contract.py`.
+#
+# WHY THIS FILE EXISTS AT ALL. `ROADMAP.md` has carried a prose list of scope
+# amendments since Phase 003, and it has drifted twice. It read *seven* while
+# listing eight from Phase 024 until Phase 025 repaired it; by Phase 030 it read
+# *thirteen* while listing eleven, with the tenth filed below the eleventh. That
+# document says so about itself, and names the cause in four words: "Nothing
+# tests it." Phase 032 was assigned the granularity review, and a review of a
+# count that nothing checks would have been the third instance of the same
+# defect rather than an answer to it.
+#
+# THE TEST BEING SCORED. ADR-0021 never uses the word "condition"; the four-part
+# form every later record cites is `ROADMAP.md`'s own restatement of it -- an
+# amendment must be able to say *nothing displaced, nothing deferred, no phase
+# owns the work, and the two halves need each other*. The four keys below are
+# those four, in that order, and `score` is recomputed from them by the contract
+# test rather than trusted as written.
+#
+# VERDICT VOCABULARY -- two words:
+#   MET     the amendment's own record claims this condition and the claim holds
+#   FAILED  the amendment's own record concedes this condition
+#
+# There is deliberately no third word. Every one of these was argued in an
+# accepted ADR by somebody who had to say plainly which conditions they failed,
+# and a "partially" here would be this ledger softening a judgement the record
+# already made.
+#
+# THE FIRST THREE ARE UNSCORED, AND THAT IS NOT AN OMISSION. Amendments one and
+# two predate ADR-0021 entirely. The third *is* ADR-0021 -- it created the test
+# in the act of being the amendment that needed one -- so scoring it against
+# itself would be circular. `scored = false` says so per row.
+#
+# NOTHING WRITES THIS FILE.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# Before the test existed.
+# ---------------------------------------------------------------------------
+
+[[amendment]]
+ordinal = 1
+ordinal_word = "First"
+phase = 3
+scored = false
+record = "docs/adr/0012-phase-003-delivers-architecture-boundaries.md"
+summary = "Phase 003 moved from coding standards to architecture boundaries; the standards moved to Phase 013."
+displaces = [13]
+title_collisions = []
+overlaps_complete = []
+
+[[amendment]]
+ordinal = 2
+ordinal_word = "Second"
+phase = 4
+scored = false
+record = "docs/adr/0016-phase-004-absorbs-the-quality-gate-scope.md"
+summary = "Phase 004 absorbed the quality gates Phase 013 had owned."
+displaces = [13]
+title_collisions = []
+overlaps_complete = []
+
+[[amendment]]
+ordinal = 3
+ordinal_word = "Third"
+phase = 5
+scored = false
+record = "docs/adr/0021-phase-005-widens-to-include-the-test-foundation.md"
+summary = "Phase 005 widened to deliver the deterministic test foundation, and wrote the test every later amendment is scored against."
+displaces = []
+title_collisions = []
+overlaps_complete = []
+
+# ---------------------------------------------------------------------------
+# Scored against ADR-0021.
+# ---------------------------------------------------------------------------
+
+[[amendment]]
+ordinal = 4
+ordinal_word = "Fourth"
+phase = 17
+scored = true
+record = "docs/adr/0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md"
+summary = "Phase 017 absorbed interpreter pinning and the environment lifecycle from Phases 018 and 019."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "MET"
+score = 2
+displaces = [18, 19]
+title_collisions = []
+overlaps_complete = []
+
+[[amendment]]
+ordinal = 5
+ordinal_word = "Fifth"
+phase = 21
+scored = true
+record = "docs/adr/0056-phase-021-widens-to-deliver-the-application-bootstrap.md"
+summary = "Phase 021 delivered the application bootstrap alongside the runtime dependencies its title names."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "MET"
+score = 2
+displaces = [30]
+title_collisions = []
+overlaps_complete = []
+
+[[amendment]]
+ordinal = 6
+ordinal_word = "Sixth"
+phase = 22
+scored = true
+record = "docs/adr/0057-phase-022-widens-to-deliver-the-runtime-filesystem-and-lifecycle.md"
+summary = "Phase 022 delivered the runtime filesystem and process lifecycle alongside the scientific stack."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "FAILED"
+score = 1
+displaces = [26, 30, 257, 262, 266, 267, 268, 270]
+title_collisions = []
+overlaps_complete = []
+
+[[amendment]]
+ordinal = 7
+ordinal_word = "Seventh"
+phase = 23
+scored = true
+record = "docs/adr/0060-gpu-capability-is-detected-and-the-runtime-explains-itself.md"
+summary = "Phase 023 gave the running application its diagnostics alongside GPU capability detection."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "FAILED"
+score = 1
+displaces = [26, 27, 30, 282]
+title_collisions = []
+overlaps_complete = [6]
+
+[[amendment]]
+ordinal = 8
+ordinal_word = "Eighth"
+phase = 24
+scored = true
+record = "docs/adr/0061-phase-024-widens-to-deliver-runtime-health-and-support-bundles.md"
+summary = "Phase 024 gave the running application its health surface alongside the GPU benefit harness."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "FAILED"
+score = 1
+displaces = [30, 260, 276, 280, 282, 301]
+title_collisions = []
+overlaps_complete = []
+
+[[amendment]]
+ordinal = 9
+ordinal_word = "Ninth"
+phase = 25
+scored = true
+record = "docs/adr/0064-phase-025-widens-to-deliver-the-runtime-watchdog.md"
+summary = "Phase 025 delivered the runtime watchdog alongside TA-Lib provisioning, and named the signal Phase 032 is answering."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "FAILED"
+score = 1
+displaces = [30, 262, 266, 302]
+title_collisions = [263]
+overlaps_complete = []
+
+[[amendment]]
+ordinal = 10
+ordinal_word = "Tenth"
+phase = 26
+scored = true
+record = "docs/adr/0067-phase-026-widens-to-deliver-the-telemetry-foundation.md"
+summary = "Phase 026 delivered the telemetry foundation alongside the configuration layout and profiles."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "FAILED"
+score = 1
+displaces = [280, 282, 315]
+title_collisions = [280]
+overlaps_complete = []
+
+[[amendment]]
+ordinal = 11
+ordinal_word = "Eleventh"
+phase = 27
+scored = true
+record = "docs/adr/0070-phase-027-widens-to-deliver-the-loopback-diagnostics-surface.md"
+summary = "Phase 027 delivered the loopback diagnostics surface alongside environment and profile resolution, over this document's own refusal."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "MET"
+score = 2
+displaces = [280, 315]
+title_collisions = []
+overlaps_complete = []
+
+[[amendment]]
+ordinal = 12
+ordinal_word = "Twelfth"
+phase = 28
+scored = true
+record = "docs/adr/0073-phase-028-widens-to-deliver-the-environment-capability-inventory.md"
+summary = "Phase 028 delivered the environment capability inventory alongside the local secret store."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "MET"
+score = 2
+displaces = [30]
+title_collisions = []
+overlaps_complete = []
+
+[[amendment]]
+ordinal = 13
+ordinal_word = "Thirteenth"
+phase = 29
+scored = true
+record = "docs/adr/0076-phase-029-widens-to-deliver-the-dependency-attestation.md"
+summary = "Phase 029 delivered the dependency attestation alongside the credential prompting and validation flow."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "MET"
+score = 2
+displaces = [32]
+title_collisions = []
+overlaps_complete = [20]
+
+[[amendment]]
+ordinal = 14
+ordinal_word = "Fourteenth"
+phase = 30
+scored = true
+record = "docs/adr/0079-phase-030-widens-to-deliver-the-configuration-evidence-surface.md"
+summary = "Phase 030 made configuration able to explain itself alongside the bootstrap health check suite. The only amendment to score four."
+nothing_displaced = "MET"
+nothing_deferred = "MET"
+no_phase_owns_it = "MET"
+halves_need_each_other = "MET"
+score = 4
+displaces = []
+title_collisions = []
+overlaps_complete = []
+
+[[amendment]]
+ordinal = 15
+ordinal_word = "Fifteenth"
+phase = 31
+scored = true
+record = "docs/adr/0082-phase-031-widens-to-deliver-the-user-scoped-secret-vault.md"
+summary = "Phase 031 delivered the user-scoped secret vault alongside offline and degraded installation handling. Joint-worst, directly after the only four."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "FAILED"
+score = 1
+displaces = [292]
+title_collisions = [292]
+overlaps_complete = [28, 29]
+
+# ---------------------------------------------------------------------------
+# What a later phase will find partly built.
+#
+# The review's most useful output, and the one thing in it that is about the
+# future rather than the past. Every row names a phase that has NOT started and
+# whose subject already exists in part, together with what is deliberately
+# absent -- because a phase told only what exists will rebuild the boundary, and
+# a phase told only what is missing will rebuild what is there.
+#
+# `test_granularity_contract.py` asserts every `phase` here is still `Planned`,
+# so a row survives only until its phase ships.
+# ---------------------------------------------------------------------------
+
+[[inheritance]]
+phase = 257
+title = "Orchestrator Architecture"
+already_built = "shutdown ordering, the coordinator lock, the lifecycle event vocabulary"
+absent_by_design = "no long-lived process, no supervision"
+from_phases = [22, 23]
+
+[[inheritance]]
+phase = 260
+title = "Resource Governor"
+already_built = "process and host resource diagnostics"
+absent_by_design = "no governance, no throttling"
+from_phases = [24]
+
+[[inheritance]]
+phase = 262
+title = "Subsystem Lifecycle Management"
+already_built = "graceful shutdown in a fixed order, reached whatever the application did"
+absent_by_design = "no start, no restart, no dependency graph between subsystems"
+from_phases = [22, 25]
+
+[[inheritance]]
+phase = 263
+title = "Supervisor and Watchdog"
+already_built = "a monotonic heartbeat registry, a suspect threshold distinct from a confirmed stall, bounded and redacted stall evidence, a bounded escalation to a hard exit"
+absent_by_design = "no driver, no recovery, no restart, no subsystem ordering, no draining"
+from_phases = [25]
+
+[[inheritance]]
+phase = 266
+title = "Persistent Orchestration State"
+already_built = "atomic state publication into a user-local tree"
+absent_by_design = "no scheduling state"
+from_phases = [22, 25]
+
+[[inheritance]]
+phase = 267
+title = "Crash Recovery and Restart Semantics"
+already_built = "crash-safe lifecycle evidence and a previous-run record"
+absent_by_design = "no resumption"
+from_phases = [22]
+
+[[inheritance]]
+phase = 268
+title = "Graceful Shutdown and Draining"
+already_built = "ordered shutdown that is reached on every ending"
+absent_by_design = "no draining of work in flight"
+from_phases = [22]
+
+[[inheritance]]
+phase = 270
+title = "Windows Service and Session Continuity"
+already_built = "a single-instance coordinator lock proved by acquisition"
+absent_by_design = "no service, no sleep or resume handling"
+from_phases = [22]
+
+[[inheritance]]
+phase = 276
+title = "Status and Reporting Commands"
+already_built = "a runtime health snapshot, `globin doctor`, `globin secrets doctor`"
+absent_by_design = "no positions, no performance"
+from_phases = [24, 29]
+
+[[inheritance]]
+phase = 280
+title = "Operational Metrics Collection"
+already_built = "a provider-neutral metric contract, a registry bounded by construction, two provider bridges, a Prometheus scrape route"
+absent_by_design = "nothing collects, retains, dashboards or alerts"
+from_phases = [24, 26, 27]
+
+[[inheritance]]
+phase = 282
+title = "Log Rotation and Retention"
+already_built = "a bounded log file in the runtime tree, under a policy that cannot be constructed if it could not be honoured"
+absent_by_design = "no rotation, no retention"
+from_phases = [23, 24, 26]
+
+[[inheritance]]
+phase = 291
+title = "Interactive Configuration Wizard"
+already_built = "per-field provenance and `globin config explain`"
+absent_by_design = "nothing collects configuration an operator has not supplied"
+from_phases = [30]
+
+[[inheritance]]
+phase = 292
+title = "Credential Collection and Persistence Flow"
+already_built = "the Credential Manager store, the DPAPI vault, the six-verb command group, the permission model"
+absent_by_design = "collection is Phase 029's and is already complete"
+from_phases = [28, 29, 31]
+
+[[inheritance]]
+phase = 301
+title = "Resource Consumption Profiling"
+already_built = "bounded thread and memory introspection"
+absent_by_design = "no profiling against a capacity model"
+from_phases = [24]
+
+[[inheritance]]
+phase = 302
+title = "Failure Injection and Resilience Testing"
+already_built = "the three process fault hooks, `faulthandler`, bounded stall evidence"
+absent_by_design = "no injection"
+from_phases = [23, 25]
+
+[[inheritance]]
+phase = 315
+title = "Live Monitoring and Escalation"
+already_built = "a readiness and liveness projection, a scrape surface"
+absent_by_design = "no escalation thresholds"
+from_phases = [26, 27]

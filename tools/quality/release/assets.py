@@ -2,10 +2,13 @@
 
 **Evidence, not software.** Every asset here is a record of what the gates
 established about one commit. No wheel and no source distribution is built:
-[`MEMORY.md`](../../../MEMORY.md) records that no packaging build has ever been
-run and that build verification belongs to Phases 017-032, so publishing a
-distribution now would attach an artifact nothing has verified to a release that
-claims to be verified.
+Since Phase 032 the reason has changed: building *is* verified now -- the
+measurements are in
+[`../../../docs/engineering/QUALITY_GATES.md`](../../../docs/engineering/QUALITY_GATES.md)
+-- but it is verified rather than *gated*, because `hatchling` is absent from
+`pylock.dev.toml` and build isolation therefore reaches an index. Publishing a
+distribution from a release gate that runs offline would mean attaching an
+artefact this gate did not build.
 
 **The checksum file never lists itself.** A file whose own digest is one of its
 lines cannot be written — the digest changes the contents, which changes the

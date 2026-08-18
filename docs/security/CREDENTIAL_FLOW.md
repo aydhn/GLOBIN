@@ -254,7 +254,7 @@ answers `undeclared` and use is refused.
 
 ## What this does not cover
 
-| Question | Owner |
+| Question | Phase |
 |---|---|
 | Which key type is used against which exchange surface | Phase 038 |
 | Whether a venue agrees a key carries the permissions declared for it | Phase 039 |

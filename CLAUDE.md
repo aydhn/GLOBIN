@@ -575,17 +575,15 @@ the declared contract, this means it satisfies it and lacks a capability.
 
 **Six libraries are now absent-safe** -- `psutil`, `opentelemetry`, `prometheus_client`,
 `advapi32`, `kernel32` and, since Phase 031, `crypt32` -- each reached through one
-factory in one adapter, each with an architecture tripwire. Phase 031 also made
-*which arm each one took* something GLOBIN records rather than discards.
+factory in one adapter, each with an architecture tripwire, because the CI `quality`
+job installs none of them. Do not add a second import site for any of them; add a
+factory. Phase 031 also made *which arm each one took* something GLOBIN records
+rather than discards, and `tests/architecture/test_degradation_discipline.py` fails
+if a seventh factory appears without a row in the contract.
 
 **Do not widen the bind address for remote access.** The type will not let you, and the
 supported shape is a separate authenticated, TLS-capable collector that scrapes
 `127.0.0.1` locally -- Phases 280 and 315.
-
-**Four libraries are now absent-safe, not one.** `psutil`, `opentelemetry`,
-`prometheus_client` -- each reached through one factory in one adapter, each with its
-own architecture tripwire, because the CI `quality` job installs none of them. Do not
-add a second import site for any of them; add a factory.
 
 `psutil` is the third runtime dependency and the **first this repository imports**.
 It is reached through one factory in `globin/adapters/health.py` and nowhere else,

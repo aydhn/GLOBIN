@@ -26,7 +26,7 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Fact | Value |
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
-| Completed phases | **001-030** |
+| Completed phases | **001-032** |
 | Phase 001 | **Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
 | Phase 002 | **Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Commit `9c46313`, pushed. |
 | Phase 003 | **Architecture Boundaries and Dependency Direction.** Five layers under `src/globin/`, the inward dependency contract in `docs/architecture/dependency-rules.toml`, C4 system context and container views, the ADR lifecycle with supersession rules, and `tests/architecture/test_architecture_contract.py` enforcing all of it. Commit `990e5f4`, pushed. |
@@ -59,7 +59,6 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Phase 030 | **Bootstrap Health Check Suite, and the configuration evidence surface.** The registry became a *suite*: every check now declares a `Durability` -- whether its answer survives the run -- and eleven of the eighteen are stable. Three calls are argued rather than assumed: `config.valid` is stable **because the snapshot is immutable**, not because documents are; `state.previous_run` is stable because re-asking it later would read *this* run's record; `bootstrap.ready` is perishable because an aggregate is no stronger than its weakest input. `RecheckPolicy` is validated at construction and **nothing executes it** -- no process runs long enough. `bootstrap preflight` is the third combination of two existing switches (run everything, and gate), and adds **no exit code**; 26 stays free. As the fourteenth amendment, configuration learned to explain itself: `--config PATH` above the four computed documents and **fatal when absent**, `--set KEY=VALUE` above the environment and validated against `known_keys()`, per-field provenance, a reserved `config_schema_version`, a bounded document size, and a second fingerprint that *includes* origins beside the semantic one that excludes them. Two defects were found rather than built: a `ConfigurationError` clause written around the whole of `_bootstrap` silently changed a Phase 021 exit code from 17 to 14, and `tomllib.TOMLDecodeError` is a `ValueError` that neither `main` nor the pipeline caught -- unreachable until `--config` made it reachable. ADR-0079/0080/0081. |
 | Next phase | **032 -- Environment Consolidation and Phase Gate Review.** Not started, and it closes the band. **It is holding the granularity review, now with fifteen amendments in front of it.** Phase 031 scored **one** of ADR-0021's four conditions -- the joint-worst in the programme, arriving directly after the only amendment to score four -- and ADR-0082 offers that sequence to 032 as evidence about the phase boundaries rather than as an argument about the test. The honest reading is that a test producing a four and then a one in consecutive phases is being applied rather than deciding anything. Phase 292 *Credential Collection and Persistence Flow* now arrives to find its subject partly built, which ADR-0082 states rather than refuses. |
 | Phase 031 | **Delivered both halves.** Degraded operation: six absent-safe factories whose chosen arm was previously discarded now feed a declared registry with a necessity per component, and a posture folded from what each actually returned. Three tiers, the third (`opportunistic`) being Phase 030's inherited rule -- a capability the registry *predicted* absent must not make a host amber, or CI would be amber for ever. **`advapi32` is declared required and observed not-applicable** while nothing needs a credential, which makes the tier real without building ahead. The network is **declared, not probed**: a probe would be a mechanism with no caller *and* would remove a guarantee the architecture tests prove. Exit code **24 reused, 26 still free**. Alongside it a DPAPI vault, admitted by arithmetic against the store's own 2560-byte constant with **no fallback edge** -- asserted as a call count, because §3 forbids "a quiet fall back to somewhere less protected". Three measured facts worth keeping: `CryptUnprotectData` **may succeed with corrupted output** and Microsoft says not to rely on a code to detect tampering, so the envelope carries its own digest checked *before* the platform; the prompt flow is **removed in February 2027**, so a null prompt struct is the surviving path; and `LocalFree` is a `kernel32` export, so it crosses the boundary as **one callable, never a handle**. The native buffer *is* overwritten before release -- §7's blanket "no erasure" was narrowed, because it was true of a Python `str` and not of a native allocation. ADR-0082, ADR-0083. |
-| Known defect | **`observed.secrets` is wholly redacted out of the bootstrap manifest, and has been since Phase 029.** `adapters/bootstrap.py` runs `redact()` over `observed`, and the key `secrets` substring-matches `SENSITIVE_KEY_FRAGMENTS`, so `SecretReadiness.as_record()`'s counts never survive -- the published value is the literal string `[redacted]`. The record itself carries no material (a count and reference *names*, which §1 calls ordinary data), so the redaction is a false positive rather than a protection. Phase 031 measured it and deliberately did **not** fix it: every available fix either weakens a security default at a call site or renames a published manifest key, and both are decisions worth taking deliberately rather than in passing. The information is not entirely lost -- `secrets_outcome`'s summary carries the human-readable form under `checks`. **`observed.degradation` was checked and does survive**, because no fragment matches it. |
 | Roadmap | [`ROADMAP.md`](ROADMAP.md); band skeleton in `src/globin/roadmap.py` |
 
 **The roadmap has been amended fourteen times.** Band ranges, phase numbers and band
@@ -286,6 +285,19 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
 ---
 
 ## Working rules
+
+- **A published section named for what it describes may publish nothing.**
+  `redact` matches field names by case-insensitive *substring* and replaces the
+  value wholesale, so an evidence section called `secrets`, `credentials` or
+  `tokens` is the string `[redacted]` however harmless its contents.
+  `observed.secrets` was exactly that from Phase 029 until Phase 032, hiding a
+  count and a list of reference names that `SECURITY_BASELINE.md` section 1 calls
+  ordinary data. Every accurate rename is caught too --- `secret_references`
+  matches `secret`, `credential_references` matches `credential` --- so the
+  surviving name was `references`, after the type. Fix by renaming and bumping
+  the schema version, never by excepting a key inside the redactor: that weakens
+  a default every future caller inherits. `test_bootstrap_contract.py` now fails
+  if any observed section name trips `is_sensitive`.
 
 - **Bootstrap before anything, once per clone:**
   `powershell -ExecutionPolicy Bypass -File scripts/bootstrap.ps1`. Since Phase
@@ -616,5 +628,15 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
   them yet.
 - The CI workflow pins exact tool versions matching this machine. Those pins are
   a reproducibility measure, not a lockfile; Phase 020 owns the real one.
-- No packaging build has been run. Build verification is deferred to Phases
-  17-32 and must not be described as verified before then.
+- **A packaging build has been run, and the artefacts were installed rather than
+  inspected.** Phase 032 closed the deferral this line used to carry. `python -m
+  build` 1.5.0 produced `globin-0.1.0-py3-none-any.whl` (101 members) and
+  `globin-0.1.0.tar.gz` (654 members); the wheel holds `globin/` and its
+  `.dist-info` and nothing else, while the sdist carries the whole tree. Installed
+  into a throwaway environment, `globin --version` answered `0.1.0` and `globin
+  bootstrap check` refused at `python.environment` — the fail-closed refusal Phase
+  021 designed, reached from an installed artefact rather than from the source tree.
+- **Building reaches the network, so it is not a gate.** `hatchling` is the build
+  backend and is **not in `pylock.dev.toml`**, so `--no-isolation` cannot work and
+  isolation fetches it from an index. Locking the backend is a dependency review,
+  not a line of tooling.

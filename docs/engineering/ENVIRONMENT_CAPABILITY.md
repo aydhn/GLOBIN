@@ -202,12 +202,12 @@ hostname, or a home directory.
 
 ## What this does not cover
 
-| Question | Where |
+| Question | Phase |
 |---|---|
 | Which host and interpreter are supported | [`RUNTIME_BASELINE.md`](RUNTIME_BASELINE.md) |
 | Whether this machine still matches an accepted baseline | [`ENVIRONMENT_DRIFT.md`](ENVIRONMENT_DRIFT.md) |
 | Whether a GPU is present, and whether using it pays | [`GPU_CAPABILITY.md`](GPU_CAPABILITY.md), [`GPU_BENEFIT.md`](GPU_BENEFIT.md) |
-| The full set of preflight checks a long-running process needs | Phase 030 |
+| The full set of preflight checks a long-running process needs | 030, delivered — [`PREFLIGHT_SUITE.md`](PREFLIGHT_SUITE.md) |
 | Behaviour when the network or an optional native component is unavailable | 031, delivered — [`DEGRADED_OPERATION.md`](DEGRADED_OPERATION.md) |
 | Which products and environments the venue offers | Phase 036 |
 

@@ -181,8 +181,14 @@ the contract:
 > unchanged by all fifteen.
 >
 > This count said *seven* while listing eight from Phase 024 until Phase 025
-> repaired it. Nothing tests it, which is why it drifted and why it is worth
-> reading sceptically. **It had drifted again by Phase 030**, in two ways at once:
+> repaired it. Nothing tested it, which is why it drifted and why it was worth
+> reading sceptically. **Phase 032 bound it**: the ledger in
+> [`docs/engineering/scope-amendments.toml`](docs/engineering/scope-amendments.toml)
+> now carries one row per amendment, and
+> `tests/contract/test_granularity_contract.py` compares the spelled count above
+> against its length, checks every ordinal below appears exactly once and in
+> ascending order, and recomputes each score from its four conditions. The two
+> ways this paragraph has drifted are now two failing tests. **It had drifted again by Phase 030**, in two ways at once:
 > the count read thirteen while the list stopped at eleven, and the tenth was
 > filed below the eleventh. Phase 030 repaired both and added its own, which is
 > why three entries below carry that phase's number.
@@ -457,6 +463,7 @@ the contract:
 > [ADR-0082](docs/adr/0082-phase-031-widens-to-deliver-the-user-scoped-secret-vault.md)
 > carries the whole of it, cites neither the fourteenth's score nor the count, and
 > closes by forbidding a sixteenth from citing any of this.
+
 
 ---
 

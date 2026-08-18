@@ -190,10 +190,10 @@ readable.
 
 ## What this does not cover
 
-| Question | Owner |
+| Question | Phase |
 |---|---|
 | What a running GLOBIN does when a component is missing or degraded | 031, delivered — [`DEGRADED_OPERATION.md`](DEGRADED_OPERATION.md) |
-| The preflight *suite*, its scheduling and its periodicity | Phase 030 |
-| Whether the environment band was drawn at the right granularity | Phase 032 |
+| The preflight *suite*, its scheduling and its periodicity | 030, delivered — [`PREFLIGHT_SUITE.md`](PREFLIGHT_SUITE.md) |
+| Whether the environment band was drawn at the right granularity | 032, delivered — [`GRANULARITY_REVIEW.md`](GRANULARITY_REVIEW.md) |
 | Building `.venv` — still `scripts/bootstrap.ps1`, and only that | 017/020, delivered |
 | Repairing drift — still an operator action | 019, delivered |

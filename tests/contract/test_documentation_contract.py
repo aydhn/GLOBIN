@@ -30,6 +30,38 @@ DEFERRAL_TABLES: tuple[str, ...] = (
     # do the enforcing -- the day any of those phases ships, this fails and the
     # document has to be reconciled in the same commit.
     "docs/security/SECRET_STORE_CONTRACT.md",
+    # Eighteen more, added by Phase 032 when the band closed. Five of them were
+    # already spelled `| Question | Phase |` and were simply never registered;
+    # nine carried the same table under a different header -- `| Question |
+    # Where |`, `| Question | Owner |`, `| Question | Owning phase |`, and in
+    # one case `| Not registered | Owner |`. `_deferral_rows` walks from the
+    # literal header, so every one of those was invisible to this check and
+    # every one of them had drifted. The headers were normalised rather than the
+    # parser taught a second spelling: a parser that accepts two will accept a
+    # third, and the header is the opt-in marker by design.
+    #
+    # `| Question | Document |` and `| Question | Command |` are deliberately
+    # NOT normalised. They answer a different question -- which document, which
+    # command -- and folding them in would make this check assert about rows
+    # that name no phase at all.
+    "docs/TIME_POLICY.md",
+    "docs/TELEMETRY_POLICY.md",
+    "docs/engineering/BOOTSTRAP.md",
+    "docs/engineering/CONFIGURATION_EVIDENCE.md",
+    "docs/engineering/CONFIGURATION_LAYOUT.md",
+    "docs/engineering/DEGRADED_OPERATION.md",
+    "docs/engineering/DEPENDENCY_LOCKING.md",
+    "docs/engineering/DEPENDENCY_MATERIALIZATION.md",
+    "docs/engineering/ENVIRONMENT_CAPABILITY.md",
+    "docs/engineering/ENVIRONMENT_DRIFT.md",
+    "docs/engineering/PREFLIGHT_SUITE.md",
+    "docs/engineering/RUNTIME_BASELINE.md",
+    "docs/engineering/RUNTIME_FILESYSTEM.md",
+    "docs/engineering/RUNTIME_TELEMETRY.md",
+    "docs/engineering/SCIENTIFIC_STACK.md",
+    "docs/security/CREDENTIAL_FLOW.md",
+    "docs/security/SECRET_STORE.md",
+    "docs/security/SECRET_VAULT.md",
 )
 
 #: A row of one of those tables: a question, then the phase or phases owning it.
