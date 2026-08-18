@@ -109,7 +109,13 @@ from globin.domain.metrics import declared_series, metrics
 from globin.domain.observability import redact
 from globin.domain.preflight import PreflightOutcome
 from globin.domain.runtime_state import RuntimeArea
-from globin.domain.secrets import SecretKind, SecretReference, provider_writable
+from globin.domain.secrets import (
+    SecretKind,
+    SecretLocator,
+    SecretProviderKind,
+    SecretReference,
+    provider_writable,
+)
 from globin.errors import ConfigurationError, GlobinError, InternalError, ValidationError
 from globin.ports.entitlements import GrantRegister
 from globin.ports.secret_entry import SecretEntry
@@ -200,6 +206,16 @@ answer that six phases early.
 
 KIND_FLAG: Final[str] = "--kind"
 NAME_FLAG: Final[str] = "--name"
+
+PROVIDER_FLAG: Final[str] = "--provider"
+"""Which mechanism holds the credential being addressed.
+
+Added by Phase 031, and permitted by ``SECRET_STORE_CONTRACT.md`` §5 on the same
+reading that permits ``--environment`` and ``--kind``: the prohibition is on an
+option that would place *material* on a command line, and a mechanism name is
+ordinary data. Without it an operator cannot address a vault secret at all, and
+``secrets health`` could not say which mechanism it checked.
+"""
 
 PROFILE_FLAG: Final[str] = "--profile"
 """Which configuration profile this run uses.
@@ -370,6 +386,10 @@ Commands:
   secrets health      Report whether the store can be reached at all.
   secrets doctor      Report what each mechanism on this host can do.
                       Reads no stored value.
+
+  --provider NAME     Which mechanism holds the credential. One of
+                      credential_manager, dpapi_vault, environment. Omitted,
+                      the credential manager is used.
   diagnostics environment  Report this host's capabilities: process and native
                         architecture, emulation, declared toolchain, and the
                         compatibility fingerprint. Publishes no path.
@@ -449,6 +469,7 @@ class Invocation:
     environment: str = ""
     kind: str = ""
     name: str = ""
+    provider: str = ""
     config: str = ""
     overrides: tuple[str, ...] = ()
     field: str = ""
@@ -1710,6 +1731,7 @@ def _parse_secrets(rest: Sequence[str]) -> Invocation:
         environment=options.environment,
         kind=options.kind,
         name=options.name,
+        provider=options.provider,
     )
 
 
@@ -1722,10 +1744,11 @@ class _SecretOptions:
     environment: str = ""
     kind: str = ""
     name: str = ""
+    provider: str = ""
 
 
 def _secret_options(words: Sequence[str], context: str) -> _SecretOptions:
-    """Accept the five options a secrets subcommand may take, and nothing else.
+    """Accept the six options a secrets subcommand may take, and nothing else.
 
     Args:
         words: The remaining words.
@@ -1757,6 +1780,7 @@ def _secret_options(words: Sequence[str], context: str) -> _SecretOptions:
         ENVIRONMENT_FLAG: "environment",
         KIND_FLAG: "kind",
         NAME_FLAG: "name",
+        PROVIDER_FLAG: "provider",
     }
     while remaining:
         word = remaining.pop(0)
@@ -1783,6 +1807,7 @@ def _secret_options(words: Sequence[str], context: str) -> _SecretOptions:
         environment=values.get("environment", ""),
         kind=values.get("kind", ""),
         name=values.get("name", ""),
+        provider=values.get("provider", ""),
     )
 
 
@@ -1830,6 +1855,69 @@ def _reference_from(invocation: Invocation) -> SecretReference:
         raise UsageError(msg) from None
 
 
+def _provider_from(invocation: Invocation) -> SecretProviderKind | None:
+    """Which mechanism was named, if any.
+
+    Args:
+        invocation: What was asked for.
+
+    Returns:
+        The mechanism, or ``None`` where none was named — which is a different
+        situation from naming one and being wrong, and is why an unrecognised
+        name is refused rather than defaulted.
+
+    Raises:
+        UsageError: If a mechanism was named and is not one GLOBIN has.
+    """
+    if not invocation.provider:
+        return None
+    try:
+        return SecretProviderKind(invocation.provider)
+    except ValueError:
+        listed = ", ".join(kind.value for kind in SecretProviderKind)
+        msg = f"unrecognised provider {invocation.provider!r}. Expected one of {listed}"
+        raise UsageError(msg) from None
+
+
+def _locators_for(
+    invocation: Invocation, provider: SecretProviderKind | None
+) -> tuple[SecretLocator, ...]:
+    """The routing this invocation implies.
+
+    Args:
+        invocation: What was asked for.
+        provider: Which mechanism was named, if any.
+
+    Returns:
+        One locator when a mechanism and a complete reference were both given,
+        and nothing otherwise — in which case the reference routes to the
+        composition root's default.
+
+    Raises:
+        UsageError: If the environment hand-off was named without a variable to
+            read, which :class:`~globin.domain.secrets.SecretLocator` refuses at
+            construction. Surfaced here as usage rather than as a traceback,
+            because it is something the operator typed.
+
+    The variable name is derived from the reference rather than taken as a
+    seventh option, so that no spelling of it can reach the command line beside a
+    value. `GLOBIN_`-prefixed names are refused by
+    :func:`~globin.domain.secrets.variable_problems` for the reason recorded
+    there: one would make every later start-up refuse.
+    """
+    if provider is None or not (invocation.environment and invocation.kind and invocation.name):
+        return ()
+    reference = _reference_from(invocation)
+    variable = ""
+    if provider is SecretProviderKind.ENVIRONMENT:
+        variable = f"{reference.environment.text}_{reference.name}".upper()
+    try:
+        return (SecretLocator(provider=provider, reference=reference, variable=variable),)
+    except ValidationError as fault:
+        msg = f"that provider cannot address that reference: {fault}"
+        raise UsageError(msg) from fault
+
+
 def _secrets(
     invocation: Invocation,
     *,
@@ -1852,10 +1940,19 @@ def _secrets(
     directory.
     """
     state = build_runtime_state()
-    store = build_secret_store()
+    word = invocation.command.split(" ", 1)[1]
+    provider = _provider_from(invocation)
+    locators = _locators_for(invocation, provider)
+    store = build_secret_store(state, locators=locators)
     register = build_grant_register(state)
 
-    word = invocation.command.split(" ", 1)[1]
+    if word in SECRETS_WRITING and provider is not None and not provider_writable(provider):
+        msg = (
+            f"{provider.value} is a hand-off rather than a store and never accepts a "
+            f"write; nothing was collected"
+        )
+        raise UsageError(msg)
+
     if word == HEALTH:
         return _secret_health(store, out=out, err=err, as_json=invocation.as_json)
     if word == SECRETS_DOCTOR:

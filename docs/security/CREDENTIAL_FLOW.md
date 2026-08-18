@@ -13,9 +13,16 @@ different thing again. Nothing in this document connects to an exchange.
 
 ## The commands
 
-Six verbs, and no seventh. `SECRET_STORE_CONTRACT.md` section 5 permits exactly
-these, and a contract test compares the command tuple against that list — so a
-seventh cannot arrive without the contract changing first.
+Seven verbs, and no eighth. `SECRET_STORE_CONTRACT.md` section 5 permits exactly
+these, and a contract test compares the command tuple against that list — so an
+eighth cannot arrive without the contract changing first.
+
+**The seventh arrived in Phase 031 and the order is what matters**: section 5 was
+amended in the same commit that added `doctor`, not afterwards. A command surface
+that grew first and was described later would be a contract following the code.
+`doctor` is not `health` with a wider remit — `health` answers whether *a* backend
+can be reached, and `doctor` answers which of the several mechanisms this host has
+and what each will do. It reads nothing an operator stored and emits no value.
 
 ```bash
 .venv\Scripts\globin.exe secrets set --environment paper --kind api_key --name venue_key
@@ -40,6 +47,25 @@ seventh cannot arrive without the contract changing first.
 ```bash
 .venv\Scripts\globin.exe secrets health --json
 ```
+
+```bash
+.venv\Scripts\globin.exe secrets doctor
+```
+
+Since Phase 031 there are three mechanisms rather than one, and `--provider` says
+which holds the credential being addressed — `credential_manager`,
+`dpapi_vault` or `environment`. Omitted, the credential manager is used, which is
+what every earlier invocation got and what it still gets.
+
+```bash
+.venv\Scripts\globin.exe secrets verify --environment paper --kind private_key --name venue_signing_key --provider dpapi_vault
+```
+
+**A mechanism name is not material**, which is why section 5 permits the option on
+the same reading that permits `--environment` and `--kind`. And a write against a
+mechanism that never accepts one — the environment hand-off — is refused **before
+the operator is prompted**, so the material never exists rather than existing and
+being discarded.
 
 `--json` is **refused** for `set` and `rotate`, as it already is for
 `bootstrap evidence` and `diagnostics bundle`. A command whose primary act is an

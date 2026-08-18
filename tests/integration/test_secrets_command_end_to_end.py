@@ -36,7 +36,12 @@ from globin.domain.secrets import (
     SecretValue,
     StoreFault,
 )
-from globin.runtime.cli import SECRETS_DOCTOR, SECRETS_SUBCOMMANDS, main
+from globin.runtime.cli import (
+    PROVIDER_FLAG,
+    SECRETS_DOCTOR,
+    SECRETS_SUBCOMMANDS,
+    main,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -386,7 +391,10 @@ def substitute(
     Patched where they are *used* rather than where they are defined, which is
     what `docs/TESTING_STRATEGY.md` requires.
     """
-    monkeypatch.setattr("globin.runtime.cli.build_secret_store", lambda: store or _Store())
+    monkeypatch.setattr(
+        "globin.runtime.cli.build_secret_store",
+        lambda *_args, **_kwargs: store or _Store(),
+    )
     monkeypatch.setattr(
         "globin.runtime.cli.build_grant_register", lambda _state: register or _Register()
     )
@@ -612,3 +620,81 @@ def test_the_seventh_verb_is_named_by_the_contract() -> None:
     contract = (root / "docs/security/SECRET_STORE_CONTRACT.md").read_text(encoding="utf-8")
     assert "per-mechanism capability report" in contract
     assert SECRETS_DOCTOR in SECRETS_SUBCOMMANDS
+
+
+# ---------------------------------------------------------------------------
+# The sixth option
+# ---------------------------------------------------------------------------
+
+
+def test_a_write_to_a_hand_off_is_refused_before_anything_is_collected() -> None:
+    """The ordering is the point, not the refusal.
+
+    `require_permitted` argues it for entitlements and it holds here: a value
+    that never existed cannot leak, so the mechanism's writability is checked
+    before the operator is prompted rather than after. A refusal that arrived
+    from the store would mean the material had been typed, held and discarded.
+    """
+    code, _, err = run(
+        "secrets",
+        "set",
+        "--environment",
+        "paper",
+        "--kind",
+        "api_key",
+        "--name",
+        "venue_key",
+        "--provider",
+        "environment",
+    )
+    assert code == int(ExitCode.USAGE)
+    assert "never accepts a write" in err
+    assert "nothing was collected" in err
+
+
+def test_an_unrecognised_provider_is_refused_rather_than_defaulted() -> None:
+    """Naming one and being wrong is not the same as naming none.
+
+    Defaulting a misspelling would send a credential to a mechanism the operator
+    did not choose, which is the distinction `profile_from` already draws.
+    """
+    code, _, err = run(
+        "secrets",
+        "verify",
+        "--environment",
+        "paper",
+        "--kind",
+        "api_key",
+        "--name",
+        "venue_key",
+        "--provider",
+        "invented",
+    )
+    assert code == int(ExitCode.USAGE)
+    assert "unrecognised provider" in err
+    assert "credential_manager" in err
+
+
+def test_the_provider_option_carries_a_mechanism_and_never_material() -> None:
+    """Section 5 forbids an option that would place *material* on a command line.
+
+    A mechanism name is ordinary data, the same class as `--environment` and
+    `--kind`. This asserts the option exists and that the forbidden spellings
+    still do not — the contract test covers the second half in general, and this
+    is the local statement for the option Phase 031 added.
+    """
+    assert PROVIDER_FLAG == "--provider"
+    code, _, err = run(
+        "secrets",
+        "verify",
+        "--environment",
+        "paper",
+        "--kind",
+        "api_key",
+        "--name",
+        "venue_key",
+        "--secret",
+        "not-a-real-value",
+    )
+    assert code == int(ExitCode.USAGE)
+    assert "unrecognised argument" in err
