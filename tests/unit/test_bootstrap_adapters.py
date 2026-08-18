@@ -368,7 +368,7 @@ def test_what_is_declared_locked_and_installed_is_reported(tmp_path: Path) -> No
     probe = DeclaredDependencyProbe(
         project_file=tmp_path / "pyproject.toml",
         lock_file=tmp_path / "pylock.toml",
-        installed=lambda: frozenset({"numpy", "pandas"}),
+        installed=lambda: {"numpy": "2.5.2", "pandas": "3.0.5"},
     )
     readiness = probe.readiness()
     assert readiness.declared == ("numpy", "pandas")
@@ -382,7 +382,7 @@ def test_a_declared_distribution_that_is_absent_is_reported_as_missing(tmp_path:
     probe = DeclaredDependencyProbe(
         project_file=tmp_path / "pyproject.toml",
         lock_file=tmp_path / "pylock.toml",
-        installed=lambda: frozenset({"numpy"}),
+        installed=lambda: {"numpy": "2.5.2"},
     )
     assert probe.readiness().missing == ("pandas",)
 
@@ -393,7 +393,7 @@ def test_a_tree_with_no_runtime_lock_reports_that(tmp_path: Path) -> None:
     probe = DeclaredDependencyProbe(
         project_file=tmp_path / "pyproject.toml",
         lock_file=tmp_path / "pylock.toml",
-        installed=lambda: frozenset({"numpy", "pandas"}),
+        installed=lambda: {"numpy": "2.5.2", "pandas": "3.0.5"},
     )
     assert probe.readiness().locked is False
 
@@ -414,7 +414,7 @@ def test_a_project_file_this_reader_cannot_use_declares_nothing(tmp_path: Path, 
     probe = DeclaredDependencyProbe(
         project_file=tmp_path / "pyproject.toml",
         lock_file=tmp_path / "pylock.toml",
-        installed=frozenset,
+        installed=dict,
     )
     assert probe.readiness().declared == ()
 

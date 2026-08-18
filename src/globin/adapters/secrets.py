@@ -279,6 +279,7 @@ class WindowsCredentialStore:
     """
 
     library: Any
+    declared: tuple[SecretReference, ...] = ()
 
     def health(self) -> StoreFault | None:
         """Ask the store a question with no side effects.
@@ -416,14 +417,23 @@ class WindowsCredentialStore:
         without requiring the listing be discovered by walking somebody else's
         credentials.
 
-        The set of references GLOBIN requires is declared rather than
-        discovered, and the declaration is Phase 029's. When it exists, an
-        inventory is that declaration resolved one reference at a time through
-        :meth:`resolve`, which touches nothing GLOBIN did not write. A contract
-        test pins this emptiness to that phase, so it goes red rather than
-        being forgotten.
+        **Phase 029 made good on that promise**, and the shape is exactly what
+        the previous version of this docstring described: the declaration
+        resolved one reference at a time through :meth:`resolve`, touching
+        nothing GLOBIN did not write.
+
+        It still returns empty on this host, and for a different reason than
+        before -- :attr:`declared` is fed from
+        :func:`globin.domain.entitlements.required_credentials`, which is empty
+        because GLOBIN reaches no venue. The mechanism exists; the set does not.
+
+        Every resolved value is discarded immediately. What is returned is a
+        tuple of references, which
+        ``SECRET_STORE_CONTRACT.md`` section 1 calls ordinary data.
         """
-        return ()
+        return tuple(
+            sorted(reference for reference in self.declared if self.resolve(reference).resolved)
+        )
 
 
 def _fault_for(status: int) -> StoreFault:
@@ -451,8 +461,16 @@ def _fault_for(status: int) -> StoreFault:
     return StoreFault.BACKEND_REFUSED
 
 
-def windows_credential_store() -> WindowsCredentialStore | UnavailableSecretStore:
+def windows_credential_store(
+    declared: tuple[SecretReference, ...] = (),
+) -> WindowsCredentialStore | UnavailableSecretStore:
     """Build the store this host can offer.
+
+    Args:
+        declared: The references GLOBIN is allowed to look for, which is
+            what :meth:`WindowsCredentialStore.inventory` resolves one at a
+            time. Empty on a host with no requirement, which is every host
+            today.
 
     Returns:
         A Credential Manager-backed store where ``advapi32`` loads, and one that
@@ -488,4 +506,4 @@ def windows_credential_store() -> WindowsCredentialStore | UnavailableSecretStor
     library.CredDeleteW.restype = wintypes.BOOL
     library.CredFree.argtypes = (ctypes.c_void_p,)
     library.CredFree.restype = None
-    return WindowsCredentialStore(library=library)
+    return WindowsCredentialStore(library=library, declared=declared)

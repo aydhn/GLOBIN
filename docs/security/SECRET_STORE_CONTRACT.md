@@ -267,7 +267,7 @@ material. It means the material is not at rest in a file this repository can rea
 |---|---|
 | Where configuration files live, and what profiles exist | 026, delivered — [`../engineering/CONFIGURATION_LAYOUT.md`](../engineering/CONFIGURATION_LAYOUT.md) |
 | Which configuration sources are consulted, and in what order | 027, delivered — [`../CONFIGURATION_POLICY.md`](../CONFIGURATION_POLICY.md) |
-| How a credential is collected and validated before first use | 029 |
+| Whether a venue agrees a key carries the permissions declared for it | 039 |
 | Which preflight checks run before a long-running process starts | 030 |
 | What an environment is, and how production, testnet and demo differ | 035 |
 

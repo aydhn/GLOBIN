@@ -140,6 +140,9 @@ a future reader can judge whether the reason still holds.
 | [0073](0073-phase-028-widens-to-deliver-the-environment-capability-inventory.md) | Phase 028 widens to deliver the environment capability inventory | Accepted |
 | [0074](0074-the-secret-store-is-the-windows-credential-manager-and-rotation-is-constructed.md) | The secret store is the Windows Credential Manager, and rotation is constructed rather than inherited | Accepted |
 | [0075](0075-native-architecture-is-measured-through-one-adapter-and-a-fingerprint-excludes-what-moves.md) | Native architecture is measured through one adapter, and a fingerprint excludes what moves | Accepted |
+| [0076](0076-phase-029-widens-to-deliver-the-dependency-attestation.md) | Phase 029 widens to deliver the dependency attestation | Accepted |
+| [0077](0077-a-credential-is-collected-at-a-console-and-a-permission-is-declared-rather-than-verified.md) | A credential is collected at a console, and a permission is declared rather than verified | Accepted |
+| [0078](0078-the-second-lock-reader-is-the-reference-implementation-and-a-cache-is-not-a-source-of-trust.md) | The second lock reader is the reference implementation, and a cache is not a source of trust | Accepted |
 
 ## Relationship to other documents
 

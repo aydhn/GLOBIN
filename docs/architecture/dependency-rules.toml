@@ -59,6 +59,13 @@ capable_modules = [
     # that continues after the interpreter has stopped being able to run Python.
     # An inner layer reaching for it would be an inner layer holding an open file.
     "faulthandler",
+    # `getpass` joined this table in Phase 029; see ADR-0077. It reads standard
+    # input, writes a prompt to a stream, and on POSIX opens `/dev/tty` directly
+    # -- which is I/O by any reading, and I/O with a person on the other end of
+    # it. An inner layer reaching for it would be an inner layer holding a
+    # terminal. It was absent from this list until the phase that first had a
+    # reason to call it, which is the moment the rule is cheapest to state.
+    "getpass",
     "ftplib",
     "http",
     "imaplib",

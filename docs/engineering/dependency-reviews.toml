@@ -601,3 +601,84 @@ treats as worse than a crash.
 WHAT BREAKS IF IT DISAPPEARS? Nothing today. One factory in \
 `globin.adapters.telemetry_prometheus`, behind a port with a second \
 implementation, and absent on every CI run."""
+
+# ---------------------------------------------------------------------------
+# Adopted in Phase 029 -- the entry that REVERSES a recorded decision.
+#
+# ADR-0052 decision 9 says of Phase 018: "No dependency was added -- `urllib.request`
+# and `re`, not `packaging`." That was right for what Phase 018 needed, and the
+# hand-written matcher it produced is still the only PEP 425 implementation in
+# `tools/`. What changed is not the judgement but the question: Phase 029 needs a
+# RUNNING GLOBIN to read its own lock, evaluate PEP 508 markers against this
+# environment and compare PEP 440 versions -- three things the Phase 018 subset
+# refuses BY NAME rather than by omission. ADR-0078 records the reversal.
+# ---------------------------------------------------------------------------
+
+[[review]]
+name = "packaging"
+ecosystem = "pypi"
+scope = "runtime"
+licence = "Apache-2.0 OR BSD-2-Clause"
+licence_source = "https://github.com/pypa/packaging/blob/main/LICENSE"
+adopted = "phase-029"
+reviewed = 2026-08-18
+verdict = "adopted"
+reason = """The reference implementation of the packaging specifications this \
+repository has been re-deriving by hand: PEP 440 versions, PEP 425 tags, PEP 508 \
+markers and requirements, PEP 503 name normalisation, and -- decisively -- PEP 751 \
+itself.
+
+WHAT IT COSTS TRANSITIVELY: NOTHING, TWICE OVER, AND BOTH WERE MEASURED. Its \
+installed `METADATA` on this host carries ZERO `Requires-Dist` lines: not one \
+behind an extra, not one behind a marker, none at all. It is also ALREADY IN BOTH \
+LOCKS at 26.3, arriving as a transitive of ta-lib -> build since Phase 025, so \
+promoting it to a declared root adds nothing to `pylock.toml` whatsoever. This is \
+the only entry in this register whose adoption changes no resolved set at all; \
+what changes is that a package GLOBIN was already shipping becomes one it is \
+allowed to import.
+
+LICENCE. `Apache-2.0 OR BSD-2-Clause`, read from the project's own LICENSE, which \
+is a dual-licence notice stating the software is available under the terms of \
+EITHER of LICENSE.APACHE or LICENSE.BSD; both files ship inside the distribution. \
+This is the FIRST `OR` EXPRESSION IN THIS REGISTER, and `docs/DEPENDENCY_POLICY.md` \
+had already ruled that an `OR` is a choice somebody must make and record rather \
+than a lookup. GLOBIN CHOOSES Apache-2.0, for its explicit patent grant; the NOTICE \
+obligation that comes with it binds on redistribution, which this repository does \
+not do. Both branches were on the allow list already, so the policy needed no \
+widening -- only the choice needed writing down.
+
+MAINTAINED. It is PyPA's own, and that is the answer to question 3's real test -- \
+could one person stop and nobody notice. This is not a project with a bus factor; \
+it is the library `pip`, `build` and effectively every installer already depend on, \
+and pip vendors a copy. Version 26.3 is installed here and declares \
+`Requires-Python: >=3.9`.
+
+RUNTIME, AND FREE. No paid tier, no account, no service. ADR-0003 is satisfied.
+
+COULD IT BE WRITTEN INSTEAD? IT WAS, AND THE PART THAT MATTERS MOST WOULD HAVE TO \
+BE WRITTEN AGAIN. `tools/quality/wheels/plan.py` is the hand-written answer and it \
+stays: it decides whether a wheel serves the DECLARED target, must return the same \
+verdict on every machine, and is deliberately a subset -- one implementation, one \
+minor line, one platform, four specifier operators, everything else refused by \
+name. What this phase needs is precisely what that subset refuses. Chiefly, \
+`packaging.pylock` is a COMPLETE PEP 751 IMPLEMENTATION -- `Pylock.from_dict` \
+validates a lock and raises `PylockUnsupportedVersionError` on a major outside \
+`1 <= v < 2`, which is the specification's own MUST, and warns on an unsupported \
+minor, which is its SHOULD. Writing a second one by hand would mean this \
+repository maintaining a parser for a specification whose reference implementation \
+it already ships. Public API since 26.0, `select()` since 26.1 and extended in \
+26.3, documented and not marked provisional.
+
+WHAT BREAKS IF IT DISAPPEARS? MORE THAN ANY OTHER ENTRY HERE, AND THAT IS STATED \
+RATHER THAN SOFTENED. This is the first runtime dependency with NO absent-safe \
+factory: unlike psutil and the four Phase 026 entries, there is no \
+`Availability.UNAVAILABLE` path and no degraded answer, because a dependency \
+inventory with no version comparison is not a degraded inventory, it is the defect \
+Phase 029 exists to fix. The mitigation is containment rather than a fallback -- \
+`tests/architecture/test_packaging_discipline.py` confines every import to \
+`globin.domain.dependency` and `globin.adapters.dependency`, forbids \
+`Marker.evaluate()` with no argument anywhere, and refuses any `packaging` type in \
+a ports, application or runtime signature. It is also the one runtime dependency \
+PRESENT ON EVERY CI RUN, because pytest declares `packaging>=22` itself; that made \
+it safe to import, and `.github/workflows/quality.yml` now pins it explicitly so \
+the availability is a declaration rather than a circumstance."""

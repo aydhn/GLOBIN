@@ -43,6 +43,8 @@ from enum import IntEnum, StrEnum
 from typing import Final
 
 from globin.domain.configuration import GlobinConfig
+from globin.domain.dependency import DependencyInventory, LockState
+from globin.domain.diagnostics_http import ReadinessReason
 from globin.domain.environment import (
     EnvironmentCapabilitySnapshot,
     EnvironmentCompatibility,
@@ -153,6 +155,7 @@ class ExitCode(IntEnum):
     DIAGNOSTICS_FAILED = 22
     WATCHDOG_STALLED = 23
     ENVIRONMENT_INCOMPATIBLE = 24
+    CREDENTIAL_NOT_ENTITLED = 25
 
 
 class PathLocation(StrEnum):
@@ -491,6 +494,7 @@ def checks() -> tuple[CheckSpec, ...]:
         CheckSpec("state.previous_run", "state", ExitCode.RUNTIME_STATE_CORRUPT),
         CheckSpec("instance.lock", "instance", ExitCode.INSTANCE_ALREADY_ACTIVE),
         CheckSpec("secrets.required", "secrets", ExitCode.SECRETS_UNREADY),
+        CheckSpec("secrets.entitlement", "secrets", ExitCode.CREDENTIAL_NOT_ENTITLED),
         CheckSpec("bootstrap.ready", "bootstrap", ExitCode.GATE_FAILED),
     )
 
@@ -691,27 +695,44 @@ class DependencyReadiness:
         locked: Whether a runtime lock accompanies them.
         missing: Declared distributions this interpreter cannot import metadata
             for, sorted.
+        inventory: What the lock and the environment say about each other, or
+            ``None`` when that could not be measured.
 
-    Deliberately shallow. Resolving a dependency graph is a network operation and
-    a slow one, and a process that ran a resolver at start-up would need a
-    network to start. What this answers is the cheap, local question: is what was
-    declared actually present.
+    Still shallow, and still deliberately so: resolving a dependency graph is a
+    network operation, and a process that ran a resolver at start-up would need a
+    network to start. Nothing here resolves, downloads or consults an index.
+
+    **Phase 029 made it one layer less shallow than it was.** The three fields
+    above answer "is what was declared present", by name. They cannot see a
+    version, so an environment whose numpy had drifted two minor releases from
+    the lock answered yes. :attr:`inventory` is the answer to the question those
+    three could not ask, and it is a separate type rather than six more fields
+    for a specific reason: :meth:`DependencyInventory.projection` must be able to
+    hand a fingerprint a value with no volatile field in it, which a filtered
+    view of a growing class cannot do.
+
+    ``None`` means *not measured* -- no project root, or a lock that could not be
+    read -- and never "nothing is wrong". The distinction is the same one
+    ADR-0045 draws for a platform capability.
     """
 
     declared: tuple[str, ...] = ()
     locked: bool = False
     missing: tuple[str, ...] = ()
+    inventory: DependencyInventory | None = None
 
     def as_record(self) -> dict[str, object]:
         """This readiness as the mapping the evidence carries.
 
         Returns:
-            The declared set, whether a lock accompanies it, and what is missing.
+            The declared set, whether a lock accompanies it, what is missing, and
+            the inventory when one was measured.
         """
         return {
             "declared": list(self.declared),
             "locked": self.locked,
             "missing": list(self.missing),
+            "inventory": None if self.inventory is None else self.inventory.as_record(),
         }
 
 
@@ -1268,6 +1289,77 @@ def dependency_outcome(readiness: DependencyReadiness) -> CheckOutcome:
             status=CheckStatus.PASS,
             summary="no runtime dependency is declared",
         )
+
+    inventory = readiness.inventory
+    if inventory is not None:
+        if inventory.lock_state is LockState.UNSUPPORTED:
+            return CheckOutcome(
+                identifier="dependency.lock",
+                status=CheckStatus.FAIL,
+                summary=(
+                    f"pylock.toml announces lock-version {inventory.lock_version}, "
+                    f"which this GLOBIN does not implement"
+                ),
+                remediation=(
+                    "PEP 751 requires a tool that does not support a lock's major "
+                    "version to refuse it rather than read it optimistically. "
+                    "Install a GLOBIN new enough for this lock, or fetch a "
+                    "checkout whose lock this one can read."
+                ),
+            )
+        if inventory.lock_state is LockState.UNREADABLE:
+            return CheckOutcome(
+                identifier="dependency.lock",
+                status=CheckStatus.FAIL,
+                summary="pylock.toml exists and could not be read",
+                remediation=(
+                    "The file is not valid TOML, or not the shape PEP 751 "
+                    "describes. Fetch the repository again rather than editing "
+                    "it here."
+                ),
+            )
+        if inventory.lock_state is LockState.INTERPRETER_EXCLUDED:
+            return CheckOutcome(
+                identifier="dependency.lock",
+                status=CheckStatus.FAIL,
+                summary="pylock.toml was resolved for a different interpreter",
+                remediation=(
+                    "Its requires-python does not admit the interpreter running "
+                    "GLOBIN. Build the environment with scripts/bootstrap.ps1, "
+                    "which uses the interpreter the runtime contract declares."
+                ),
+            )
+        divergent = inventory.unsatisfied()
+        if divergent:
+            names = tuple(observation.name for observation in divergent)
+            return CheckOutcome(
+                identifier="dependency.lock",
+                status=CheckStatus.FAIL,
+                summary=(
+                    f"{len(divergent)} distribution(s) diverge from the lock: {_joined(names[:3])}"
+                ),
+                remediation=(
+                    "Reinstall from the lock with scripts/bootstrap.ps1. "
+                    "Installing the differences individually would produce a "
+                    "third set of packages rather than the verified one."
+                ),
+            )
+        if inventory.unknown_keys:
+            return CheckOutcome(
+                identifier="dependency.lock",
+                status=CheckStatus.WARN,
+                summary=(
+                    f"pylock.toml carries {len(inventory.unknown_keys)} key(s) this "
+                    f"GLOBIN does not know: {_joined(inventory.unknown_keys[:3])}"
+                ),
+                remediation=(
+                    "PEP 751 makes an unknown key inside a supported major "
+                    "version a warning rather than a refusal, so this does not "
+                    "stop a start-up. The lock was written by a newer producer "
+                    "than this GLOBIN was built against."
+                ),
+            )
+
     return CheckOutcome(
         identifier="dependency.lock",
         status=CheckStatus.PASS,
@@ -1392,6 +1484,83 @@ def secrets_outcome(readiness: SecretReadiness) -> CheckOutcome:
         identifier="secrets.required",
         status=CheckStatus.PASS,
         summary=f"all {len(readiness.required)} required reference(s) resolved",
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class EntitlementReadiness:
+    """What is known about whether required credentials may do what is asked.
+
+    Args:
+        demanded: One identifier per requirement, sorted.
+        refused: Identifiers whose verdict refuses, sorted.
+        states: Identifier and verification state, sorted.
+
+    A separate type from :class:`SecretReadiness` rather than three more fields
+    on it, so that class keeps the shape and the "no value ever reaches this
+    type" docstring it already has. This one answers a different question: not
+    whether a credential resolves, but whether it is allowed to be used.
+
+    Every field is a name or a bounded state. There is no field material could
+    occupy.
+    """
+
+    demanded: tuple[str, ...] = ()
+    refused: tuple[str, ...] = ()
+    states: tuple[tuple[str, str], ...] = ()
+
+    def as_record(self) -> dict[str, object]:
+        """This readiness as the mapping the evidence carries.
+
+        Returns:
+            What was demanded, what was refused, and the state of each.
+        """
+        return {
+            "demanded": list(self.demanded),
+            "refused": list(self.refused),
+            "states": [list(pair) for pair in self.states],
+        }
+
+
+def entitlement_outcome(readiness: EntitlementReadiness) -> CheckOutcome:
+    """Judge whether every required credential is permitted to be used.
+
+    Args:
+        readiness: What was demanded and how each verdict came out.
+
+    Returns:
+        The outcome of ``secrets.entitlement``.
+
+    Passing on an empty demand set is a vacuous truth rather than a skipped
+    check, and the summary says so -- the same distinction
+    :func:`secrets_outcome` draws, for the same reason: the two look identical in
+    a log and mean opposite things the day a phase declares a requirement.
+    """
+    if readiness.refused:
+        return CheckOutcome(
+            identifier="secrets.entitlement",
+            status=CheckStatus.FAIL,
+            summary=(
+                f"{len(readiness.refused)} credential(s) not permitted to be used: "
+                f"{_joined(readiness.refused)}"
+            ),
+            remediation=(
+                "A credential is required for an operation its declared grants "
+                "do not cover, or GLOBIN withholds the permission class "
+                "outright. Declare what each key carries with globin secrets "
+                "set; no declaration can grant a withheld class."
+            ),
+        )
+    if not readiness.demanded:
+        return CheckOutcome(
+            identifier="secrets.entitlement",
+            status=CheckStatus.PASS,
+            summary="no credential is required, so there is nothing to permit",
+        )
+    return CheckOutcome(
+        identifier="secrets.entitlement",
+        status=CheckStatus.PASS,
+        summary=f"all {len(readiness.demanded)} required credential(s) permitted",
     )
 
 
@@ -1527,3 +1696,44 @@ class BootstrapOutcome:
     def ready(self) -> bool:
         """Whether GLOBIN may start."""
         return self.context is not None
+
+
+def readiness_for(exit_code: ExitCode) -> ReadinessReason:
+    """The readiness class an exit code implies.
+
+    Args:
+        exit_code: The code a bootstrap run would exit with.
+
+    Returns:
+        The bounded reason a reader should be told, never a sentence.
+
+    **Total over** :class:`ExitCode` by construction: the mapping is consulted
+    and anything absent from it becomes :attr:`ReadinessReason.UNKNOWN`, so a
+    later phase adding a code cannot make this raise. A contract test asserts the
+    totality anyway, and asserts that every reason except the three lifecycle
+    ones is reachable from some code -- a member nothing can produce is
+    vocabulary rather than a capability.
+
+    **This function is why** :attr:`ReadinessReason.DEPENDENCY_UNREADY` **stopped
+    being decorative.** It was declared in Phase 027 and, until Phase 029,
+    nothing anywhere set it: ``mark_unready`` had no production caller, because
+    no long-running run exists yet to call it. Rather than add a call to a run
+    that does not exist, the reason is derived from the verdict a bootstrap
+    already reaches, and published inside the digested part of its manifest.
+
+    It lives here rather than beside :class:`ReadinessReason` because of the
+    import graph: ``domain.configuration`` imports ``domain.diagnostics_http``
+    and this module imports ``domain.configuration``, so the dependency may run
+    this way and not the other. Putting it there would have been a cycle.
+    """
+    mapping = {
+        ExitCode.OK: ReadinessReason.READY,
+        ExitCode.HOST_UNSUPPORTED: ReadinessReason.ENVIRONMENT_INCOMPATIBLE,
+        ExitCode.INTERPRETER_MISMATCH: ReadinessReason.ENVIRONMENT_INCOMPATIBLE,
+        ExitCode.ENVIRONMENT_MISMATCH: ReadinessReason.ENVIRONMENT_INCOMPATIBLE,
+        ExitCode.ENVIRONMENT_INCOMPATIBLE: ReadinessReason.ENVIRONMENT_INCOMPATIBLE,
+        ExitCode.DEPENDENCY_UNREADY: ReadinessReason.DEPENDENCY_UNREADY,
+        ExitCode.CONFIGURATION_INVALID: ReadinessReason.CONFIGURATION_INVALID,
+        ExitCode.SECRETS_UNREADY: ReadinessReason.SECRETS_UNREADY,
+    }
+    return mapping.get(exit_code, ReadinessReason.UNKNOWN)

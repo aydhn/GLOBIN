@@ -42,14 +42,21 @@ from importlib import metadata
 from pathlib import Path
 from typing import Final
 
+from globin.adapters.dependency import (
+    installed_versions,
+    marker_environment,
+    python_full_version,
+    read_lock,
+)
 from globin.application.environment import snapshot_from
-from globin.application.secrets import readiness
+from globin.application.secrets import entitlement, readiness
 from globin.domain.bootstrap import (
     CREATED_PATHS,
     MAX_ROOT_SEARCH_DEPTH,
     BootstrapOutcome,
     CheckStatus,
     DependencyReadiness,
+    EntitlementReadiness,
     HostFacts,
     InterpreterFacts,
     PathLocation,
@@ -59,14 +66,25 @@ from globin.domain.bootstrap import (
     RuntimePaths,
     SecretReadiness,
     checks,
+    readiness_for,
     recorded_absent,
     recorded_inside,
     recorded_outside,
 )
+from globin.domain.dependency import (
+    DependencyInventory,
+    LockReading,
+    LockState,
+    canonical_name,
+    inventory_from,
+    requirement_name,
+)
+from globin.domain.entitlements import CredentialRequirement
 from globin.domain.environment import EnvironmentCapabilitySnapshot
 from globin.domain.observability import redact
 from globin.domain.secrets import SecretReference
 from globin.errors import ConfigurationError
+from globin.ports.entitlements import GrantRegister
 from globin.ports.environment import ToolchainProbe, WindowsSystemApi
 from globin.ports.secrets import SecretStore
 from globin.project_contract import PACKAGE_NAME
@@ -89,9 +107,15 @@ SCHEMA: Final[str] = "globin.bootstrap.manifest"
 """Identifies what kind of document this is, so another manifest fed to this
 reader is refused by name rather than by a missing key."""
 
-SCHEMA_VERSION: Final[int] = 1
+SCHEMA_VERSION: Final[int] = 2
 """Bumped whenever the document changes shape, and inside the digested payload so
-that a canonicalisation change cannot collide with an older digest."""
+that a canonicalisation change cannot collide with an older digest.
+
+Two since Phase 029, which added a `readiness` word to the verdict and a
+dependency `inventory` to the observed dependencies. `load` already refuses a
+document whose version it does not recognise, with a message telling the reader
+to regenerate it, so the bump is safe by construction rather than by anybody
+remembering to migrate."""
 
 PHASE: Final[int] = 21
 """The phase that established this manifest."""
@@ -525,19 +549,19 @@ def normalise(name: str) -> str:
         Lower-cased, with every run of ``-``, ``_`` and ``.`` collapsed to a
         single ``-``, as PEP 503 specifies.
 
-    Written out rather than imported. ``packaging`` would do it, and ADR-0003
-    makes the empty runtime dependency list an invariant — a normalisation rule
-    of four lines is not a reason to spend it.
+    Kept as a name and re-exported rather than deleted, because call sites and
+    tests import it from here. The implementation moved to
+    :func:`globin.domain.dependency.canonical_name` in Phase 029, which delegates
+    to ``packaging``.
+
+    This function's previous docstring said it was "written out rather than
+    imported" because ADR-0003 made the empty runtime dependency list an
+    invariant and "a normalisation rule of four lines is not a reason to spend
+    it". That reasoning was right and is now spent for a different reason: the
+    repository needed PEP 440, PEP 508 and PEP 751 as well, and one library
+    supplies all four.
     """
-    normalised: list[str] = []
-    for character in name.lower():
-        if character in "-_.":
-            if normalised and normalised[-1] == "-":
-                continue
-            normalised.append("-")
-        else:
-            normalised.append(character)
-    return "".join(normalised).strip("-")
+    return canonical_name(name)
 
 
 def distribution_name(requirement: str) -> str:
@@ -549,17 +573,22 @@ def distribution_name(requirement: str) -> str:
 
     Returns:
         Its normalised distribution name, with any extras, version specifier and
-        environment marker removed.
+        environment marker removed, or empty when the requirement is malformed.
 
-    Deliberately shallow. GLOBIN declares its own dependencies and this reads
-    them back; it is not a requirement parser and must not become one, because
-    the moment it needs to be right about markers it needs ``packaging`` and the
-    zero-dependency invariant is gone.
+    **This is the parser its own predecessor predicted.** That version split on
+    eight separator characters and said it "must not become" a requirement
+    parser, "because the moment it needs to be right about markers it needs
+    ``packaging`` and the zero-dependency invariant is gone". Phase 029 spent the
+    invariant deliberately, and being right about markers is exactly what the
+    dependency inventory needs.
+
+    The substantive change is not tidiness. The old splitter returned a name for
+    input no requirement grammar accepts, so a malformed ``pyproject.toml`` line
+    produced a plausible distribution name and a start-up check that reported a
+    package missing which had never been declared. This returns empty instead,
+    and the inventory skips it.
     """
-    head = requirement.strip()
-    for separator in ("[", "(", ";", "@", "<", ">", "=", "!", "~", " "):
-        head = head.split(separator, 1)[0]
-    return normalise(head)
+    return requirement_name(requirement)
 
 
 @dataclass(frozen=True, slots=True)
@@ -582,7 +611,8 @@ class DeclaredDependencyProbe:
 
     project_file: Path
     lock_file: Path
-    installed: Callable[[], frozenset[str]]
+    installed: Callable[[], Mapping[str, str]]
+    environment: Callable[[], Mapping[str, str]] = marker_environment
 
     def readiness(self) -> DependencyReadiness:
         """Read the state of the declared runtime dependencies.
@@ -597,13 +627,68 @@ class DeclaredDependencyProbe:
         first — and it already has.
         """
         present = self.installed()
-        declared = tuple(sorted(self._declared()))
+        requirements = self._requirements()
+        declared = tuple(sorted({distribution_name(item) for item in requirements} - {""}))
         missing = tuple(name for name in declared if name not in present)
         return DependencyReadiness(
             declared=declared,
             locked=self.lock_file.is_file(),
             missing=missing,
+            inventory=self._inventory(requirements, present),
         )
+
+    def _inventory(
+        self, requirements: tuple[str, ...], present: Mapping[str, str]
+    ) -> DependencyInventory:
+        """Compare the lock against this environment.
+
+        Args:
+            requirements: The raw requirement strings, as declared.
+            present: Canonical distribution name to installed version.
+
+        Returns:
+            The inventory. A lock that is absent or unreadable produces one
+            saying so rather than nothing at all, because "there is no lock" is
+            an answer the check needs and ``None`` would lose it.
+        """
+        try:
+            text = self.lock_file.read_text(encoding="utf-8")
+        except OSError:
+            reading = LockReading(state=LockState.ABSENT)
+        else:
+            reading = read_lock(text)
+        environment = self.environment()
+        return inventory_from(
+            declared=requirements,
+            reading=reading,
+            installed=present,
+            environment=environment,
+            python_version=python_full_version(environment),
+        )
+
+    def _requirements(self) -> tuple[str, ...]:
+        """Every requirement string ``project.dependencies`` holds, verbatim.
+
+        Returns:
+            The strings as written, markers and specifiers intact.
+
+        Verbatim rather than reduced to names, because the inventory needs the
+        marker to decide whether an entry applies on this platform at all. The
+        predecessor of this method returned names and threw the rest away, which
+        is why a marked dependency would have been reported missing here.
+        """
+        try:
+            with self.project_file.open("rb") as handle:
+                document = tomllib.load(handle)
+        except (OSError, tomllib.TOMLDecodeError):
+            return ()
+        project = document.get("project")
+        if not isinstance(project, dict):
+            return ()
+        dependencies = project.get("dependencies")
+        if not isinstance(dependencies, list):
+            return ()
+        return tuple(item for item in dependencies if isinstance(item, str))
 
     def _declared(self) -> set[str]:
         """Every distribution ``project.dependencies`` names.
@@ -639,13 +724,15 @@ def installed_distributions() -> frozenset[str]:
     it is the standard library's own view of the environment it is running in,
     needs no child process, and therefore cannot become a network call by
     accident.
+
+    Kept, and now derived from :func:`globin.adapters.dependency.installed_versions`
+    so that one scan answers both questions. **This function is why Phase 029
+    exists**: it walked every distribution's metadata and then discarded
+    ``distribution.version``, so a package installed at a version the lock does
+    not name was reported present and correct. Callers wanting the versions
+    should ask for them directly rather than through this.
     """
-    found: set[str] = set()
-    for distribution in metadata.distributions():
-        name = distribution.metadata["Name"]
-        if name:
-            found.add(normalise(str(name)))
-    return frozenset(found)
+    return frozenset(installed_versions())
 
 
 @dataclass(frozen=True, slots=True)
@@ -665,10 +752,18 @@ class StoreBackedSecrets:
     host with no credentials, and everything changed for the phase that fills
     the set in.
 
-    **Populating** ``required`` **is Phase 029's**, not this one's. That phase
-    defines credential collection and validation, and with it the question of
-    which references a start-up genuinely needs; declaring one here would be
-    asserting a requirement nothing has established.
+    **Phase 029 populated it, and it is still empty.** That is not a
+    contradiction: what changed is that the emptiness became a *derivation*
+    rather than a literal. The composition root now feeds
+    :func:`globin.domain.entitlements.required_references` into this field, and
+    that function returns nothing because GLOBIN reaches no venue and therefore
+    genuinely requires no credential at start-up. Phase 038 brings the first
+    authenticated surface; adding one entry to the registry is all it will take
+    for this check to begin demanding a credential, with no plumbing in between.
+
+    Declaring one now would make ``bootstrap check`` refuse on every clean host,
+    including the one CI builds, and the only way to satisfy it would be to
+    manufacture a credential to meet a requirement nothing has established.
     """
 
     store: SecretStore
@@ -683,6 +778,43 @@ class StoreBackedSecrets:
             for its *outcome* only.
         """
         return readiness(self.store, self.required)
+
+
+@dataclass(frozen=True, slots=True)
+class RegisterBackedEntitlements:
+    """Reports whether required credentials are permitted, from the register.
+
+    Args:
+        register: Where declarations are kept.
+        requirements: What start-up demands. **Empty today**, and empty because
+            GLOBIN reaches no venue rather than by omission.
+
+    **The store is never consulted.** An entitlement is decided from what is
+    demanded and what is declared, and both are ordinary data. Whether the
+    credential also *resolves* is ``secrets.required``'s question, and answering
+    two questions in one probe would make a missing credential and an
+    over-narrow one indistinguishable.
+    """
+
+    register: GrantRegister
+    requirements: tuple[CredentialRequirement, ...] = ()
+
+    def readiness(self) -> EntitlementReadiness:
+        """Verify every requirement against what is declared.
+
+        Returns:
+            What was demanded, what was refused, and each verdict's state. No
+            value is read, returned or held.
+        """
+        verdicts = entitlement(self.requirements, self.register.declarations())
+        demanded = tuple(sorted(verdict.reference.name for verdict in verdicts))
+        refused = tuple(
+            sorted(verdict.reference.name for verdict in verdicts if not verdict.permitted)
+        )
+        states = tuple(
+            sorted((verdict.reference.name, verdict.state.value) for verdict in verdicts)
+        )
+        return EntitlementReadiness(demanded=demanded, refused=refused, states=states)
 
 
 @dataclass(frozen=True, slots=True)
@@ -847,6 +979,7 @@ def build(outcome: BootstrapOutcome) -> dict[str, object]:
                 if check.status in {CheckStatus.FAIL, CheckStatus.UNMEASURED}
             ),
             "fingerprint": (outcome.context.fingerprint if outcome.context is not None else None),
+            "readiness": readiness_for(outcome.exit_code).value,
         },
     }
     document[DIGEST_KEY] = digest(document)

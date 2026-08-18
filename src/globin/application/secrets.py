@@ -34,7 +34,17 @@ over a value GLOBIN would have to retain to compare against.
 from dataclasses import dataclass
 
 from globin.domain.bootstrap import SecretReadiness
+from globin.domain.entitlements import (
+    CredentialRequirement,
+    GrantDeclaration,
+    PermissionVerdict,
+    VerificationState,
+    declaration_for,
+    verify,
+)
 from globin.domain.secrets import (
+    EntryFault,
+    EntryProblem,
     SecretReference,
     SecretResolution,
     SecretSlot,
@@ -43,6 +53,7 @@ from globin.domain.secrets import (
     store_key,
 )
 from globin.errors import ConfigurationError
+from globin.ports.secret_entry import SecretEntry
 from globin.ports.secrets import SecretStore
 
 REMEDIATION: dict[StoreFault, str] = {
@@ -285,3 +296,237 @@ def inventory_keys(references: tuple[SecretReference, ...]) -> tuple[str, ...]:
     permits exactly one builder, and this routes to it.
     """
     return tuple(sorted(store_key(reference) for reference in references))
+
+
+ENTRY_REMEDIATION: dict[EntryFault, str] = {
+    EntryFault.NOT_INTERACTIVE: (
+        "Run this at a terminal. Collection is interactive only, so that "
+        "material never reaches shell history or a process command line."
+    ),
+    EntryFault.ECHO_UNAVAILABLE: (
+        "This terminal cannot hide what you type, so nothing was read. Use a "
+        "console that supports it rather than accepting a visible entry."
+    ),
+    EntryFault.CANCELLED: "Nothing was stored. Run the command again when ready.",
+    EntryFault.MISMATCH: (
+        "The two entries differed, so nothing was stored. Run the command again."
+    ),
+    EntryFault.REFUSED_FORMAT: (
+        "The material cannot be stored as typed. The reported problems say "
+        "which rule it broke; no part of what you typed is shown."
+    ),
+    EntryFault.ENTRY_UNAVAILABLE: (
+        "The terminal could not be read. Run this directly rather than through "
+        "a wrapper that redirects input."
+    ),
+}
+"""What to do about each way collection can fail.
+
+Total over :class:`~globin.domain.secrets.EntryFault`, and a contract test says
+so. A fault with no remediation is a refusal an operator cannot act on, which is
+the failure mode this table exists to prevent.
+"""
+
+VERDICT_REMEDIATION: dict[VerificationState, str] = {
+    VerificationState.DECLARED: (
+        "Permitted by the declaration on record. Nothing has verified that "
+        "declaration against the venue, and nothing in this phase can."
+    ),
+    VerificationState.UNDECLARED: (
+        "No grants are declared for this credential. Declare them with "
+        "globin secrets set, which asks what the key is permitted to do."
+    ),
+    VerificationState.INSUFFICIENT: (
+        "The declaration does not cover what this operation needs. Either "
+        "narrow the operation or re-declare the credential to match the key."
+    ),
+    VerificationState.WITHHELD: (
+        "GLOBIN refuses this permission class outright. SECURITY_BASELINE.md "
+        "section 4 withholds anything that can move funds off the account, and "
+        "no declaration can grant it."
+    ),
+}
+"""What to do about each verification state.
+
+Total over :class:`~globin.domain.entitlements.VerificationState`, asserted by a
+contract test for the same reason as the table above.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class CollectionOutcome:
+    """What one interactive collection did, end to end.
+
+    Args:
+        reference: What was being set.
+        stored: Whether material is now current for that reference.
+        entry_fault: Why collection failed, when it did.
+        problems: Which format rules the material broke, when it did.
+        store_fault: Why the write failed, when it did.
+        rotation: The rotation outcome, when the command rotated rather than set.
+
+    **No field can hold material.** There is no value field, and there is no
+    branch that could add one: :class:`~globin.domain.secrets.SecretValue` has no
+    encoder and no string form, so it could not be rendered even if a field
+    existed.
+    """
+
+    reference: SecretReference
+    stored: bool
+    entry_fault: EntryFault | None = None
+    problems: tuple[EntryProblem, ...] = ()
+    store_fault: StoreFault | None = None
+    rotation: RotationOutcome | None = None
+
+    def as_record(self) -> dict[str, object]:
+        """This outcome as the mapping a record carries.
+
+        Returns:
+            The reference's public parts and what happened. No material, because
+            none is held.
+        """
+        return {
+            "environment": self.reference.environment.text,
+            "kind": self.reference.kind.value,
+            "name": self.reference.name,
+            "stored": self.stored,
+            "entry_fault": None if self.entry_fault is None else self.entry_fault.value,
+            "problems": [problem.value for problem in self.problems],
+            "store_fault": None if self.store_fault is None else self.store_fault.value,
+            "rotation": None if self.rotation is None else self.rotation.as_record(),
+        }
+
+
+def set_from_entry(
+    entry: SecretEntry,
+    store: SecretStore,
+    reference: SecretReference,
+    *,
+    prompt: str,
+) -> CollectionOutcome:
+    """Collect a secret from a person and store it.
+
+    Args:
+        entry: How to ask.
+        store: Where to put it.
+        reference: What is being set.
+        prompt: What to show before the entry.
+
+    Returns:
+        What happened, with no material in it.
+
+    The value exists for the width of this function and is handed straight to the
+    store. Nothing caches it, nothing logs it, and the outcome that comes back
+    has no field it could occupy.
+    """
+    outcome = entry.collect(prompt)
+    if outcome.value is None:
+        return CollectionOutcome(
+            reference=reference,
+            stored=False,
+            entry_fault=outcome.fault,
+            problems=outcome.problems,
+        )
+    fault = store.store(reference, outcome.value)
+    return CollectionOutcome(
+        reference=reference,
+        stored=fault is None,
+        store_fault=fault,
+    )
+
+
+def rotate_from_entry(
+    entry: SecretEntry,
+    store: SecretStore,
+    reference: SecretReference,
+    *,
+    prompt: str,
+) -> CollectionOutcome:
+    """Collect a replacement and rotate to it.
+
+    Args:
+        entry: How to ask.
+        store: Where to write.
+        reference: What is being rotated.
+        prompt: What to show before the entry.
+
+    Returns:
+        What happened, carrying the rotation outcome when one was attempted.
+
+    Reuses :func:`rotate` unchanged. Collection replaces only where the
+    replacement value comes from; the four-step ordering that keeps the previous
+    value resolvable is not reimplemented here and must not be.
+    """
+    outcome = entry.collect(prompt)
+    if outcome.value is None:
+        return CollectionOutcome(
+            reference=reference,
+            stored=False,
+            entry_fault=outcome.fault,
+            problems=outcome.problems,
+        )
+    rotation = rotate(store, reference, outcome.value)
+    return CollectionOutcome(
+        reference=reference,
+        stored=rotation.rotated,
+        store_fault=rotation.fault,
+        rotation=rotation,
+    )
+
+
+def entitlement(
+    requirements: tuple[CredentialRequirement, ...],
+    declarations: tuple[GrantDeclaration, ...],
+) -> tuple[PermissionVerdict, ...]:
+    """Verify every requirement against what is declared.
+
+    Args:
+        requirements: What the use sites demand.
+        declarations: What an operator declared.
+
+    Returns:
+        One verdict per requirement, in the order the requirements were given.
+    """
+    return tuple(
+        verify(requirement, declaration_for(requirement.reference, declarations))
+        for requirement in requirements
+    )
+
+
+def require_permitted(
+    store: SecretStore,
+    requirement: CredentialRequirement,
+    declaration: GrantDeclaration | None,
+) -> SecretValue:
+    """Resolve a credential only if it is permitted to do what is being asked.
+
+    Args:
+        store: The store to ask.
+        requirement: What the use site demands.
+        declaration: What an operator declared, or ``None``.
+
+    Returns:
+        The material.
+
+    Raises:
+        ConfigurationError: If the verdict refuses. The message names the state
+            and the missing grants, and carries no material -- the store is never
+            reached, so no material exists to leak.
+
+    **This is the roadmap's "before use", made structural.** The verdict is
+    computed first and the function returns without touching the store when it
+    refuses, so there is no branch in which material is resolved and then
+    discarded. A unit test asserts the store double recorded zero calls on a
+    refused verdict, which is the observable form of that claim.
+    """
+    verdict = verify(requirement, declaration)
+    if not verdict.permitted:
+        missing = ", ".join(grant.value for grant in verdict.missing)
+        msg = (
+            f"{requirement.reference.name} is not permitted to "
+            f"{requirement.purpose}: {verdict.state.value}"
+            f"{f' (missing {missing})' if missing else ''}. "
+            f"{VERDICT_REMEDIATION[verdict.state]}"
+        )
+        raise ConfigurationError(msg)
+    return require(store, requirement.reference)

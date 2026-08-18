@@ -38,6 +38,7 @@ from globin.domain.bootstrap import (
     implementation_outcome,
     parse_version,
     paths_outcome,
+    readiness_for,
     ready_outcome,
     recorded_absent,
     recorded_inside,
@@ -48,6 +49,13 @@ from globin.domain.bootstrap import (
     version_outcome,
 )
 from globin.domain.configuration import default_config
+from globin.domain.dependency import (
+    DependencyInventory,
+    DependencyObservation,
+    DependencyState,
+    LockState,
+)
+from globin.domain.diagnostics_http import ReadinessReason
 from globin.errors import InternalError, ValidationError
 
 # ---------------------------------------------------------------------------
@@ -200,6 +208,10 @@ def test_every_check_identifier_is_stable_and_machine_readable() -> None:
         "state.previous_run",
         "instance.lock",
         "secrets.required",
+        # Phase 029. Placed after `secrets.required` because a credential that
+        # does not resolve cannot be asked what it is permitted to do, and
+        # before the aggregate because the aggregate is always last.
+        "secrets.entitlement",
         "bootstrap.ready",
     )
 
@@ -743,3 +755,171 @@ def test_an_outcome_with_no_context_is_not_ready() -> None:
     outcome = BootstrapOutcome(report=BootstrapReport(outcomes=(passing("project.root"),)))
     assert not outcome.ready
     assert outcome.exit_code is ExitCode.OK
+
+
+# ---------------------------------------------------------------------------
+# Phase 029: what the inventory adds to the dependency verdict
+# ---------------------------------------------------------------------------
+
+
+def _inventory(
+    *observations: DependencyObservation,
+    lock_state: LockState = LockState.PRESENT,
+    lock_version: str = "1.0",
+    unknown_keys: tuple[str, ...] = (),
+) -> DependencyInventory:
+    return DependencyInventory(
+        observations=observations,
+        lock_state=lock_state,
+        lock_version=lock_version,
+        unknown_keys=unknown_keys,
+    )
+
+
+def _ready(inventory: DependencyInventory) -> DependencyReadiness:
+    """A readiness whose three original fields are all satisfied.
+
+    Every test below therefore isolates the inventory: the older fields would
+    have reported this host as ready, which is exactly the blindness Phase 029
+    removes.
+    """
+    return DependencyReadiness(declared=("numpy",), locked=True, inventory=inventory)
+
+
+def test_a_lock_version_this_globin_cannot_read_refuses_rather_than_guessing() -> None:
+    """PEP 751 states this as a MUST, not as a warning."""
+    outcome = dependency_outcome(
+        _ready(_inventory(lock_state=LockState.UNSUPPORTED, lock_version="2.0"))
+    )
+    assert outcome.status is CheckStatus.FAIL
+    assert "2.0" in outcome.summary
+
+
+def test_a_lock_that_exists_and_cannot_be_read_refuses() -> None:
+    outcome = dependency_outcome(_ready(_inventory(lock_state=LockState.UNREADABLE)))
+    assert outcome.status is CheckStatus.FAIL
+    assert "could not be read" in outcome.summary
+
+
+def test_a_lock_resolved_for_another_interpreter_refuses() -> None:
+    outcome = dependency_outcome(_ready(_inventory(lock_state=LockState.INTERPRETER_EXCLUDED)))
+    assert outcome.status is CheckStatus.FAIL
+    assert "different interpreter" in outcome.summary
+
+
+def test_a_version_that_drifted_from_the_lock_refuses_and_names_it() -> None:
+    """The finding the three original fields could not make.
+
+    `declared`, `locked` and `missing` all say this host is ready: numpy is
+    declared, a lock accompanies it, and it is installed. It is installed at the
+    wrong version.
+    """
+    outcome = dependency_outcome(
+        _ready(
+            _inventory(
+                DependencyObservation(
+                    name="numpy",
+                    state=DependencyState.VERSION_MISMATCH,
+                    locked_version="2.5.2",
+                    installed_version="2.6.0",
+                )
+            )
+        )
+    )
+    assert outcome.status is CheckStatus.FAIL
+    assert "numpy" in outcome.summary
+    assert "bootstrap.ps1" in outcome.remediation
+
+
+def test_an_unknown_key_warns_and_does_not_stop_a_start_up() -> None:
+    """PEP 751 makes this a SHOULD-warn, and `exit_code_for` ignores a warning."""
+    outcome = dependency_outcome(_ready(_inventory(unknown_keys=("future-key",))))
+    assert outcome.status is CheckStatus.WARN
+    assert "future-key" in outcome.summary
+
+
+def test_an_environment_that_agrees_with_its_lock_passes() -> None:
+    outcome = dependency_outcome(
+        _ready(
+            _inventory(
+                DependencyObservation(
+                    name="numpy",
+                    state=DependencyState.SATISFIED,
+                    locked_version="2.5.2",
+                    installed_version="2.5.2",
+                )
+            )
+        )
+    )
+    assert outcome.status is CheckStatus.PASS
+
+
+def test_a_readiness_with_no_inventory_behaves_exactly_as_it_did_before() -> None:
+    """`None` means not measured, and must not become a refusal by itself."""
+    outcome = dependency_outcome(
+        DependencyReadiness(declared=("numpy",), locked=True, inventory=None)
+    )
+    assert outcome.status is CheckStatus.PASS
+
+
+# ---------------------------------------------------------------------------
+# Phase 029: the exit code to readiness mapping
+# ---------------------------------------------------------------------------
+
+
+def test_every_exit_code_maps_to_a_readiness_reason() -> None:
+    """Total by construction, and asserted anyway.
+
+    A later phase adding an exit code cannot make this raise; what it can do is
+    leave the new code reported as `unknown`, which this test makes visible.
+    """
+    for code in ExitCode:
+        assert isinstance(readiness_for(code), ReadinessReason)
+
+
+def test_the_dependency_exit_code_is_what_finally_sets_the_dependency_reason() -> None:
+    """`ReadinessReason.DEPENDENCY_UNREADY` had no producer at all until now."""
+    assert readiness_for(ExitCode.DEPENDENCY_UNREADY) is ReadinessReason.DEPENDENCY_UNREADY
+
+
+@pytest.mark.parametrize(
+    ("code", "reason"),
+    [
+        pytest.param(ExitCode.OK, ReadinessReason.READY, id="ok"),
+        pytest.param(
+            ExitCode.CONFIGURATION_INVALID,
+            ReadinessReason.CONFIGURATION_INVALID,
+            id="configuration",
+        ),
+        pytest.param(ExitCode.SECRETS_UNREADY, ReadinessReason.SECRETS_UNREADY, id="secrets"),
+        pytest.param(
+            ExitCode.HOST_UNSUPPORTED,
+            ReadinessReason.ENVIRONMENT_INCOMPATIBLE,
+            id="host",
+        ),
+        pytest.param(
+            ExitCode.ENVIRONMENT_INCOMPATIBLE,
+            ReadinessReason.ENVIRONMENT_INCOMPATIBLE,
+            id="capability",
+        ),
+        pytest.param(ExitCode.INTERNAL, ReadinessReason.UNKNOWN, id="internal-is-unknown"),
+    ],
+)
+def test_an_exit_code_maps_to_the_class_a_reader_can_act_on(
+    code: ExitCode, reason: ReadinessReason
+) -> None:
+    assert readiness_for(code) is reason
+
+
+def test_every_reason_a_bootstrap_can_reach_is_produced_by_some_exit_code() -> None:
+    """A member nothing can set is vocabulary rather than a capability.
+
+    The three lifecycle reasons are excluded because they describe a running
+    process rather than a start-up verdict, and nothing here can produce them.
+    """
+    lifecycle = {
+        ReadinessReason.STARTING,
+        ReadinessReason.STOPPING,
+    }
+    produced = {readiness_for(code) for code in ExitCode}
+    assert set(ReadinessReason) - lifecycle == produced

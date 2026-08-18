@@ -1,0 +1,212 @@
+# ADR-0078 — The second lock reader is the reference implementation, and a cache is not a source of trust
+
+## Status
+
+Accepted — Phase 029.
+
+**Date:** 2026-08-18
+
+## Context
+
+Since Phase 020 this repository has recomputed every claim its lock makes, and since Phase
+024 it has done so for the runtime lock as well. What none of that reached is a *running*
+GLOBIN. `DependencyReadiness` carried three fields — declared names, a lock-exists boolean,
+and a missing set — and its docstring called itself "deliberately shallow".
+
+The shallowness had a specific consequence. `installed_distributions()` walked every
+distribution's metadata through `importlib.metadata` and then **discarded
+`distribution.version`**, while the gate's own twin in `tools/quality/lock/gate.py` had been
+returning name-to-version pairs since Phase 020. An environment whose numpy had drifted two
+minor releases from the lock reported ready.
+
+A second gap: `ReadinessReason.DEPENDENCY_UNREADY` was declared at Phase 027 and **nothing
+anywhere set it**.
+
+## Decision
+
+### 1. `packaging` is adopted as a runtime dependency, narrowly reversing ADR-0052
+
+ADR-0052 decision 9 records that Phase 018 deliberately did not adopt it. That was right for
+the question Phase 018 had — a machine-independent verdict about wheel filenames, which a
+regex answers. This phase needs a *running* GLOBIN to evaluate PEP 508 markers and compare
+PEP 440 versions, which the Phase 018 subset refuses **by name**.
+
+The cost was measured before it was accepted and is **nothing**: `packaging` declares zero
+`Requires-Dist`, and it was already in `pylock.toml` as a transitive of `ta-lib` → `build`.
+Promoting it to a declared root changed no resolved set. It is the only entry in
+`dependency-reviews.toml` whose adoption changes no lock.
+
+Its licence, `Apache-2.0 OR BSD-2-Clause`, is the register's **first `OR` expression**, which
+`docs/DEPENDENCY_POLICY.md` had already ruled must get its own paragraph and a recorded
+choice. **GLOBIN chooses Apache-2.0**, for the patent grant.
+
+`tools/quality/wheels/plan.py` stays and is untouched. It remains the only answer to the
+declared-target question, and the only PEP 425 matcher in `tools/`.
+
+### 2. There are two PEP 751 readers, and the second is the reference implementation
+
+`src/globin` cannot import `tools.quality.lock.plan`: `pyproject.toml` packages only
+`src/globin`, so it would `ImportError` in an installed GLOBIN. A second reader was
+therefore unavoidable.
+
+What was avoidable was writing one. `packaging.pylock` is a complete, documented PEP 751
+implementation — public API since packaging 26.0 — and adopting `packaging` brought it.
+`Pylock.from_dict` raises on a major version outside `1 <= v < 2`, which is the
+specification's own MUST, and warns on an unsupported minor, which is its SHOULD.
+`globin.adapters.dependency.read_lock` is a translation of that into
+`LockState` values, because a start-up check reports a remedy rather than raising at
+whoever called it.
+
+`docs/engineering/SOURCE_OF_TRUTH.md` permits a second copy only when "a test compares the
+two copies and fails when they diverge", and
+`tests/contract/test_dependency_reader_contract.py` is that test. **Note which way round it
+runs**: the reference implementation is the yardstick and the hand-written Phase 020 parser
+is the thing being checked, so the tripwire validates delivered code against the
+specification rather than pinning two new pieces of code together.
+
+Two asymmetries are asserted **as deliberate** so they cannot silently invert. The gate
+refuses an unsupported major through `version_problems` after parsing while the reference
+implementation refuses during parsing — both refuse, at different stages, which this test
+discovered rather than assumed. And the gate compares versions as raw text while the runtime
+compares PEP 440 releases; the test pins the direction, so a start-up can never refuse an
+environment the gate has just certified.
+
+### 3. Only the fields with a consumer are parsed
+
+pip emits none of PEP 751's optional keys — verified by grep across both committed locks.
+So the test is not "is it evaluable" but "does parsing it prevent a defect in code this
+phase ships". Two do: `marker` and `requires-python`, without which a package legitimately
+absent on this platform is reported `MISSING`. The document's own `requires-python` is read
+for the same reason. Everything else is *recognised so it does not trip the unknown-key
+warning* and interpreted not at all.
+
+`vcs.commit-id` is refused: it is meaningful only for a source the lock gate already rejects
+outright, and parsing a field for a shape nothing accepts is speculation with extra steps.
+
+### 4. The fingerprint cannot see the lock's producer
+
+`DependencyProjection` has two fields and no place for a timestamp, a path, a URL, a size or
+an upload time. It also deliberately omits `lock_version` and `unknown_keys`, which the
+inventory does carry: a lock regenerated by a newer pip with not one name or version changed
+has not changed which dependencies this environment has, and a fingerprint that moved would
+report a difference that does not exist.
+
+### 5. A cache is not a source of trust; the lock is
+
+An artefact is addressed **by** the digest the lock records — name, version, algorithm,
+digest and filename all participate in the key — and its bytes are re-hashed before use. A
+file that hashes to something else is not a cache hit that failed validation; it is a
+different file that was never under that key.
+
+**A corrupt artefact is left in place and reported.** Deleting the evidence of a corruption
+is how the ability to diagnose it is lost, and re-fetching would be the cache quietly
+becoming a network client.
+
+**The network fallback is unreachable rather than un-taken.**
+`tools/quality/materialize/plan.py` imports no networking module and takes the cache's
+contents as an argument, so there is no branch somebody could add that reaches an index.
+
+### 6. An empty wheelhouse is unmeasured, not failed
+
+Artefacts are hundreds of megabytes and are not committed, so a fresh clone has established
+nothing rather than established an absence. `drift` draws exactly this line with an
+unrecorded baseline and exits 3; this does the same. A wheelhouse that **has** been
+populated and is wrong still fails, and an artefact that is unhashed, unservable or
+source-only fails even with an empty wheelhouse — fetching would not fix any of them.
+
+### 7. Tags are built from the declaration, never from this interpreter
+
+`sys_tags()` answers "could *this* machine install it", which is machine-specific; the gate
+must answer "does an artefact exist serving the *declared* target", which must be identical
+on a 3.12 runner, a 3.14 runner and a Linux box. Using `sys_tags()` gate-side would make the
+gate reject the committed lock on the 3.12 matrix leg.
+
+## Consequences
+
+`DependencyReadiness` gains one field rather than six, and **no new port**.
+`ports/bootstrap.py:DependencyProbe` already asks the outside world this question at this
+moment in this pipeline; a second port would have been a seam with nothing behind it. The
+honest change is that the existing answer stops throwing information away — which is why
+`installed` is now `Mapping[str, str]`.
+
+`readiness_for(exit_code)` is what finally sets `DEPENDENCY_UNREADY`. Rather than adding a
+`mark_unready` call to a long-running run that does not exist yet, the reason is derived from
+the verdict a bootstrap already reaches and published **inside the digested part** of its
+manifest, so it cannot be edited afterwards. The bootstrap manifest schema moves 1 → 2.
+
+Five drift kinds are modelled and nine are refused by name. The most interesting refusal is
+`SURPLUS`: deciding an installed distribution is unexpected needs the `seeded` exemption
+list, which lives in `lock-policy.toml` — a file the wheel does not ship. Without it `pip`,
+`setuptools` and GLOBIN itself report as surplus. The lock gate already answers this
+correctly where the declaration is readable.
+
+## Risks and Trade-offs
+
+**`packaging` has no absent-safe factory, and that is a deliberate exception.** Every other
+runtime dependency has one. A dependency inventory that cannot compare versions is not a
+degraded inventory but the defect this phase removes, so there is no honest degraded answer.
+`pytest` itself requires `packaging`, so it is present wherever the suite runs, and the
+workflow now pins it so availability is a declaration rather than a circumstance.
+Containment is `tests/architecture/test_packaging_discipline.py`.
+
+**`Pylock.select` is all-or-nothing**, which was measured rather than assumed: it raises on
+the first package with no serving artefact instead of yielding the rest. A single unservable
+distribution is therefore a lock-level problem naming that package, and `PlanState.INCOMPATIBLE`
+is reachable through the pure planning API rather than through the gate. Defensible for a
+gate — an environment that cannot be fully built is not partly buildable — but worth knowing.
+
+**A second reader is still a second reader.** The tripwire compares them on the committed
+locks and on generated documents, but a divergence on a document neither has seen would go
+unnoticed until it appeared in a real lock.
+
+## Alternatives Considered
+
+**Write a second PEP 751 parser by hand.** The obvious reading of "the runtime cannot
+import `tools/`". Rejected once `packaging.pylock` was found: it would have meant this
+repository maintaining a parser for a specification whose reference implementation it
+already ships, and the tripwire would then have compared two hand-written readers rather
+than checking one against the specification.
+
+**Import `tools.quality.lock.plan` from `src/globin`.** Rejected because it does not work:
+the wheel packages only `src/globin`, so an installed GLOBIN would raise `ImportError`. The
+constraint is real rather than stylistic.
+
+**Extend `DependencyReadiness` with six fields instead of adding a type.** Rejected for
+three reasons: its "deliberately shallow" docstring is the written reason no resolver runs
+at start-up and widening the class makes it false; the fingerprint needs a projection with
+no volatile field, which a filtered view of a growing class cannot give; and its record
+feeds a sealed, versioned manifest.
+
+**Add a `dependency` health check to `domain/health.py`.** Rejected as Phase 030's, and on
+cost: the measurement is a whole-`site-packages` walk that the cached health projection
+would pay up to once a second, for an answer that cannot change while the process runs. The
+bootstrap fingerprint already reaches the health document and now moves when dependencies
+drift, at no hot-path cost.
+
+**Let `Pylock.select` default to `sys_tags()`.** Rejected: it would make the gate answer a
+machine-specific question and reject the committed lock on the 3.12 matrix leg.
+
+**Delete a corrupt cached artefact, or re-fetch it.** Rejected: the first destroys the
+evidence needed to diagnose it, the second makes the cache a network client and voids the
+offline guarantee.
+
+**Fail rather than report `unmeasured` on an empty wheelhouse.** Rejected: artefacts are not
+committed, so every clean checkout would be red for a condition that is expected.
+
+## References
+
+- [ADR-0052](0052-wheel-availability-is-a-recorded-survey-whose-verdict-is-recomputed.md) — decision 9, reversed narrowly here
+- [ADR-0054](0054-the-toolchain-is-locked-with-pep-751-and-the-verdict-is-recomputed.md) — the lock governance this extends
+- [ADR-0044](0044-dependency-review-is-a-written-process-with-a-generated-inventory.md) — the six questions `packaging` was reviewed against
+- [ADR-0075](0075-native-architecture-is-measured-through-one-adapter-and-a-fingerprint-excludes-what-moves.md) — the fingerprint pattern this follows
+- [ADR-0076](0076-phase-029-widens-to-deliver-the-dependency-attestation.md) — the widening record
+- [`../engineering/DEPENDENCY_MATERIALIZATION.md`](../engineering/DEPENDENCY_MATERIALIZATION.md) — how to use it
+- [`../research/phase_029_sources.md`](../research/phase_029_sources.md) — the PEP 751 clauses and the measurements
+
+## Supersedes
+
+Nothing.
+
+## Superseded By
+
+Nothing.

@@ -242,7 +242,8 @@ is a decision rather than a regression.
 | Which sources are consulted, in what order, and how environment variables and launcher selection fit | 027, delivered — the `Precedence` section above, and [ADR-0071](adr/0071-configuration-precedence-is-declared-and-an-environment-variable-is-a-derived-name.md) |
 | The rules a secret is handled under | 015, delivered — [`security/SECURITY_BASELINE.md`](security/SECURITY_BASELINE.md) |
 | Where a secret is stored, and how it is supplied | 028, delivered — [`security/SECRET_STORE.md`](security/SECRET_STORE.md) |
-| How a credential is collected from an operator, and validated before first use | 029 |
+| How a credential is collected from an operator, and what it is permitted to do | 029, delivered — [`security/CREDENTIAL_FLOW.md`](security/CREDENTIAL_FLOW.md) |
+| Which credential a given exchange surface needs, and what the venue says it may do | 038, 039 |
 | What an environment is, and how production, testnet and demo differ | 035 |
 
 Nothing in the configuration model knows about files, environment variables or

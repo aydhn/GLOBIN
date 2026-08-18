@@ -63,19 +63,30 @@ workflow pins and the producer for the development scope only, because
 `runtime_coverage` finding now asks the runtime lock the question the development
 one was always asked.
 
-### Why there is no runtime lock
+### Why there was no runtime lock, and why there is one now
 
-`project.dependencies` is empty and `tests/contract/test_packaging_contract.py`
-keeps it so. A lock of an empty set would restate that contract test by being
-empty — and, decisively, `pip-audit --locked` **raises** on a lock recording no
-packages rather than auditing it, so creating one would break the vulnerability
-gate this phase strengthens.
+This section described the Phase 020 state — `project.dependencies` empty,
+`[runtime] locked = false`, no `pylock.toml` — and **kept describing it for nine
+phases after Phase 021 changed it**, contradicting the table above it in this
+same file. Phase 029 repaired that; what follows is the record of why the
+asymmetry existed and how it closed, because the mechanism is still load-bearing.
 
-The asymmetry is not left to memory. `docs/engineering/lock-policy.toml` records
-`[runtime] locked = false` with its reason, and the gate fails with
-`LOCK_RUNTIME_UNLOCKED` the moment `project.dependencies` becomes non-empty while
-no runtime lock exists. Phase 021 cannot introduce a runtime dependency without
-producing the lock that goes with it.
+At Phase 020 a lock of an empty set would have restated a contract test by being
+empty, and — decisively — `pip-audit --locked` **raises** on a lock recording no
+packages rather than auditing it, so creating one would have broken the
+vulnerability gate. The asymmetry was not left to memory:
+`docs/engineering/lock-policy.toml` recorded `[runtime] locked = false` with its
+reason, and the gate was written to fail with `LOCK_RUNTIME_UNLOCKED` the moment
+`project.dependencies` became non-empty while no runtime lock existed.
+
+**It fired exactly as designed.** Phase 021 could not introduce numpy and pandas
+without producing `pylock.toml` in the same commit, and did not. `[runtime]
+locked = true` today, the lock carries twenty-six distributions against nine
+declared roots, and every claim it makes about itself is recomputed by the same
+eleven checks the development lock faces. Phase 024 closed the remaining half of
+the question — until then `coverage_problems` read `DEVELOPMENT` as a literal, so
+the runtime lock was checked for internal soundness and never once asked whether
+it contained what `pyproject.toml` declares.
 
 ---
 

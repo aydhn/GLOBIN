@@ -53,6 +53,13 @@ from globin.adapters.identifiers import new_run_id
 from globin.adapters.observability import new_correlation_id
 from globin.adapters.telemetry_otel import opentelemetry_bridge
 from globin.adapters.telemetry_prometheus import prometheus_publisher
+from globin.application.secrets import (
+    ENTRY_REMEDIATION,
+    REMEDIATION,
+    resolve,
+    rotate_from_entry,
+    set_from_entry,
+)
 from globin.domain.bootstrap import BootstrapOutcome, CheckStatus, ExitCode
 from globin.domain.configuration import (
     DiagnosticsHttpConfig,
@@ -70,6 +77,11 @@ from globin.domain.diagnostics_http import (
     policy_problems,
     route_paths,
 )
+from globin.domain.entitlements import (
+    GrantDeclaration,
+    GrantSet,
+    declaration_for,
+)
 from globin.domain.environment import (
     CapabilityReason,
     EnvironmentCapabilitySnapshot,
@@ -77,9 +89,14 @@ from globin.domain.environment import (
     compatibility_fingerprint,
 )
 from globin.domain.health import RuntimeHealthSnapshot, RuntimeHealthState
+from globin.domain.identifiers import EnvironmentId
 from globin.domain.metrics import declared_series, metrics
 from globin.domain.runtime_state import RuntimeArea
-from globin.errors import ConfigurationError, GlobinError
+from globin.domain.secrets import SecretKind, SecretReference
+from globin.errors import ConfigurationError, GlobinError, ValidationError
+from globin.ports.entitlements import GrantRegister
+from globin.ports.secret_entry import SecretEntry
+from globin.ports.secrets import SecretStore
 from globin.project_contract import PROJECT_NAME
 from globin.runtime.composition import (
     BUNDLE_MANIFEST_MEMBER,
@@ -90,9 +107,12 @@ from globin.runtime.composition import (
     build_bootstrap,
     build_bundle_builder,
     build_config_sources,
+    build_grant_register,
     build_health_collector,
     build_logger,
     build_runtime_state,
+    build_secret_entry,
+    build_secret_store,
     bundle_candidates,
     project_identity,
     resolve_run_profile,
@@ -127,13 +147,42 @@ ENVIRONMENT: Final[str] = "environment"
 """Report what this host is capable of, and whether that is enough. Reads only.
 
 Distinct from ``doctor``, which judges this host against the whole start-up
-contract and reports fifteen checks. This reports the capability half in full —
+contract and reports eighteen checks. This reports the capability half in full —
 the process and native architectures, the emulation state, every declared tool,
 and the compatibility fingerprint — which ``doctor`` reduces to one line.
 """
 
+SECRETS: Final[str] = "secrets"
+"""Manage the local credential store. Six verbs and no seventh.
+
+``SECRET_STORE_CONTRACT.md`` section 5 permits exactly: set (interactive entry
+only), verify presence (returning a boolean), list (names, environments, kinds
+and existence only), delete, rotate, and a backend health check. A contract test
+compares :data:`SECRETS_SUBCOMMANDS` against that list, so a seventh verb cannot
+arrive without the contract being changed first.
+"""
+
+SET: Final[str] = "set"
+VERIFY: Final[str] = "verify"
+LIST: Final[str] = "list"
+DELETE: Final[str] = "delete"
+ROTATE: Final[str] = "rotate"
+HEALTH: Final[str] = "health"
+
 VERSION: Final[str] = "--version"
 JSON_FLAG: Final[str] = "--json"
+ENVIRONMENT_FLAG: Final[str] = "--environment"
+"""Which deployment target a credential belongs to.
+
+**Never defaulted from** ``--profile``. A profile names a configuration
+*document*; an environment names a deployment target, and Phase 035 is where
+what an environment guarantees gets decided. Deriving one from the other would
+answer that six phases early.
+"""
+
+KIND_FLAG: Final[str] = "--kind"
+NAME_FLAG: Final[str] = "--name"
+
 PROFILE_FLAG: Final[str] = "--profile"
 """Which configuration profile this run uses.
 
@@ -148,6 +197,25 @@ HELP_WORDS: Final[tuple[str, ...]] = ("-h", "--help")
 A tuple rather than a :class:`frozenset` for the reason
 :data:`~globin.domain.bootstrap.CREATED_PATHS` gives: ``frozenset(...)`` is a
 call, and a layer package performs none at import.
+"""
+
+SECRETS_SUBCOMMANDS: Final[tuple[str, ...]] = (
+    SET,
+    VERIFY,
+    LIST,
+    DELETE,
+    ROTATE,
+    HEALTH,
+)
+"""What may follow ``secrets``. There is no default: two of these write and one
+deletes, and guessing which was meant would be guessing about a credential."""
+
+SECRETS_WRITING: Final[tuple[str, ...]] = (SET, ROTATE)
+"""The verbs whose primary act is an interactive prompt.
+
+``--json`` is refused for both, exactly as it is for ``bootstrap evidence`` and
+``diagnostics bundle``: there is no document for standard output, and offering
+one invites somebody to script a prompt.
 """
 
 BOOTSTRAP_SUBCOMMANDS: Final[tuple[str, ...]] = (CHECK, EVIDENCE)
@@ -171,12 +239,13 @@ invites somebody to add it to a script that runs every minute; a verb reads like
 the deliberate act it is.
 """
 
-USAGE: Final[str] = """usage: globin [--version] [doctor|bootstrap|diagnostics]
+USAGE: Final[str] = """usage: globin [--version] [doctor|bootstrap|diagnostics|secrets]
                      [subcommand] [--json] [--profile NAME]
 
 GLOBIN's local entry point. It performs no network access of any kind: no
-exchange is contacted, no credential is read and no order is placed. See
-docs/engineering/BOOTSTRAP.md.
+exchange is contacted and no order is placed. Since Phase 029 one command
+group reads and writes the machine's own credential store, and it still
+reaches no network. See docs/engineering/BOOTSTRAP.md.
 
 Commands:
   doctor              Report on this host, and keep going past a problem.
@@ -193,6 +262,15 @@ Commands:
   diagnostics endpoint  Report the loopback diagnostics surface: whether it is
                         enabled, where it would bind, which routes answer, and
                         every bound it runs inside. Binds nothing.
+  secrets set         Collect a credential at this terminal and store it.
+                      Interactive only; refuses a pipe, and refuses --json.
+  secrets rotate      Collect a replacement, keeping the previous value
+                      resolvable until the new one has been read back.
+  secrets verify      Report whether a credential is present. Reads its
+                      outcome, never its value.
+  secrets list        List what is declared, by name. Never a value.
+  secrets delete      Remove a credential from the store.
+  secrets health      Report whether the store can be reached at all.
   diagnostics environment  Report this host's capabilities: process and native
                         architecture, emulation, declared toolchain, and the
                         compatibility fingerprint. Publishes no path.
@@ -200,6 +278,11 @@ Commands:
 Options:
   --json              Write the machine-readable document to standard output,
                       and nothing else. Human text goes to standard error.
+  --environment NAME  Which deployment target a credential belongs to. Never
+                      defaulted from --profile: a profile names a document, and
+                      what an environment guarantees is Phase 035's question.
+  --kind KIND         api_key, api_secret or private_key.
+  --name NAME         The credential's logical name.
   --profile NAME      Which configuration profile to resolve. Outranks
                       GLOBIN_PROFILE, which outranks the declared default.
                       A name that is not a declared profile is refused, never
@@ -227,6 +310,7 @@ Exit codes:
   22  a diagnostic could not be produced, which is not a health verdict
   23  the watchdog ended this process, which did not stop when asked
   24  this host satisfies the runtime contract and lacks a required capability
+  25  a required credential is not permitted to do what GLOBIN asks of it
 """
 
 
@@ -256,6 +340,9 @@ class Invocation:
     command: str
     as_json: bool = False
     profile: str = ""
+    environment: str = ""
+    kind: str = ""
+    name: str = ""
 
 
 def parse(argv: Sequence[str]) -> Invocation:
@@ -291,6 +378,8 @@ def parse(argv: Sequence[str]) -> Invocation:
         return _parse_bootstrap(words[1:])
     if head == DIAGNOSTICS:
         return _parse_diagnostics(words[1:])
+    if head == SECRETS:
+        return _parse_secrets(words[1:])
     msg = f"unrecognised argument: {head!r}"
     raise UsageError(msg)
 
@@ -471,6 +560,17 @@ def main(
         return int(ExitCode.OK)
     if invocation.command == VERSION:
         return _version(out, err)
+
+    if invocation.command.startswith(SECRETS):
+        try:
+            return _secrets(invocation, out=out, err=err)
+        except UsageError as fault:
+            print(f"globin: {fault}", file=err)
+            print(USAGE, file=err)
+            return int(ExitCode.USAGE)
+        except (GlobinError, OSError) as fault:
+            print(f"globin: the secret operation failed: {fault}", file=err)
+            return int(ExitCode.SECRETS_UNREADY)
 
     if invocation.command.startswith(DIAGNOSTICS):
         try:
@@ -1236,3 +1336,355 @@ def _version_string() -> str:
     """
     identity = project_identity()
     return "" if identity is None else identity.version
+
+
+def _parse_secrets(rest: Sequence[str]) -> Invocation:
+    """Read what follows ``secrets``.
+
+    Args:
+        rest: The remaining words.
+
+    Returns:
+        What was asked for.
+
+    Raises:
+        UsageError: If the subcommand is unknown, if it is missing, or if an
+            option is malformed.
+
+    There is no default subcommand, deliberately. ``bootstrap`` defaults to
+    ``check`` and ``diagnostics`` to ``snapshot`` because both are read-only; the
+    verbs here include two that write and one that deletes, and a bare
+    ``globin secrets`` that guessed which one was meant would be guessing about a
+    credential.
+    """
+    words = list(rest)
+    if not words:
+        listed = ", ".join(SECRETS_SUBCOMMANDS)
+        msg = f"{SECRETS} needs a subcommand: {listed}"
+        raise UsageError(msg)
+    word = words[0]
+    if word not in SECRETS_SUBCOMMANDS:
+        listed = ", ".join(SECRETS_SUBCOMMANDS)
+        msg = f"unrecognised {SECRETS} subcommand: {word!r}. Expected one of {listed}"
+        raise UsageError(msg)
+    options = _secret_options(words[1:], f"{SECRETS} {word}")
+    if options.as_json and word in SECRETS_WRITING:
+        msg = (
+            f"{JSON_FLAG} means nothing for {SECRETS} {word}, whose whole action is "
+            f"an interactive prompt"
+        )
+        raise UsageError(msg)
+    return Invocation(
+        command=f"{SECRETS} {word}",
+        as_json=options.as_json,
+        profile=options.profile,
+        environment=options.environment,
+        kind=options.kind,
+        name=options.name,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _SecretOptions:
+    """What a secrets subcommand was given."""
+
+    as_json: bool = False
+    profile: str = ""
+    environment: str = ""
+    kind: str = ""
+    name: str = ""
+
+
+def _secret_options(words: Sequence[str], context: str) -> _SecretOptions:
+    """Accept the five options a secrets subcommand may take, and nothing else.
+
+    Args:
+        words: The remaining words.
+        context: What they followed, for the message.
+
+    Returns:
+        What was asked for.
+
+    Raises:
+        UsageError: If anything else appears, if an option repeats, or if one
+            that needs a value is given without one.
+
+    A sibling of :func:`_options` rather than a replacement, because widening
+    that function would let ``--environment`` be passed to ``doctor``, where it
+    means nothing.
+
+    **No option carries material, and that is enforced here rather than
+    documented.** ``SECRET_STORE_CONTRACT.md`` section 5 forbids "``--secret=``
+    or any other option that would place material on a command line". Every
+    unrecognised word is refused, so a caller reaching for one gets a usage
+    error rather than a credential in their shell history; a contract test names
+    the specific spellings.
+    """
+    remaining = list(words)
+    as_json = False
+    values: dict[str, str] = {}
+    valued = {
+        PROFILE_FLAG: "profile",
+        ENVIRONMENT_FLAG: "environment",
+        KIND_FLAG: "kind",
+        NAME_FLAG: "name",
+    }
+    while remaining:
+        word = remaining.pop(0)
+        if word == JSON_FLAG:
+            if as_json:
+                msg = f"{JSON_FLAG} was given twice"
+                raise UsageError(msg)
+            as_json = True
+            continue
+        field = valued.get(word)
+        if field is None:
+            msg = f"unrecognised argument after {context}: {word!r}"
+            raise UsageError(msg)
+        if values.get(field):
+            msg = f"{word} was given twice"
+            raise UsageError(msg)
+        if not remaining or remaining[0].startswith("-"):
+            msg = f"{word} needs a value"
+            raise UsageError(msg)
+        values[field] = remaining.pop(0)
+    return _SecretOptions(
+        as_json=as_json,
+        profile=values.get("profile", ""),
+        environment=values.get("environment", ""),
+        kind=values.get("kind", ""),
+        name=values.get("name", ""),
+    )
+
+
+def _reference_from(invocation: Invocation) -> SecretReference:
+    """Build the reference a secrets subcommand names.
+
+    Args:
+        invocation: What was asked for.
+
+    Returns:
+        The reference.
+
+    Raises:
+        UsageError: If any of the three parts is missing or malformed.
+
+    **The environment is never defaulted from the profile.** Deriving one from
+    the other would answer Phase 035's question -- what an environment *is* --
+    six phases early, and ``CONFIGURATION_LAYOUT.md`` is explicit that a profile
+    names a *document* rather than a deployment target.
+    """
+    if not invocation.environment:
+        msg = f"{ENVIRONMENT_FLAG} is required and names a deployment target"
+        raise UsageError(msg)
+    if not invocation.kind:
+        listed = ", ".join(kind.value for kind in SecretKind)
+        msg = f"{KIND_FLAG} is required and must be one of {listed}"
+        raise UsageError(msg)
+    if not invocation.name:
+        msg = f"{NAME_FLAG} is required and names the credential"
+        raise UsageError(msg)
+    try:
+        kind = SecretKind(invocation.kind)
+    except ValueError:
+        listed = ", ".join(item.value for item in SecretKind)
+        msg = f"unrecognised kind {invocation.kind!r}. Expected one of {listed}"
+        raise UsageError(msg) from None
+    try:
+        return SecretReference(
+            environment=EnvironmentId(invocation.environment),
+            kind=kind,
+            name=invocation.name,
+        )
+    except ValidationError as fault:
+        msg = f"that is not a usable reference: {fault}"
+        raise UsageError(msg) from None
+
+
+def _secrets(
+    invocation: Invocation,
+    *,
+    out: TextIO,
+    err: TextIO,
+) -> int:
+    """Run one ``secrets`` subcommand.
+
+    Args:
+        invocation: What was asked for.
+        out: Where a document goes.
+        err: Where human text goes.
+
+    Returns:
+        The exit code.
+
+    No project root is searched for. Every one of these verbs works against the
+    machine's credential store and the user-local state area, neither of which
+    is inside a checkout -- so unlike ``doctor`` this runs the same way from any
+    directory.
+    """
+    state = build_runtime_state()
+    store = build_secret_store()
+    register = build_grant_register(state)
+
+    word = invocation.command.split(" ", 1)[1]
+    if word == HEALTH:
+        return _secret_health(store, out=out, err=err, as_json=invocation.as_json)
+    if word == LIST:
+        return _secret_list(register, out=out, as_json=invocation.as_json)
+
+    reference = _reference_from(invocation)
+    if word == VERIFY:
+        return _secret_verify(
+            store, register, reference, out=out, err=err, as_json=invocation.as_json
+        )
+    if word == DELETE:
+        return _secret_delete(store, reference, out=out, err=err, as_json=invocation.as_json)
+    entry = build_secret_entry(err)
+    return _secret_write(entry, store, register, reference, word=word, out=out, err=err)
+
+
+def _secret_health(store: SecretStore, *, out: TextIO, err: TextIO, as_json: bool) -> int:
+    """Report whether the backing store can be reached at all."""
+    fault = store.health()
+    document = {"available": fault is None, "fault": None if fault is None else fault.value}
+    if as_json:
+        print(json.dumps(document, sort_keys=True), file=out)
+    elif fault is None:
+        print("the secret store is available", file=out)
+    else:
+        print(f"the secret store is unavailable: {fault.value}", file=out)
+        print(REMEDIATION[fault], file=err)
+    return int(ExitCode.OK if fault is None else ExitCode.SECRETS_UNREADY)
+
+
+def _secret_list(register: GrantRegister, *, out: TextIO, as_json: bool) -> int:
+    """List what is declared, by name only.
+
+    Never a value, and never a probe of the store: what is listed is what an
+    operator declared, which is ordinary data.
+    """
+    declarations = register.declarations()
+    document = {"declarations": [item.as_record() for item in declarations]}
+    if as_json:
+        print(json.dumps(document, sort_keys=True), file=out)
+        return int(ExitCode.OK)
+    if not declarations:
+        print("no credential is declared", file=out)
+        return int(ExitCode.OK)
+    for declaration in declarations:
+        grants = ", ".join(declaration.declared.names()) or "nothing"
+        print(
+            f"{declaration.reference.environment.text}/"
+            f"{declaration.reference.kind.value}/"
+            f"{declaration.reference.name}: {grants}",
+            file=out,
+        )
+    return int(ExitCode.OK)
+
+
+def _secret_verify(
+    store: SecretStore,
+    register: GrantRegister,
+    reference: SecretReference,
+    *,
+    out: TextIO,
+    err: TextIO,
+    as_json: bool,
+) -> int:
+    """Report whether a credential exists, without reading its value.
+
+    The resolution's *outcome* is asked for and the value is discarded
+    immediately -- which is what ``SECRET_STORE_CONTRACT.md`` section 5 means by
+    "verify presence (returning a boolean)".
+    """
+    resolution = resolve(store, reference)
+    declaration = declaration_for(reference, register.declarations())
+    grants = [] if declaration is None else list(declaration.declared.names())
+    document = {
+        "environment": reference.environment.text,
+        "kind": reference.kind.value,
+        "name": reference.name,
+        "present": resolution.resolved,
+        "fault": None if resolution.fault is None else resolution.fault.value,
+        "declared": grants,
+    }
+    if as_json:
+        print(json.dumps(document, sort_keys=True), file=out)
+    elif resolution.resolved:
+        print(f"{reference.name} is present; declared grants: {grants or 'none'}", file=out)
+    else:
+        fault = resolution.fault
+        print(f"{reference.name} is not usable: {fault.value if fault else 'absent'}", file=out)
+        if fault is not None:
+            print(REMEDIATION[fault], file=err)
+    return int(ExitCode.OK if resolution.resolved else ExitCode.SECRETS_UNREADY)
+
+
+def _secret_delete(
+    store: SecretStore,
+    reference: SecretReference,
+    *,
+    out: TextIO,
+    err: TextIO,
+    as_json: bool,
+) -> int:
+    """Remove a credential from the store."""
+    fault = store.delete(reference)
+    document = {
+        "environment": reference.environment.text,
+        "kind": reference.kind.value,
+        "name": reference.name,
+        "deleted": fault is None,
+        "fault": None if fault is None else fault.value,
+    }
+    if as_json:
+        print(json.dumps(document, sort_keys=True), file=out)
+    elif fault is None:
+        print(f"{reference.name} was removed", file=out)
+    else:
+        print(f"{reference.name} was not removed: {fault.value}", file=out)
+        print(REMEDIATION[fault], file=err)
+    return int(ExitCode.OK if fault is None else ExitCode.SECRETS_UNREADY)
+
+
+def _secret_write(
+    entry: SecretEntry,
+    store: SecretStore,
+    register: GrantRegister,
+    reference: SecretReference,
+    *,
+    word: str,
+    out: TextIO,
+    err: TextIO,
+) -> int:
+    """Collect material interactively and either set or rotate it.
+
+    Human output only: ``--json`` is refused for both verbs by the parser,
+    because a command whose primary act is a prompt has no document for standard
+    output and offering one invites scripting it.
+    """
+    prompt = f"{reference.environment.text}/{reference.name} ({reference.kind.value}): "
+    if word == SET:
+        outcome = set_from_entry(entry, store, reference, prompt=prompt)
+    else:
+        outcome = rotate_from_entry(entry, store, reference, prompt=prompt)
+
+    if not outcome.stored:
+        if outcome.entry_fault is not None:
+            print(f"nothing was stored: {outcome.entry_fault.value}", file=out)
+            print(ENTRY_REMEDIATION[outcome.entry_fault], file=err)
+            for problem in outcome.problems:
+                print(f"  - {problem.value}", file=err)
+        elif outcome.store_fault is not None:
+            print(f"nothing was stored: {outcome.store_fault.value}", file=out)
+            print(REMEDIATION[outcome.store_fault], file=err)
+        return int(ExitCode.SECRETS_UNREADY)
+
+    print(f"{reference.name} was stored", file=out)
+    if register.declare(GrantDeclaration(reference=reference, declared=GrantSet())):
+        print(
+            "no grants are declared for it yet, so nothing may use it. "
+            "Declaring what a key is permitted to do is Phase 039's flow.",
+            file=err,
+        )
+    return int(ExitCode.OK)

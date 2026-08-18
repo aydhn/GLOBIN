@@ -484,3 +484,218 @@ def store_key(reference: SecretReference, slot: SecretSlot = SecretSlot.CURRENT)
         msg = f"a store key cannot be built from an incomplete reference: {parts}"
         raise ValidationError(msg)
     return KEY_SEPARATOR.join(parts).lower()
+
+
+PEM_ARMOUR: Final[str] = "-----BEGIN"
+"""How a PEM-armoured key announces itself.
+
+Named because :func:`entry_problems` uses it to turn one specific oversize
+failure into a sentence somebody can act on. ``phase_028_sources.md`` S-11
+records that an RSA-4096 key in PEM form is 3324 bytes and does not fit
+:data:`MAX_SECRET_BYTES` at all; without this branch the platform answers with
+an **undocumented** ``RPC_X_BAD_STUB_DATA``, which names neither the size nor
+the ceiling.
+"""
+
+
+def control_characters() -> str:
+    """Every C0 control character, plus DEL.
+
+    Returns:
+        The thirty-three characters, as one string.
+
+    A function rather than a module constant, and the reason is the layer
+    contract rather than taste: ``"".join(...)`` is a call, and
+    ``tests/architecture/test_architecture_contract.py`` refuses any call
+    executed when a layer module is imported. Written as a constant this was
+    caught immediately, which is the tripwire working.
+
+    Built from a range rather than written out, because a literal of thirty-three
+    characters is thirty-three chances to omit one.
+    """
+    return "".join(chr(code) for code in (*range(0x20), 0x7F))
+
+
+class EntryProblem(StrEnum):
+    """Why collected material cannot be stored, in bounded terms.
+
+    **No member carries an index, an offset or a substring of the material.** A
+    length is safe -- :meth:`SecretValue.size_bytes` is already documented as
+    publishable -- and everything finer is a description of the secret.
+
+    Five members, and no minimum length among them. Any floor would be invented:
+    what a real key looks like is a fact about a key type, and choosing one is
+    Phase 038's. Non-empty is the only honest lower bound.
+    """
+
+    EMPTY = "empty"
+    """Nothing was typed."""
+
+    SURROUNDING_WHITESPACE = "surrounding_whitespace"
+    """Leading or trailing whitespace.
+
+    **Refused rather than stripped.** Stripping is a transformation nobody asked
+    for, and it would make a credential whose true value has leading whitespace
+    both unstorable and unreportable. A paste from a browser routinely carries a
+    trailing newline, and a store that kept it would produce a credential wrong
+    in a way nothing downstream can see.
+    """
+
+    CONTROL_CHARACTER = "control_character"
+    """A C0 control character or DEL appears in the material.
+
+    Either a paste accident or a terminal artefact -- and, the day Phase 038
+    signs a request with this, a request-splitting hazard.
+    """
+
+    TOO_LARGE = "too_large"
+    """The UTF-8 encoding exceeds :data:`MAX_SECRET_BYTES`."""
+
+    ARMOURED_KEY_TOO_LARGE = "armoured_key_too_large"
+    """It looks like a PEM key and it does not fit.
+
+    A narrowing of :attr:`TOO_LARGE` that exists so the message can say "this
+    looks like a PEM key of N bytes; the ceiling is 2560" rather than leaving
+    somebody to discover the platform limit for themselves.
+    """
+
+
+class EntryFault(StrEnum):
+    """Why interactive collection did not produce a value."""
+
+    NOT_INTERACTIVE = "not_interactive"
+    """Standard input is not a terminal, so nothing was read.
+
+    Refused **before** any read is attempted. Accepting a pipe would make a
+    shell one-liner that pipes a key into this command work, which places
+    material in shell history and in the writing process command line -- both
+    prohibited by ``SECURITY_BASELINE.md`` section 2.
+    """
+
+    ECHO_UNAVAILABLE = "echo_unavailable"
+    """The platform could not suppress echo, so collection was abandoned.
+
+    ``SECRET_STORE_CONTRACT.md`` section 5 requires that ``GetPassWarning``
+    aborts collection rather than being printed. The abort happens **before the
+    operator has typed anything**, because the ``getpass`` fallback warns before
+    it reads -- so the value never exists, rather than existing and being
+    discarded.
+    """
+
+    CANCELLED = "cancelled"
+    """The operator ended the entry, or input reached its end."""
+
+    MISMATCH = "mismatch"
+    """The two entries differed.
+
+    Also what is reported when the *second* entry is malformed, deliberately:
+    the second entry shape is not disclosed, only that it differed.
+    """
+
+    REFUSED_FORMAT = "refused_format"
+    """The material cannot be stored, and the problems say which rule it broke."""
+
+    ENTRY_UNAVAILABLE = "entry_unavailable"
+    """The terminal could not be read at all."""
+
+
+def entry_problems(material: str) -> tuple[EntryProblem, ...]:
+    """Every reason collected material cannot be stored.
+
+    Args:
+        material: What was typed.
+
+    Returns:
+        The problems, in a fixed order, empty when the material is storable.
+
+    Structural only. **No exchange-specific format rule is applied**, and none
+    is invented: what a Binance API key looks like is recorded in
+    ``phase_020_sources.md`` S-15 and S-16 as venue documentation this phase
+    deliberately does not choose from. Which key type is used against which
+    surface is Phase 038's, and its permission model Phase 039's.
+
+    The invariant tying this to the type it guards: the result is empty exactly
+    when :class:`SecretValue` would construct without raising. A property test
+    asserts it over generated input, so the validator cannot drift from the
+    constructor it exists to front-run.
+    """
+    if not material:
+        return (EntryProblem.EMPTY,)
+    problems: list[EntryProblem] = []
+    if material != material.strip():
+        problems.append(EntryProblem.SURROUNDING_WHITESPACE)
+    forbidden = control_characters()
+    if any(character in forbidden for character in material):
+        problems.append(EntryProblem.CONTROL_CHARACTER)
+    if len(material.encode("utf-8")) > MAX_SECRET_BYTES:
+        if material.startswith(PEM_ARMOUR):
+            problems.append(EntryProblem.ARMOURED_KEY_TOO_LARGE)
+        else:
+            problems.append(EntryProblem.TOO_LARGE)
+    return tuple(problems)
+
+
+@dataclass(frozen=True, slots=True)
+class SecretEntryOutcome:
+    """What one attempt at interactive collection produced.
+
+    Args:
+        value: The collected material, or ``None`` when collection failed.
+        fault: Why it failed, or ``None`` when it succeeded.
+        problems: Which format rules were broken, when the fault is
+            :attr:`EntryFault.REFUSED_FORMAT`.
+
+    Raises:
+        InternalError: If both or neither of ``value`` and ``fault`` are set, or
+            if ``problems`` disagrees with the fault.
+
+    The exactly-one invariant mirrors :class:`SecretResolution`, and raises for
+    the same reason: a value that is simultaneously a success and a failure is a
+    defect in this repository rather than a condition a caller should branch on.
+
+    **There is no field a rendering could reach.** :meth:`as_record` emits the
+    fault and the problems and has no branch that could emit the value, because
+    :class:`SecretValue` has no encoder and no string form to emit.
+    """
+
+    value: SecretValue | None = None
+    fault: EntryFault | None = None
+    problems: tuple[EntryProblem, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Refuse an outcome that claims two things at once.
+
+        Raises:
+            InternalError: As documented on the class.
+        """
+        if (self.value is None) == (self.fault is None):
+            msg = "a collection outcome carries exactly one of a value and a fault"
+            raise InternalError(msg)
+        if self.problems and self.fault is not EntryFault.REFUSED_FORMAT:
+            msg = "format problems accompany a refused format and nothing else"
+            raise InternalError(msg)
+        if self.fault is EntryFault.REFUSED_FORMAT and not self.problems:
+            msg = "a refused format must say which rule it broke"
+            raise InternalError(msg)
+
+    @property
+    def collected(self) -> bool:
+        """Whether a value was produced.
+
+        Returns:
+            Whether collection succeeded.
+        """
+        return self.value is not None
+
+    def as_record(self) -> dict[str, object]:
+        """Render as ordinary data.
+
+        Returns:
+            Whether a value was collected, the fault and the problems. The value
+            itself has no representation and therefore no way into this mapping.
+        """
+        return {
+            "collected": self.collected,
+            "fault": None if self.fault is None else self.fault.value,
+            "problems": [problem.value for problem in self.problems],
+        }

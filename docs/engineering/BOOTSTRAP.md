@@ -177,7 +177,7 @@ the phase that owns it:
 |---|---|
 | Which configuration files exist, and what profiles they describe | Phase 026 |
 | Which sources are consulted, and in what order | Phase 027 |
-| Collecting and validating a credential | Phase 029 |
+| Declaring which credentials a start-up requires | Phase 038 |
 | The wider health-check suite a long-running process needs | Phase 030 |
 
 `secrets.required` **is** registered and passes today, because GLOBIN holds no

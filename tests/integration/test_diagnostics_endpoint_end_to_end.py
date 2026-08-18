@@ -22,6 +22,7 @@ import http.client
 import json
 import socket
 import threading
+import time
 from collections.abc import Iterator
 from dataclasses import replace
 from typing import Final
@@ -553,6 +554,21 @@ def test_capacity_exhaustion_is_a_refusal_rather_than_growth() -> None:
     Driven by holding the single worker busy with a connection that never sends a
     request line, so the pool and the queue are both occupied deterministically rather
     than by racing a burst of traffic.
+
+    **Opening a connection is not the same as the server having accepted it**, and
+    Phase 029 corrected the test for that. `socket.create_connection` returns once
+    the kernel has completed the handshake into the listen backlog; the accept loop
+    may not have taken either connection yet, so a third request sent immediately
+    can find capacity that is about to be occupied and answer 200. That is a race in
+    the *test*, not in the surface, and it stayed hidden until the suite grew heavy
+    enough to widen it.
+
+    The fix is a bounded wait rather than a sleep: the third request is re-sent until
+    it is refused or the deadline passes. What is asserted is unchanged -- a full
+    queue answers 503, closes, and starts no thread -- and only the assumption about
+    *when* the accepts land is relaxed. Capacity, once exhausted by two connections
+    that never send anything, is never released, so a run that never sees 503 is a
+    real failure rather than a slow one.
     """
     settings = _settings(max_concurrent_requests=1)
     endpoint, _gate = build_diagnostics_endpoint(
@@ -570,7 +586,12 @@ def test_capacity_exhaustion_is_a_refusal_rather_than_growth() -> None:
         # third finds no room and must be refused.
         for _ in range(2):
             held.append(socket.create_connection((LOOPBACK_IPV4, settings.port), timeout=TIMEOUT))
-        refused = _raw(settings.port, b"GET /health/live HTTP/1.0\r\n\r\n")
+        deadline = time.monotonic() + TIMEOUT
+        refused = b""
+        while time.monotonic() < deadline:
+            refused = _raw(settings.port, b"GET /health/live HTTP/1.0\r\n\r\n")
+            if str(STATUS_UNAVAILABLE).encode() in refused.split(b"\r\n")[0]:
+                break
         assert str(STATUS_UNAVAILABLE).encode() in refused.split(b"\r\n")[0]
         assert BODY_AT_CAPACITY in refused
         assert threading.active_count() <= before

@@ -19,6 +19,81 @@ can be opened and read.
 
 ## [Unreleased]
 
+### A credential can be handed to GLOBIN, and refused before it is used
+
+- **Collection is interactive only, and three refusals happen before material
+  exists.** A pipe is refused *before* `getpass` is called, because accepting one
+  puts the key in shell history and in a process command line. A terminal that
+  cannot suppress echo aborts *before the operator has typed anything* --
+  `getpass`'s fallback warns before it reads, so converting that warning to an
+  error means the value never exists rather than existing and being discarded.
+  The material is asked for twice, and there is no flag that turns the
+  confirmation off.
+- **Whitespace is refused rather than stripped**, along with control characters
+  and anything over the measured 2560-byte ceiling. No minimum length is
+  invented: what a real key looks like is a fact about a key type, and that is
+  Phase 038's. A real PEM key cannot be collected at a single-line prompt at all,
+  because it is multi-line -- stated rather than discovered at a terminal.
+- **Permission verification has no state meaning "confirmed".** GLOBIN reaches no
+  venue, so a member meaning the issuer agrees would be a lie with a name. What
+  is decidable locally is containment: a credential is refused for an operation
+  whose demanded grants are not a subset of what an operator declared, and the
+  converse is never claimed. A demanded `transfer` is withheld **whatever the
+  declaration says**, checked before the declaration is consulted.
+- `require_permitted` computes the verdict and returns **without touching the
+  store** when it refuses. There is no branch in which material is resolved and
+  then discarded.
+- **`globin secrets` has six verbs and no seventh** -- set, verify, list, delete,
+  rotate, health -- matching `SECRET_STORE_CONTRACT.md` section 5 exactly, with a
+  contract test comparing the two. `--json` is refused for `set` and `rotate`.
+- **Nothing is required to start, and the emptiness is now a derivation.** The
+  registry exists and is wired through the composition root, so Phase 038 adds one
+  entry and start-up begins demanding it with no plumbing in between.
+- Exit code `25` joins the contract, deliberately distinct from `15`: one means
+  go and store a credential, the other means go and change a key's permissions.
+
+### A running GLOBIN can finally see its own dependency versions
+
+- **The defect this closes:** `installed_distributions()` walked every
+  distribution's metadata and then discarded the version, so an environment two
+  minor releases from its lock reported ready. The gate's own twin had returned
+  name-and-version pairs since Phase 020; the runtime was the anomaly.
+- **`packaging` is adopted as a runtime dependency**, narrowly reversing ADR-0052
+  decision 9. It cost nothing: it declares no dependencies of its own and was
+  already in `pylock.toml` as a transitive of `ta-lib`, so the lock needed no
+  regeneration. Its `Apache-2.0 OR BSD-2-Clause` licence is the register's first
+  `OR` expression, and the choice -- Apache-2.0 -- is recorded rather than
+  inferred.
+- **The runtime writes no second PEP 751 parser.** `packaging.pylock` is the
+  specification's reference implementation, so the two-reader tripwire now checks
+  the delivered Phase 020 parser *against the specification* rather than pinning
+  two hand-written readers to each other.
+- `ReadinessReason.DEPENDENCY_UNREADY` finally has a caller. It was declared in
+  Phase 027 and nothing anywhere set it.
+- **A new gate, `materialize`, asks whether the locked environment could be built
+  from local bytes.** Its network fallback is unreachable rather than un-taken:
+  the module that decides imports nothing that could reach an index. A corrupt
+  cached artefact is left in place and reported -- not deleted, which would
+  destroy the evidence, and not re-fetched, which would make the cache a network
+  client. An empty wheelhouse is `unmeasured` rather than failed, exactly as
+  `drift` treats an unrecorded baseline.
+- **The clean-room harness never touches the environment you are using**, held by
+  three independent mechanisms and asserted directly: a decoy `.venv` is proved
+  byte-for-byte unchanged after both a successful and a failing run.
+
+### Fixed
+
+- `globin --help` claimed `doctor` reports fifteen checks; it reported seventeen
+  and now reports eighteen.
+- `getpass` was absent from the I/O-capable module list, so nothing stopped an
+  inner layer importing a module that reads a terminal.
+- Three documentation blocks that had contradicted the tree since Phase 021 --
+  `DEPENDENCY_LOCKING.md`'s "Why there is no runtime lock", `DEPENDENCY_POLICY.md`'s
+  claim that `project.dependencies` is empty, and `pyproject.toml`'s Phase 1 note.
+- A capacity test in the diagnostics surface assumed a connection was accepted as
+  soon as it was opened. It was a race in the test rather than in the surface, and
+  it stayed hidden until the suite grew heavy enough to widen it.
+
 ### GLOBIN has somewhere to keep a credential, and still keeps none
 
 - **The store is the Windows Credential Manager, reached through `ctypes`.** No new

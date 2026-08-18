@@ -24,6 +24,7 @@ from typing import Protocol
 
 from globin.domain.bootstrap import (
     DependencyReadiness,
+    EntitlementReadiness,
     HostFacts,
     InterpreterFacts,
     ProjectIdentity,
@@ -151,6 +152,20 @@ class SecretProbe(Protocol):
         Returns:
             Which references are required and which of them are unavailable. No
             value is read, returned or held.
+        """
+        ...
+
+
+class EntitlementProbe(Protocol):
+    """Reports whether required credentials are permitted to do what is asked."""
+
+    def readiness(self) -> EntitlementReadiness:
+        """Return the state of every required credential entitlement.
+
+        Returns:
+            What was demanded and how each verdict came out. No value is read,
+            returned or held -- the verdict is computed from declarations and
+            requirements, and the store is never consulted.
         """
         ...
 

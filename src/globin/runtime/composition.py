@@ -37,12 +37,12 @@ from globin.adapters.bootstrap import (
     DeclaredDependencyProbe,
     FilesystemProjectProbe,
     ProjectRuntimeTree,
+    RegisterBackedEntitlements,
     StoreBackedSecrets,
     SystemEnvironmentProbe,
     SystemHostProbe,
     TomlRuntimeBaselineSource,
     find_project_root,
-    installed_distributions,
     write,
 )
 from globin.adapters.clock import SystemClock, SystemMonotonicClock
@@ -51,6 +51,7 @@ from globin.adapters.configuration import (
     OptionalDocumentSource,
     TomlConfigurationSource,
 )
+from globin.adapters.dependency import installed_versions
 from globin.adapters.diagnostics import (
     DIAGNOSTICS_FILE,
     FAULT_FILE_NAME,
@@ -73,6 +74,7 @@ from globin.adapters.diagnostics_http import (
     ShutdownLiveness,
     TelemetryExposition,
 )
+from globin.adapters.entitlements import StateGrantRegister
 from globin.adapters.environment import (
     DECLARED_TOOLCHAIN,
     PathToolchainProbe,
@@ -101,6 +103,7 @@ from globin.adapters.runtime_state import (
 )
 from globin.adapters.runtime_state import ProjectRuntimeTree as UserRuntimeTree
 from globin.adapters.runtime_state import render as render_state_document
+from globin.adapters.secret_entry import ConsoleSecretEntry
 from globin.adapters.secrets import windows_credential_store
 from globin.adapters.serialization import JsonCodec
 from globin.adapters.support import ZipArchiveWriter, digest_of
@@ -143,6 +146,7 @@ from globin.domain.configuration import (
     default_config,
 )
 from globin.domain.diagnostics import MAXIMUM_BACKUP_COUNT
+from globin.domain.entitlements import required_credentials, required_references
 from globin.domain.runtime_state import (
     INSTANCE_FILE,
     LIFECYCLE_FILE,
@@ -155,7 +159,10 @@ from globin.domain.watchdog import WatchdogEpisode
 from globin.errors import ConfigurationError
 from globin.ports.clock import Clock, MonotonicClock
 from globin.ports.configuration import ConfigurationSource
+from globin.ports.entitlements import GrantRegister
 from globin.ports.runtime_state import ShutdownSignals
+from globin.ports.secret_entry import SecretEntry
+from globin.ports.secrets import SecretStore
 from globin.ports.serialization import Codec
 from globin.ports.watchdog import ProcessTerminator
 
@@ -784,6 +791,53 @@ def build_lifecycle(
     )
 
 
+def build_secret_store() -> SecretStore:
+    """The local secret store, or a value-typed absence.
+
+    Returns:
+        A Credential Manager-backed store where the platform offers one, and a
+        store that records the absence where it does not.
+
+    The declared references are fed in from
+    :func:`~globin.domain.entitlements.required_references`, which is what
+    ``inventory`` resolves one at a time. Empty today, so the inventory is empty
+    -- the mechanism exists and the set does not.
+    """
+    return windows_credential_store(declared=required_references())
+
+
+def build_grant_register(state: RuntimeState) -> GrantRegister:
+    """Where declarations about credentials are kept.
+
+    Args:
+        state: The runtime state, for its atomically publishing store.
+
+    Returns:
+        The register, in the user-local state area.
+
+    Deliberately not ``.globin/``: that tree is evidence about this repository
+    and CI reads it, and this is state about this machine.
+    """
+    return StateGrantRegister(store=state.store)
+
+
+def build_secret_entry(stream: TextIO) -> SecretEntry:
+    """How GLOBIN asks a person for a credential.
+
+    Args:
+        stream: Where the prompt is written. Standard error, so a command
+            rendering a document to standard output stays machine-readable.
+
+    Returns:
+        A console entry bound to the real standard input.
+
+    :data:`sys.stdin` is read here rather than captured as a default argument,
+    which would bind it at import -- the same rule every builder in this module
+    follows.
+    """
+    return ConsoleSecretEntry(stream=stream, stdin=sys.stdin)
+
+
 def build_bootstrap(
     start: Path,
     sources: Sequence[ConfigurationSource] | None = None,
@@ -843,14 +897,21 @@ def build_bootstrap(
             dependencies=DeclaredDependencyProbe(
                 project_file=(root or start) / PROJECT_MANIFEST,
                 lock_file=(root or start) / RUNTIME_LOCK,
-                installed=installed_distributions,
+                installed=installed_versions,
             ),
             environment=SystemEnvironmentProbe(
                 api=windows_system_api(),
                 toolchain=PathToolchainProbe(),
                 declared=DECLARED_TOOLCHAIN,
             ),
-            secrets=StoreBackedSecrets(store=windows_credential_store()),
+            secrets=StoreBackedSecrets(
+                store=windows_credential_store(declared=required_references()),
+                required=required_references(),
+            ),
+            entitlements=RegisterBackedEntitlements(
+                register=StateGrantRegister(store=state.store),
+                requirements=required_credentials(),
+            ),
             tree=ProjectRuntimeTree(root=root or start),
             runtime_tree=state.tree,
             state=state.store,

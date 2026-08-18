@@ -1,13 +1,16 @@
 # ---------------------------------------------------------------------------
 # GLOBIN project metadata.
 #
-# Phase 1 scope note: this file deliberately declares ZERO runtime dependencies.
-# That is not an oversight — it is an enforced invariant.
-# `tests/contract/test_packaging_contract.py` asserts `project.dependencies == []`,
-# so any future phase that adds a runtime dependency must do so consciously and
-# update the contract test. (The path was corrected in Phase 016: the file moved
-# into `tests/contract/` when Phase 005 introduced the taxonomy directories, and
-# this comment kept naming the old location.)
+# THE ZERO-DEPENDENCY ERA ENDED AT PHASE 021. This file declared no runtime
+# dependency at all from Phase 1 until then, and this note used to say so; it kept
+# saying so for eight phases after it stopped being true, which is the drift
+# `docs/engineering/SOURCE_OF_TRUTH.md` exists to prevent. Phase 029 repaired it.
+# `project.dependencies` now holds nine roots, every one of them reviewed in
+# writing in `docs/engineering/dependency-reviews.toml` and locked in
+# `pylock.toml`. What survives of the original invariant is the rule rather than
+# the count: ADR-0003 forbids a PAID runtime dependency, and
+# `tests/contract/test_packaging_contract.py` still enforces that every declared
+# root is reviewed rather than merely added.
 # Dependency management and lockfiles are the subject of Phases 17-32.
 # ---------------------------------------------------------------------------
 
@@ -109,6 +112,7 @@ dependencies = [
     "opentelemetry-api>=1.44.0",
     "opentelemetry-exporter-otlp-proto-http>=1.44.0",
     "opentelemetry-sdk>=1.44.0",
+    "packaging>=26.3",
     "pandas>=3.0.5",
     "prometheus-client>=0.26.0",
     "psutil>=7.2.2",

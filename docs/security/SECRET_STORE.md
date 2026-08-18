@@ -204,9 +204,9 @@ chosen here** — that is Phases 029 and 038.
 
 | Question | Phase |
 |---|---|
-| How a credential is collected from an operator, and validated before first use | 029 |
-| Which references a start-up requires | 029 |
-| Which key type is used against which surface | 029, 038 |
+| Whether a venue agrees a key carries the permissions declared for it | 039 |
+| Which references a start-up requires | 038 |
+| Which key type is used against which surface | 038 |
 | What an environment *is*, and how production, testnet and demo differ | 035 |
 
 ---

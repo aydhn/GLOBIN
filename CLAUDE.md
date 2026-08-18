@@ -37,6 +37,8 @@ that certifies — and the one criterion it could not — is in
 | Which document wins a conflict? | [`docs/engineering/SOURCE_OF_TRUTH.md`](docs/engineering/SOURCE_OF_TRUTH.md) |
 | Where does this file go? | [`docs/engineering/REPOSITORY_LAYOUT.md`](docs/engineering/REPOSITORY_LAYOUT.md) |
 | What must a host be capable of, and what does a compatibility fingerprint mean? | [`docs/engineering/ENVIRONMENT_CAPABILITY.md`](docs/engineering/ENVIRONMENT_CAPABILITY.md), [ADR-0075](docs/adr/0075-native-architecture-is-measured-through-one-adapter-and-a-fingerprint-excludes-what-moves.md) |
+| How is a credential handed to GLOBIN, and what decides it may be used? | [`docs/security/CREDENTIAL_FLOW.md`](docs/security/CREDENTIAL_FLOW.md), [ADR-0077](docs/adr/0077-a-credential-is-collected-at-a-console-and-a-permission-is-declared-rather-than-verified.md) |
+| Could this lock actually be installed on this machine, offline? | [`docs/engineering/DEPENDENCY_MATERIALIZATION.md`](docs/engineering/DEPENDENCY_MATERIALIZATION.md), [ADR-0078](docs/adr/0078-the-second-lock-reader-is-the-reference-implementation-and-a-cache-is-not-a-source-of-trust.md) |
 | Where does a secret actually live, and what will never display one? | [`docs/security/SECRET_STORE.md`](docs/security/SECRET_STORE.md), [ADR-0074](docs/adr/0074-the-secret-store-is-the-windows-credential-manager-and-rotation-is-constructed.md) |
 | How does a running GLOBIN answer questions about itself over HTTP? | [`docs/engineering/DIAGNOSTICS_ENDPOINT.md`](docs/engineering/DIAGNOSTICS_ENDPOINT.md), [ADR-0072](docs/adr/0072-the-diagnostics-surface-is-loopback-only-read-only-and-bounded-by-construction.md) |
 | How do I write documentation? | [`docs/engineering/DOCUMENTATION_STANDARD.md`](docs/engineering/DOCUMENTATION_STANDARD.md) |
@@ -582,6 +584,68 @@ add a second import site for any of them; add a factory.
 `psutil` is the third runtime dependency and the **first this repository imports**.
 It is reached through one factory in `globin/adapters/health.py` and nowhere else,
 which `tests/architecture/test_probe_discipline.py` enforces.
+
+Phase 029 gave GLOBIN a way to be **handed** a credential, and a way to **refuse
+to use one**.
+
+```bash
+.venv\Scripts\globin.exe secrets set --environment paper --kind api_key --name venue_key
+```
+
+```bash
+.venv\Scripts\globin.exe secrets list --json
+```
+
+Six verbs and no seventh -- `set`, `verify`, `list`, `delete`, `rotate`, `health` --
+matching `SECRET_STORE_CONTRACT.md` section 5 exactly, with a contract test comparing
+the two. Collection is **interactive only**: a pipe is refused *before* `getpass` is
+called, because accepting one puts the key in shell history. A terminal that cannot
+suppress echo aborts *before the operator types anything* -- the fallback warns before
+it reads -- so **the value never exists** rather than existing and being discarded.
+Whitespace is **refused, not stripped**. A real PEM key cannot be collected here at
+all: it is multi-line, so it trips the control-character rule whatever its size.
+
+Permission verification is containment against a declaration, and `VerificationState`
+has **no member meaning confirmed** -- GLOBIN reaches no venue, so the rule that a
+capability is a recorded state rather than a pass is enforced by there being nothing
+to write. A demanded `transfer` is `WITHHELD` **whatever the declaration says**, and it
+is checked *before* the declaration is consulted. `require_permitted` returns **without
+touching the store** on a refusal. Exit code **25**, and deliberately not `15`: one
+means store a credential, the other means change a key's permissions at the venue.
+
+**`required` is still empty, and now empty by derivation** -- the registry exists and
+Phase 038 fills it. Details:
+[`docs/security/CREDENTIAL_FLOW.md`](docs/security/CREDENTIAL_FLOW.md).
+
+Phase 029 also gave the *running* application eyes for its own dependencies, and added
+a gate for whether they could be installed at all:
+
+```bash
+python -m tools.quality materialize
+```
+
+Until now a running GLOBIN walked every distribution's metadata and **threw the version
+away**, so an environment two releases from its lock reported ready. It now carries an
+inventory, a fingerprint that cannot see the lock's producer, and the caller that finally
+sets `DEPENDENCY_UNREADY` -- a readiness word declared at Phase 027 that **nothing had
+ever set**.
+
+`packaging` is the ninth runtime dependency, adopted deliberately against ADR-0052's
+earlier refusal and costing **nothing**: it was already in `pylock.toml` as a transitive.
+It brought `packaging.pylock`, a complete PEP 751 implementation, so the runtime writes
+**no second parser** -- and the two-reader tripwire now checks the delivered Phase 020
+parser *against the reference implementation*.
+
+The materialization gate **reaches no network because `plan.py` imports nothing that
+could**, which is a property rather than a promise. An empty wheelhouse is `unmeasured`
+and exits `3`, exactly as `drift` treats an unrecorded baseline -- artefacts are hundreds
+of megabytes and are not committed, so a fresh clone has established nothing rather than
+an absence. A corrupt cached artefact is **left in place and reported**: deleting it
+destroys the diagnosis, and re-fetching would make the cache a network client.
+
+**The clean room never touches your `.venv`**, held by three independent mechanisms, and
+a decoy is proved byte-for-byte unchanged after both a successful and a failing run.
+Details: [`docs/engineering/DEPENDENCY_MATERIALIZATION.md`](docs/engineering/DEPENDENCY_MATERIALIZATION.md).
 
 A ninth sibling asks what this *machine* has rather than what the tree declares,
 and like the six above it **reaches nothing**:

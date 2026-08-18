@@ -18,6 +18,7 @@ from globin.domain.bootstrap import (
     AGGREGATE_CHECK,
     CheckStatus,
     DependencyReadiness,
+    EntitlementReadiness,
     ExitCode,
     HostFacts,
     InterpreterFacts,
@@ -299,6 +300,18 @@ class _Unknown:
         return config_layer("test", {"logging.invented": "yes"})
 
 
+@dataclass(frozen=True, slots=True)
+class _Entitlements:
+    """An entitlement probe that demands nothing, which is today's truth."""
+
+    demanded: tuple[str, ...] = ()
+    refused: tuple[str, ...] = ()
+
+    def readiness(self) -> EntitlementReadiness:
+        """Report what was demanded and how each verdict came out."""
+        return EntitlementReadiness(demanded=self.demanded, refused=self.refused)
+
+
 def pipeline(**overrides: object) -> BootstrapPipeline:
     """A pipeline whose every probe is satisfied, with any one replaced."""
     values: dict[str, object] = {
@@ -308,6 +321,7 @@ def pipeline(**overrides: object) -> BootstrapPipeline:
         "dependencies": _Dependencies(),
         "environment": _Environment(),
         "secrets": _Secrets(),
+        "entitlements": _Entitlements(),
         "tree": _Tree(),
         "runtime_tree": _RuntimeTree(),
         "state": _State(documents={}),

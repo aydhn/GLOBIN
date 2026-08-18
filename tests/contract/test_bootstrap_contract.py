@@ -64,6 +64,7 @@ EXPECTED_CODES: dict[str, int] = {
     # this and a launcher seeing it knows the run did not choose its own ending.
     "WATCHDOG_STALLED": 23,
     "ENVIRONMENT_INCOMPATIBLE": 24,
+    "CREDENTIAL_NOT_ENTITLED": 25,
 }
 
 #: Which check answers for which failure class. A launcher that saw code 12 must
@@ -86,6 +87,7 @@ EXPECTED_MAPPING: dict[str, str] = {
     "instance.lock": "INSTANCE_ALREADY_ACTIVE",
     "environment.capability": "ENVIRONMENT_INCOMPATIBLE",
     "secrets.required": "SECRETS_UNREADY",
+    "secrets.entitlement": "CREDENTIAL_NOT_ENTITLED",
     "bootstrap.ready": "GATE_FAILED",
 }
 

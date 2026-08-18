@@ -33,10 +33,11 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-028 are complete. Phase 029 is next and has not started.**
-> Nothing beyond Phase 028 is implemented. GLOBIN does not trade, does not
+> **Phases 001-029 are complete. Phase 030 is next and has not started.**
+> Nothing beyond Phase 029 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and **holds no credentials** -- it now has somewhere to
-> put one, which is a different thing. See [`README.md`](README.md).
+> put one and a way to be handed one, which is still a different thing. See
+> [`README.md`](README.md).
 >
 > **Phase 028 built the secret store, and measured what Windows would not tell it.**
 > The Credential Manager, reached through `ctypes` with no new dependency: a reference
@@ -49,6 +50,31 @@ the contract:
 > documentation does not carry were measured: the oversize failure is an **undocumented**
 > `RPC_X_BAD_STUB_DATA`, and an **RSA-4096 key in PEM form does not fit** the 2560-byte
 > ceiling at all. See [`docs/security/SECRET_STORE.md`](docs/security/SECRET_STORE.md).
+>
+> **Phase 029 gave GLOBIN a way to be handed a credential, and a way to refuse
+> to use one.** Collection is interactive only -- a pipe is refused **before**
+> `getpass` is called, because accepting one puts material in shell history --
+> and a platform that cannot suppress echo aborts **before the operator types
+> anything**, since `getpass` warns before it reads. Permission verification is
+> containment against a declaration, and `VerificationState` deliberately has
+> **no member meaning confirmed**: GLOBIN reaches no venue, so the rule that a
+> capability is a recorded state rather than a pass is enforced by there being
+> nothing to write. A demanded `transfer` is `WITHHELD` **whatever the
+> declaration says**. `required` is still empty, and now empty by *derivation* --
+> the registry exists, and Phase 038 fills it.
+>
+> **Alongside it, and as the thirteenth scope amendment, the dependency
+> attestation.** Until now a running GLOBIN read every distribution's metadata
+> and **threw the version away**, so an environment two releases from its lock
+> reported ready. It now carries an inventory, a fingerprint that cannot see the
+> lock's producer, and the caller that finally sets `DEPENDENCY_UNREADY` -- a
+> readiness word declared at Phase 027 that nothing had ever set. `packaging` was
+> adopted as a runtime dependency, which reverses ADR-0052 decision 9 and cost
+> nothing: it was already in the lock as a transitive. It brought
+> `packaging.pylock`, a complete PEP 751 implementation, so the second reader is
+> the **reference** one and the tripwire now checks the delivered Phase 020
+> parser against the specification. The materialization gate reaches no network
+> because `plan.py` imports nothing that could.
 >
 > **Alongside it, and as the twelfth scope amendment, the environment capability
 > inventory.** Native architecture is separated from process architecture, and only
@@ -149,10 +175,10 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Twelve have been made. Each cost an ADR, and each is
+> **Scope amendments.** Thirteen have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
-> unchanged by all ten.
+> unchanged by all thirteen.
 >
 > This count said *seven* while listing eight from Phase 024 until Phase 025
 > repaired it. Nothing tests it, which is why it drifted and why it is worth
@@ -394,7 +420,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 026 | Configuration File Layout and Profiles | Define on-disk configuration locations and the paper, demo, testnet and live profile structure; and, as the tenth scope amendment, give the running application its telemetry foundation -- a provider-neutral metric contract, cardinality bounded by construction, span context propagation, a bounded and failure-safe export path, and two provider bridges that are absent without breaking anything. | Complete |
 | 027 | Environment Variable and Profile Resolution | Implement deterministic precedence between defaults, files, environment variables and launcher selection; and, as the eleventh scope amendment, give the running application its loopback diagnostics surface -- liveness, readiness, a redacted runtime health projection and a Prometheus/OpenMetrics scrape, bounded and read-only, on an address a value type refuses to widen. | Complete |
 | 028 | Local Secret Storage Mechanism | Implement the approved local secret store so credentials never reach the repository or plain configuration; and, as the twelfth scope amendment, deliver the environment capability inventory -- native versus process architecture, emulation state, bounded toolchain discovery, and a compatibility fingerprint that excludes everything volatile. | Complete |
-| 029 | Credential Prompting and Validation Flow | Define interactive credential collection, format validation and permission verification before use. | Planned |
+| 029 | Credential Prompting and Validation Flow | Define interactive credential collection, format validation and permission verification before use; and, as the thirteenth scope amendment, deliver the dependency attestation -- a runtime inventory that can finally see a version, a second PEP 751 reader that is the specification's own, and an offline materialization gate whose network fallback is unreachable rather than un-taken. | Complete |
 | 030 | Bootstrap Health Check Suite | Implement the preflight checks that must pass before any long-running GLOBIN process starts. | Planned |
 | 031 | Offline and Degraded Installation Handling | Define behaviour when the network, GPU or optional native components are unavailable. | Planned |
 | 032 | Environment Consolidation and Phase Gate Review | Reconcile the environment band and certify a reproducible host before exchange integration begins. | Planned |

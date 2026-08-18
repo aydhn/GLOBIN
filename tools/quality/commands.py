@@ -364,6 +364,19 @@ _DRIFT = Step("drift", (), ("-m", "tools.quality.drift"))
 # No modules are declared. `check` starts no child at all.
 _LOCK = Step("lock", (), ("-m", "tools.quality.lock"))
 
+# The offline materialization gate. Asks whether the environment the committed
+# lock describes could be built from local bytes, and REACHES NO NETWORK doing
+# it -- `tools/quality/materialize/plan.py` imports no networking module at all,
+# so the fallback is unreachable rather than merely un-taken.
+#
+# Not part of `full`, and for the reason `drift` is not: with an empty
+# wheelhouse the verdict is `unmeasured` rather than clean, so a fresh clone
+# exits 3. Artefacts are hundreds of megabytes and are not committed.
+#
+# `packaging` is declared because this gate uses `packaging.pylock` to select
+# artefacts, which is the specification's own reference implementation.
+_MATERIALIZE = Step("materialize", ("packaging",), ("-m", "tools.quality.materialize"))
+
 # The scientific-stack gate. Reads `docs/engineering/stack-contract.toml` and
 # recomputes it against this environment: the declared target against
 # `runtime-contract.toml`, every declared version against `pyproject.toml`,
@@ -520,6 +533,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "lock",
         "The committed lock against the runtime contract, the declared bounds and the pins.",
         (_LOCK,),
+    ),
+    Command(
+        "materialize",
+        "Whether the committed lock could be installed from local bytes, with no network.",
+        (_MATERIALIZE,),
     ),
     Command(
         "stack",

@@ -34,6 +34,7 @@ from globin.domain.bootstrap import (
     CheckOutcome,
     CheckStatus,
     DependencyReadiness,
+    EntitlementReadiness,
     HostFacts,
     InterpreterFacts,
     PathLocation,
@@ -48,6 +49,7 @@ from globin.domain.bootstrap import (
     configuration_outcome,
     context_fingerprint,
     dependency_outcome,
+    entitlement_outcome,
     environment_outcome,
     host_outcome,
     identity_outcome,
@@ -74,6 +76,7 @@ from globin.domain.runtime_state import (
 from globin.errors import ConfigurationError, GlobinError
 from globin.ports.bootstrap import (
     DependencyProbe,
+    EntitlementProbe,
     EnvironmentProbe,
     HostProbe,
     ProjectProbe,
@@ -110,6 +113,7 @@ UNMEASURED_REMEDIATION: dict[str, str] = {
     "state.previous_run": "Make the runtime tree usable first; the record is read from inside it.",
     "instance.lock": "Make the runtime tree usable first; the lock file lives inside it.",
     "secrets.required": "Resolve the earlier refusal first.",
+    "secrets.entitlement": "Resolve the earlier refusal first.",
 }
 """What to tell an operator when a check could not run at all.
 
@@ -158,6 +162,7 @@ class BootstrapPipeline:
     dependencies: DependencyProbe
     environment: EnvironmentProbe
     secrets: SecretProbe
+    entitlements: EntitlementProbe
     tree: RuntimeTree
     runtime_tree: RuntimeTreeSource
     state: StateStore
@@ -188,6 +193,7 @@ class BootstrapPipeline:
             paths=RuntimePaths(),
             dependency_readiness=DependencyReadiness(),
             secret_readiness=SecretReadiness(),
+            entitlement_readiness=EntitlementReadiness(),
             runtime_root=RecordedPath(location=PathLocation.ABSENT),
         )
         outcomes: list[CheckOutcome] = []
@@ -262,6 +268,7 @@ class _RunState:
     paths: RuntimePaths
     dependency_readiness: DependencyReadiness
     secret_readiness: SecretReadiness
+    entitlement_readiness: EntitlementReadiness
     runtime_root: RecordedPath
     refused: bool = False
     baseline: RuntimeBaseline | None = None
@@ -305,6 +312,7 @@ class _RunState:
             "paths": self.paths.declared(),
             "dependencies": self.dependency_readiness.as_record(),
             "secrets": self.secret_readiness.as_record(),
+            "entitlements": self.entitlement_readiness.as_record(),
             "environment": (None if self.environment is None else self.environment.as_record()),
             "runtime": {
                 "root": self.runtime_root.as_record(),
@@ -736,6 +744,20 @@ def _secrets_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome
     return secrets_outcome(state.secret_readiness)
 
 
+def _entitlement_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
+    """Read whether required credentials are permitted to be used.
+
+    Args:
+        pipeline: The pipeline, for its entitlement probe.
+        state: The run state.
+
+    Returns:
+        The outcome of ``secrets.entitlement``.
+    """
+    state.entitlement_readiness = pipeline.entitlements.readiness()
+    return entitlement_outcome(state.entitlement_readiness)
+
+
 def steps() -> tuple[Callable[[BootstrapPipeline, _RunState], CheckOutcome], ...]:
     """Return one step per registered check except the aggregate, in order.
 
@@ -769,4 +791,5 @@ def steps() -> tuple[Callable[[BootstrapPipeline, _RunState], CheckOutcome], ...
         _previous_run_step,
         _lock_step,
         _secrets_step,
+        _entitlement_step,
     )

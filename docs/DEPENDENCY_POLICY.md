@@ -60,11 +60,14 @@ delivery date.
 
 **4. Does it run at runtime, or only in development?** ADR-0003's zero-budget
 rule binds the runtime absolutely; development tooling is explicitly exempt.
-`project.dependencies` is empty and a contract test keeps it that way, so
-anything adopted today is a development dependency by construction. Phase 021
-introduces the first runtime dependency; when it does, the lock gate refuses to
-pass until `pylock.toml` accompanies it, and the severity threshold below needs
-the argument it says it needs.
+This paragraph said `project.dependencies` "is empty and a contract test keeps it
+that way" from Phase 014 until Phase 029 repaired it — a sentence that stopped
+being true at Phase 021 and stayed on the page for eight phases. It now holds
+**nine** roots. What the contract test actually keeps true is the stronger and
+still-current rule: every declared root is reviewed here in writing, compared
+against the generated inventory in **both** directions, and accompanied by
+`pylock.toml` in the same commit or the lock gate refuses with
+`LOCK_RUNTIME_UNLOCKED`.
 
 **5. Could this be written instead?** Not always, and not usually. But
 ADR-0033's mutation harness, ADR-0036's shard planner and Phase 014's own SBOM
@@ -134,9 +137,26 @@ its components. A compound is therefore permitted by being *named* here, one
 expression at a time, and never by an argument that the general rule covers it.
 That is deliberate: it makes each compound a decision somebody wrote down.
 
-An expression joined by `OR` is **not** covered here. `OR` is a choice, and
-choosing is a decision somebody has to make and record rather than a lookup; the
-first one that appears gets its own paragraph in this section.
+An expression joined by `OR` is **not** covered by the rule above. `OR` is a
+choice, and choosing is a decision somebody has to make and record rather than a
+lookup; the first one that appears gets its own paragraph in this section.
+
+Phase 029 brought the first, and this is that paragraph. `packaging` publishes
+`Apache-2.0 OR BSD-2-Clause`, and its own `LICENSE` is a dual-licence notice
+saying the software is available under the terms of *either* of `LICENSE.APACHE`
+or `LICENSE.BSD`; both files ship inside the distribution. Both components were
+already on the allow list, so the allow list needed no widening — but that is
+exactly the argument this section refuses to accept on its own. **GLOBIN chooses
+Apache-2.0**, for its explicit patent grant, and records the choice here because
+an unrecorded choice is indistinguishable from never having made one. The NOTICE
+obligation Apache-2.0 carries binds on redistribution; this repository publishes
+no distribution of `packaging` and so does not engage it.
+
+Note what is recorded in `dependency-reviews.toml` and what is recorded here.
+The register carries the expression **whole** — `Apache-2.0 OR BSD-2-Clause` —
+because that is what the project publishes, and reducing it to the chosen branch
+would make the register say something the project does not. The *choice* lives
+here, in prose, where a person made it. Neither file alone is the answer.
 
 This is an engineering governance control. It records what a project publishes
 about itself so that decisions are reviewable. **Nothing here is a legal
