@@ -178,8 +178,15 @@ the process table and recorded in shell history; and no verbosity level that wid
 any command into one.
 
 Permitted operations: set (interactive entry only), verify presence (returning a
-boolean), list (names, environments, kinds and existence only), delete, rotate, and
-a backend health check.
+boolean), list (names, environments, kinds and existence only), delete, rotate, a
+backend health check, and a per-mechanism capability report.
+
+**The seventh was added by Phase 031 and is not a widening of what may be seen.**
+`health` answers whether *a* backend can be reached; `doctor` answers which of the
+several mechanisms this host has and what each can do. It reads no operator secret,
+emits no value, and where it round-trips anything at all it generates its own
+sentinel and removes it in a `finally`. A verb that reported on a mechanism by
+reading something stored in it would be `list` with a misleading name.
 
 An inventory listing may show a non-reversible fingerprint. If it does, the digest
 must not permit reconstruction and the full value must not be retained anywhere to
@@ -241,7 +248,8 @@ reads as a guarantee nobody made.
 | "Typically" and "usually" are the vendor's own words | Data protection binds to the user and the computer with documented exceptions; a roaming profile is one of them (S-11) |
 | Enterprise persistence roams | A credential written with the roaming scope is visible to that user's sessions on other computers (S-08) |
 | Machine scope is refused | Associating protection with the computer rather than the user makes it readable by **every** account on that computer (S-11) |
-| A prompt-based flow has an expiry | It is deprecated with a removal date, so anything built on it would ship already ending (S-11) |
+| A prompt-based flow has an expiry | It is deprecated with a removal date — **February 2027** — so anything built on it would ship already ending (S-11; the date is `../research/phase_031_sources.md` S-05) |
+| Its own tamper check is not reportable | Unprotection may return either of two statuses on corruption **or succeed with corrupted output**, and the vendor says not to rely on a code to detect tampering. An application-level check is required, and runs first (S-04) |
 | The blob has a ceiling | `CRED_MAX_CREDENTIAL_BLOB_SIZE`, 2560 bytes. Phase 028 paid that measurement: 2560 succeeds, 2561 fails with an undocumented status, and an RSA-4096 key in PEM form does **not** fit (`../research/phase_028_sources.md` S-05, S-11) |
 | Memory is not erasable | See below |
 
@@ -256,8 +264,50 @@ Microsoft's actual principle — collect late, discard early — is discharged b
 resolving a secret in the narrowest scope that needs it and holding no long-lived
 cache, not by a call that would look like erasure without being it.
 
+**Phase 031 narrowed that claim, because the broader one was not true of
+everything.** A *native* buffer — one a platform call allocated, whose address and
+length GLOBIN knows — can be overwritten before it is released, and the DPAPI vault
+does exactly that before calling `LocalFree` (`../research/phase_031_sources.md`
+S-02, S-03). The paragraph above remains exactly right about a Python `str`, which
+is what a caller ends up holding. So the honest statement is in two parts: **the
+native buffer is overwritten; the Python string decoded from it is not, and cannot
+be.** Claiming the stronger absence where the weaker one is achievable would have
+been the easier sentence and the wrong one.
+
 Using an operating-system vault does not mean the application never holds the
-material. It means the material is not at rest in a file this repository can reach.
+material. It means the material is never at rest **unprotected**, and never at rest
+in a file **inside this repository's tree**.
+
+**Phase 031 narrowed this sentence, and the narrowing is an amendment rather than a
+clarification.** As first written it said "not at rest in a file this repository can
+reach", and [ADR-0074](../adr/0074-the-secret-store-is-the-windows-credential-manager-and-rotation-is-constructed.md)
+declined a DPAPI-protected file on those words. The sentence was doing two jobs at
+once: keeping material out of the checkout, which is unchanged and absolute; and
+forbidding *any* file at all, which was a consequence of the wording rather than a
+decision anybody took against a measurement. Phase 028 then paid the measurement —
+the ceiling above is 2560 bytes and an RSA-4096 key in PEM form is 3324 — so the
+store this contract's own limits selected **cannot hold material this contract's own
+future requires**. A protected file is how that material is held, and
+[ADR-0083](../adr/0083-a-second-secret-mechanism-is-admitted-by-arithmetic-and-carries-its-own-integrity-check.md)
+records the reversal.
+
+**The rule that replaces it is narrower and checkable.** Material may be at rest in
+a file only when every one of these holds, and a file failing any of them is a
+defect rather than a variation:
+
+1. It is outside the repository tree, and outside every area
+   [`../engineering/RUNTIME_FILESYSTEM.md`](../engineering/RUNTIME_FILESYSTEM.md)
+   declares disposable.
+2. Its contents are protected by the operating system under the **current user**,
+   so that a copy of the bytes is worthless on another account or another machine.
+3. It carries only material the chosen store structurally cannot — the ceiling
+   above is the admission test, and a value that fits belongs in the store.
+4. **Nothing reads it as a fallback** when the store is unreachable. §3 requires a
+   typed refusal, and a quiet fall back to somewhere less protected is precisely
+   what that section forbids.
+5. It carries its own integrity check, verified **before** the platform is asked to
+   decrypt — because `CryptUnprotectData` documents that its own check may "succeed
+   with corrupted output" (`../research/phase_031_sources.md` S-04).
 
 ---
 

@@ -19,6 +19,67 @@ can be opened and read.
 
 ## [Unreleased]
 
+### GLOBIN says what it is running without, and can hold a key that does not fit
+
+- **Six absent-safe factories, and nothing recorded which arm they took.** Each of
+  `psutil`, `opentelemetry`, `prometheus_client`, `kernel32`, `advapi32` and now
+  `crypt32` chooses between a working implementation and a recording stand-in, and
+  that choice survived nowhere except an untyped dictionary inside one command
+  covering two of the six. A declared registry now carries a **necessity** per
+  component, and the posture is folded from what each factory actually returned.
+- **Three tiers, and the third is an inherited rule rather than laziness.**
+  `required` refuses a start, `optional` starts and names what stopped working, and
+  `opportunistic` changes nothing — because a capability the registry *predicted*
+  absent must not make a host amber. CI installs neither telemetry library on any
+  run, so the other rule would make the posture amber for ever.
+- **`advapi32` is declared required and observed not-applicable**, which is the
+  honest pair while nothing needs a credential: the question does not arise, and
+  the moment Phase 038 registers a reference the same declaration begins refusing.
+  Nothing has to remember to change a flag.
+- **The network is declared, not probed.** A reachability probe would be a mechanism
+  with no caller *and* would remove a guarantee the architecture tests currently
+  prove, by adding an outbound connect to a package that has none. Phase 045 owns
+  measuring it; Phase 297 owns refusing a live start on it.
+- **No new exit code.** `runtime.degradation` reuses **24**, because a new code
+  whose only honest readiness mapping is an existing reason is a distinction the
+  readiness surface cannot express. **26 stays free.**
+
+- **As the fifteenth scope amendment, a second secret mechanism** — and it scores
+  **one of ADR-0021's four conditions**, which is said plainly rather than argued
+  around. Phase 292 owns credential persistence by its title; Phases 028 and 029 are
+  complete and overlap; and the two halves do not need each other.
+- **A DPAPI vault, admitted by arithmetic.** The store takes what fits its 2560-byte
+  ceiling and the vault takes what does not, reading the same constant, so no value
+  belongs to both and none to neither. `belongs_in_vault` takes **no key type** — a
+  private key that fits belongs in the store, and routing by type would be storage
+  taking an opinion about signing.
+- **The envelope carries its own integrity check, verified before the platform.**
+  Microsoft states that `CryptUnprotectData` may return either of two statuses on
+  corruption *or succeed with corrupted output*, and that applications must not rely
+  on a code to detect tampering. Checking afterwards would mean a corrupted
+  plaintext had already existed as a Python string. **The digest is not a secret
+  fingerprint**: DPAPI derives a fresh key per call, so two protections of one value
+  differ. A digest over the *plaintext* was refused — it would be an offline-guessable
+  oracle written into a file.
+- **Machine scope is refused by construction.** `CRYPTPROTECT_LOCAL_MACHINE` is
+  defined *precisely so its absence can be asserted*; the prompt structure is null
+  and no such type exists in the package, which is the path that survives its
+  February 2027 removal.
+- **`LocalFree` crosses the boundary as one function, never a library handle.**
+  Widening the Win32 guard map would have handed the vault `CreateFileW`,
+  `VirtualAlloc` and the console API to obtain one deallocator.
+- **The native buffer is overwritten before it is released**, and §7's blanket "no
+  erasure" claim was narrowed to say so: true of a Python `str`, not of a native
+  allocation whose address and length are known.
+- **The vault is a sibling directory, not a sixth runtime area.** All five areas
+  answer *yes* to "may this be deleted"; a vault answers *never*. It is created by
+  the first write, so its existence is itself evidence something was stored.
+- **`AtomicDocumentWriter` was extracted rather than copied**, and the proof it was
+  behaviour-preserving is that the three runtime-state test modules pass untouched.
+- **No fallback edge between the two mechanisms**, asserted as a call count rather
+  than a returned fault — `SECRET_STORE_CONTRACT.md` §3 forbids "a quiet fall back
+  to somewhere less protected".
+
 ### A check says whether its answer survives the run
 
 - **The registry became a suite.** Every one of the eighteen registered checks now
@@ -526,7 +587,7 @@ can be opened and read.
   threshold of `1.0` would recommend moves that lose once the device transfer is
   paid for. See [`GPU_BENEFIT.md`](docs/engineering/GPU_BENEFIT.md).
 - Four capabilities in `gpu-contract.toml` moved from phase 24 to **phase 31**.
-  Phase 024 consumes them; Phase 031 owns what GLOBIN does when they are absent.
+  Phase 024 consumes them; Phase 031 answered what GLOBIN does when they are absent.
 
 ### A running GLOBIN can say how it is doing
 

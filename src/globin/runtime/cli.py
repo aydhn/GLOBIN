@@ -109,7 +109,7 @@ from globin.domain.metrics import declared_series, metrics
 from globin.domain.observability import redact
 from globin.domain.preflight import PreflightOutcome
 from globin.domain.runtime_state import RuntimeArea
-from globin.domain.secrets import SecretKind, SecretReference
+from globin.domain.secrets import SecretKind, SecretReference, provider_writable
 from globin.errors import ConfigurationError, GlobinError, InternalError, ValidationError
 from globin.ports.entitlements import GrantRegister
 from globin.ports.secret_entry import SecretEntry
@@ -129,6 +129,7 @@ from globin.runtime.composition import (
     build_logger,
     build_runtime_state,
     build_secret_entry,
+    build_secret_providers,
     build_secret_store,
     bundle_candidates,
     project_identity,
@@ -244,6 +245,16 @@ A tuple rather than a :class:`frozenset` for the reason
 call, and a layer package performs none at import.
 """
 
+SECRETS_DOCTOR: Final[str] = "doctor"
+"""Report what each mechanism can do, without reading anything an operator stored.
+
+The seventh verb, added by Phase 031 alongside the second and third mechanisms.
+``SECRET_STORE_CONTRACT.md`` §5 permits it as "a per-mechanism capability report"
+and explains why it is not ``health`` with a wider remit: ``health`` answers
+whether *a* backend can be reached, and this answers which of several this host
+has. It emits no value and reads no operator secret.
+"""
+
 SECRETS_SUBCOMMANDS: Final[tuple[str, ...]] = (
     SET,
     VERIFY,
@@ -251,6 +262,7 @@ SECRETS_SUBCOMMANDS: Final[tuple[str, ...]] = (
     DELETE,
     ROTATE,
     HEALTH,
+    SECRETS_DOCTOR,
 )
 """What may follow ``secrets``. There is no default: two of these write and one
 deletes, and guessing which was meant would be guessing about a credential."""
@@ -356,6 +368,8 @@ Commands:
   secrets list        List what is declared, by name. Never a value.
   secrets delete      Remove a credential from the store.
   secrets health      Report whether the store can be reached at all.
+  secrets doctor      Report what each mechanism on this host can do.
+                      Reads no stored value.
   diagnostics environment  Report this host's capabilities: process and native
                         architecture, emulation, declared toolchain, and the
                         compatibility fingerprint. Publishes no path.
@@ -1844,6 +1858,8 @@ def _secrets(
     word = invocation.command.split(" ", 1)[1]
     if word == HEALTH:
         return _secret_health(store, out=out, err=err, as_json=invocation.as_json)
+    if word == SECRETS_DOCTOR:
+        return _secret_doctor(state, out=out, as_json=invocation.as_json)
     if word == LIST:
         return _secret_list(register, out=out, as_json=invocation.as_json)
 
@@ -1870,6 +1886,51 @@ def _secret_health(store: SecretStore, *, out: TextIO, err: TextIO, as_json: boo
         print(f"the secret store is unavailable: {fault.value}", file=out)
         print(REMEDIATION[fault], file=err)
     return int(ExitCode.OK if fault is None else ExitCode.SECRETS_UNREADY)
+
+
+def _secret_doctor(state: RuntimeState, *, out: TextIO, as_json: bool) -> int:
+    """Report what each secret mechanism on this host can do.
+
+    Args:
+        state: The runtime tree, for the vault's directory.
+        out: Where the report goes.
+        as_json: Whether to render a document.
+
+    Returns:
+        :attr:`~globin.domain.bootstrap.ExitCode.OK` always.
+
+    **Reporting is not gating**, the same reasoning ``diagnostics telemetry``
+    gives: a host with one mechanism unavailable is a host an operator may want
+    to know about, and the gate for whether GLOBIN may start is
+    ``bootstrap check``. Returning a refusal here would make an informational
+    command fail on a machine that works.
+
+    **It reads nothing an operator stored.** Each mechanism is asked its own
+    ``health``, which is a question about reachability rather than about
+    contents -- ``SECRET_STORE_CONTRACT.md`` §5 permits a health check precisely
+    because it reports nothing it found.
+    """
+    providers = build_secret_providers(state)
+    rows = []
+    for kind in sorted(providers, key=lambda entry: entry.value):
+        fault = providers[kind].health()
+        rows.append(
+            {
+                "provider": kind.value,
+                "available": fault is None,
+                "fault": None if fault is None else fault.value,
+                "writable": provider_writable(kind),
+            }
+        )
+    if as_json:
+        print(json.dumps({"providers": rows}, sort_keys=True), file=out)
+        return int(ExitCode.OK)
+    width = max(len(str(row["provider"])) for row in rows)
+    for row in rows:
+        state_word = "available" if row["available"] else f"unavailable ({row['fault']})"
+        writable = "read-write" if row["writable"] else "read-only"
+        print(f"  {row['provider']:<{width}}  {state_word}  {writable}", file=out)
+    return int(ExitCode.OK)
 
 
 def _secret_list(register: GrantRegister, *, out: TextIO, as_json: bool) -> int:

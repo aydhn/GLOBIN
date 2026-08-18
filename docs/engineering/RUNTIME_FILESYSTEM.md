@@ -92,16 +92,49 @@ entitled to parse.
 
 Absolute, and not a matter of taste:
 
-- credentials or plaintext secrets, Credential Manager or DPAPI material, `.env`
-  contents, API keys, exchange tokens — Phase 028 decides where a secret lives
+- credentials or plaintext secrets, Credential Manager material, `.env` contents,
+  API keys, exchange tokens — [`../security/SECRET_STORE.md`](../security/SECRET_STORE.md)
+  decides where a secret lives
 - market-data history, order or trade ledgers — Phases 097-112
 - model artefacts, Parquet datasets — Phase 190 and the data-platform band
 
-The tree defined here is **small, non-secret and disposable**, and everything else
-in the design assumes all three. ADR-0059 records the characteristic failure: a
-later phase writing something large, or something secret, into `state/` because
-the directory was already there. Nothing but this document and review prevents it —
-no gate can tell a large file from a small one.
+The **five areas** defined above are **small, non-secret and disposable**, and
+everything else in the design assumes all three. ADR-0059 records the characteristic
+failure: a later phase writing something large, or something secret, into `state/`
+because the directory was already there. Nothing but this document and review
+prevents it — no gate can tell a large file from a small one.
+
+### The one thing Phase 031 added, and why it is not a sixth area
+
+The list above once also read *"Credential Manager or DPAPI material"*. Credential
+Manager material was never a file and could not have appeared here. DPAPI material
+was forbidden because in Phase 022 no DPAPI file existed and forbidding one cost
+nothing — and [ADR-0074](../adr/0074-the-secret-store-is-the-windows-credential-manager-and-rotation-is-constructed.md)
+then declined to build one, partly on that wording.
+
+Phase 031 built one, for the reason
+[`../security/SECRET_STORE_CONTRACT.md`](../security/SECRET_STORE_CONTRACT.md) §7
+now records: the chosen store has a 2560-byte ceiling, and key material a later
+phase will require does not fit under it. **The narrowing touches nothing above.**
+
+`vault/` is a **sibling of the five areas, not a sixth member of them**, and the
+distinction is the decision rather than a technicality. `RuntimeArea` exists so that
+a component asking for somewhere to write has to answer the question the
+enumeration poses — *may this be deleted, and when* — and all five answer *yes*. A
+vault answers **never; deleting it destroys material that cannot be regenerated**,
+which is not one of the answers this vocabulary has. Keeping it out of the
+enumeration is what keeps the rest true: `prepare()` does not create it,
+`boundary_outcome` does not count it, `FilesystemTreeProbe` does not walk it and
+`runtime_anchors` does not report it, every one of which is correct.
+
+| Area | Holds | Safe to delete |
+|---|---|---|
+| `vault/` | DPAPI-protected envelopes for material the store's ceiling refuses | **No.** The only part of this tree that is not disposable, and the reason it is separate |
+
+It is created by the **first write**, never at start-up, so the directory's
+existence is itself evidence that something was stored. What an operator needs to
+know about it — that it does not travel between accounts or machines, and that
+there is no backup — is [`../security/SECRET_VAULT.md`](../security/SECRET_VAULT.md).
 
 **A layout cannot escape its own root.** Every segment is validated at
 construction: `..`, a path separator, a drive letter and an empty string are all

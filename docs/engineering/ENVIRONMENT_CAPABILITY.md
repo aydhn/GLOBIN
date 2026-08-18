@@ -208,7 +208,7 @@ hostname, or a home directory.
 | Whether this machine still matches an accepted baseline | [`ENVIRONMENT_DRIFT.md`](ENVIRONMENT_DRIFT.md) |
 | Whether a GPU is present, and whether using it pays | [`GPU_CAPABILITY.md`](GPU_CAPABILITY.md), [`GPU_BENEFIT.md`](GPU_BENEFIT.md) |
 | The full set of preflight checks a long-running process needs | Phase 030 |
-| Behaviour when the network or an optional native component is unavailable | Phase 031 |
+| Behaviour when the network or an optional native component is unavailable | 031, delivered — [`DEGRADED_OPERATION.md`](DEGRADED_OPERATION.md) |
 | Which products and environments the venue offers | Phase 036 |
 
 The last three are not yet built. Nothing here anticipates them.

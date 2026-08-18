@@ -53,6 +53,10 @@ from globin.adapters.configuration import (
     RequiredDocumentSource,
     TomlConfigurationSource,
 )
+from globin.adapters.degradation import (
+    CONTRACT_RELATIVE_PATH as DEGRADATION_CONTRACT_PATH,
+)
+from globin.adapters.degradation import ContractDegradationProbe, system_arms
 from globin.adapters.dependency import installed_versions
 from globin.adapters.diagnostics import (
     DIAGNOSTICS_FILE,
@@ -106,6 +110,8 @@ from globin.adapters.runtime_state import (
 from globin.adapters.runtime_state import ProjectRuntimeTree as UserRuntimeTree
 from globin.adapters.runtime_state import render as render_state_document
 from globin.adapters.secret_entry import ConsoleSecretEntry
+from globin.adapters.secret_environment import environment_secret_provider
+from globin.adapters.secret_vault import secret_vault
 from globin.adapters.secrets import windows_credential_store
 from globin.adapters.serialization import JsonCodec
 from globin.adapters.support import ZipArchiveWriter, digest_of
@@ -124,6 +130,7 @@ from globin.application.health import HealthCollector
 from globin.application.lifecycle import Lifecycle
 from globin.application.observability import Logger
 from globin.application.preflight import PreflightRun
+from globin.application.secrets import ProviderRoutedStore
 from globin.application.support import BundleBuilder, Candidate
 from globin.application.telemetry import MetricStore, metric_store
 from globin.application.watchdog import RuntimeWatchdog
@@ -157,6 +164,11 @@ from globin.domain.runtime_state import (
     LOCK_FILE,
     RuntimeArea,
     RuntimeLayout,
+)
+from globin.domain.secrets import (
+    SecretLocator,
+    SecretProviderKind,
+    provider_permitted,
 )
 from globin.domain.support import ArtifactKind, safe_member_name
 from globin.domain.watchdog import WatchdogEpisode
@@ -846,19 +858,166 @@ def build_lifecycle(
     )
 
 
-def build_secret_store() -> SecretStore:
-    """The local secret store, or a value-typed absence.
+VAULT_FALLBACK_SEGMENT: Final[str] = "vault"
+"""Where the vault looks when no runtime tree was resolved.
+
+A bare relative segment, which no host will have and every absent-safe factory
+answers about rather than creates. It exists so that
+:func:`build_secret_providers` can be called with no runtime state -- which
+``secrets doctor`` does, because reporting on a mechanism must not require the
+tree that mechanism writes into.
+"""
+
+DEFAULT_PROVIDER: Final[SecretProviderKind] = SecretProviderKind.CREDENTIAL_MANAGER
+"""The mechanism a reference with no locator uses.
+
+The Credential Manager, because that is where every secret GLOBIN could hold
+lives today -- so a run with no locators behaves exactly as it did before Phase
+031, byte for byte. Beside :data:`DEFAULT_PROFILE`, with the same argument:
+reached only when nobody asked.
+"""
+
+ENVIRONMENT_PROVIDER_PROFILES: Final[tuple[str, ...]] = ("paper",)
+"""Which profiles permit a secret to arrive from the process environment.
+
+**An allow-list, not a deny-list, and the direction is the decision.** A deny-list
+naming ``live`` would silently permit the environment provider in every profile
+added afterwards; an allow-list refuses a new profile until somebody decides,
+which is the direction :func:`~globin.domain.config_layout.resolve_profile`
+already takes for an unknown name and which ADR-0006's "never silently upgraded to
+live" implies read the other way round.
+
+``paper`` alone, chosen by the owner. The environment is a hand-off rather than a
+store -- ``SECURITY_BASELINE.md`` §2 -- and material that arrives that way is
+visible to anything that can read this process's environment, so the mechanism is
+permitted only where nothing real is at stake.
+
+Here rather than in the domain because ``live``, ``testnet`` and ``demo`` are all
+in ``tests/architecture/test_identifier_discipline.py``'s ``VENUE_VOCABULARY`` and
+are refused as a live constant anywhere under :mod:`globin.domain`.
+"""
+
+
+def environment_provider_policy() -> dict[str, tuple[str, ...]]:
+    """The profile allow-list, in the shape the domain predicate takes.
 
     Returns:
-        A Credential Manager-backed store where the platform offers one, and a
-        store that records the absence where it does not.
+        Provider value to the profiles that permit it.
+
+    A function rather than a mapping constant so that this module performs no
+    call at import, and so that the one provider with a policy is the only one
+    named -- :func:`~globin.domain.secrets.provider_permitted` treats a provider
+    absent from the mapping as permitted, which is what keeps adding a mechanism
+    from silently disabling it.
+    """
+    return {SecretProviderKind.ENVIRONMENT.value: ENVIRONMENT_PROVIDER_PROFILES}
+
+
+def build_degradation_probe(repo_root: Path) -> ContractDegradationProbe:
+    """The degradation survey for this run.
+
+    Args:
+        repo_root: Where the declaration lives, relative to which the contract is
+            found.
+
+    Returns:
+        The probe.
+
+    ``credentials_required`` is derived from
+    :func:`~globin.domain.entitlements.required_references` rather than passed,
+    so that the moment Phase 038 registers a reference the ``advapi32`` row stops
+    being not-applicable and starts being able to refuse a start. Nothing has to
+    remember to flip a flag.
+    """
+    return ContractDegradationProbe(
+        contract=repo_root / DEGRADATION_CONTRACT_PATH,
+        arms=system_arms(credentials_required=bool(required_references())),
+    )
+
+
+def build_secret_providers(
+    state: RuntimeState | None = None,
+    *,
+    profile: str = DEFAULT_PROFILE,
+    locators: tuple[SecretLocator, ...] = (),
+    environment: Mapping[str, str] | None = None,
+) -> dict[SecretProviderKind, SecretStore]:
+    """Every secret mechanism this run has, by kind.
+
+    Args:
+        state: The runtime tree, which is where the vault directory lives. Where
+            it is absent the vault records that absence rather than guessing a
+            path.
+        profile: The run's resolved profile, which decides whether the
+            environment hand-off is permitted.
+        locators: Which mechanism holds which reference.
+        environment: The variables the hand-off may read. Handed in, never read
+            here.
+
+    Returns:
+        One entry per mechanism.
+
+    All three are built every run, and building one is cheap: the Credential
+    Manager and the vault are absent-safe factories that answer with a recorded
+    state on a host that has neither, and the hand-off holds a boolean. Building
+    only the mechanisms a locator names would make the set depend on
+    configuration, so ``secrets doctor`` could not report on a mechanism nothing
+    currently uses -- which is exactly when an operator asks.
+    """
+    declared = required_references()
+    permitted = provider_permitted(
+        SecretProviderKind.ENVIRONMENT, profile, allowed=environment_provider_policy()
+    )
+    vault_directory = (
+        state.root / state.layout.vault if state is not None else Path(VAULT_FALLBACK_SEGMENT)
+    )
+    return {
+        SecretProviderKind.CREDENTIAL_MANAGER: windows_credential_store(declared=declared),
+        SecretProviderKind.DPAPI_VAULT: secret_vault(vault_directory, declared=declared),
+        SecretProviderKind.ENVIRONMENT: environment_secret_provider(
+            environment if environment is not None else {},
+            locators,
+            permitted=permitted,
+        ),
+    }
+
+
+def build_secret_store(
+    state: RuntimeState | None = None,
+    *,
+    profile: str = DEFAULT_PROFILE,
+    locators: tuple[SecretLocator, ...] = (),
+    environment: Mapping[str, str] | None = None,
+) -> SecretStore:
+    """The secret store this run has, routed by locator.
+
+    Args:
+        state: The runtime tree, for the vault's directory.
+        profile: The run's resolved profile.
+        locators: Which mechanism holds which reference.
+        environment: The variables the hand-off may read.
+
+    Returns:
+        A store that reaches **exactly one** mechanism per reference, with no
+        fallback between them.
+
+    **Every argument defaults**, so ``build_secret_store()`` with none still
+    returns a store whose only reachable mechanism for an unlocated reference is
+    the Credential Manager -- which is what every existing caller gets and what it
+    got before Phase 031.
 
     The declared references are fed in from
     :func:`~globin.domain.entitlements.required_references`, which is what
     ``inventory`` resolves one at a time. Empty today, so the inventory is empty
     -- the mechanism exists and the set does not.
     """
-    return windows_credential_store(declared=required_references())
+    return ProviderRoutedStore(
+        providers=build_secret_providers(
+            state, profile=profile, locators=locators, environment=environment
+        ),
+        locators={locator.reference: locator for locator in locators},
+        default=DEFAULT_PROVIDER,
+    )
 
 
 def build_grant_register(state: RuntimeState) -> GrantRegister:
@@ -975,6 +1134,7 @@ def build_bootstrap(
                 register=StateGrantRegister(store=state.store),
                 requirements=required_credentials(),
             ),
+            degradation=build_degradation_probe(root or start),
             tree=ProjectRuntimeTree(root=root or start),
             runtime_tree=state.tree,
             state=state.store,

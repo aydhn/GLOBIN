@@ -146,6 +146,14 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/engineering/RUNTIME_HEALTH.md",
     "docs/engineering/SUPPORT_BUNDLE.md",
     "docs/engineering/RUNTIME_WATCHDOG.md",
+    # Added in Phase 031, with its own ledger and the two documents it owns. The
+    # ledger is the edit MEMORY.md names as the third one a phase adding a ledger
+    # must make; the other two are the halves this phase delivered. Registering
+    # them here is what stops the drift the three comments above record from
+    # recurring a fourth time.
+    "docs/research/phase_031_sources.md",
+    "docs/engineering/DEGRADED_OPERATION.md",
+    "docs/security/SECRET_VAULT.md",
 )
 
 #: Minimum byte length for a document to count as substantive rather than a
@@ -339,6 +347,25 @@ REQUIRED_CONCEPTS: dict[str, tuple[str, ...]] = {
         "docker",
         "python",
         "monolith",
+    ),
+    # Added in Phase 031. Each names a section rather than a sentence, on the rule
+    # the SECRET_STORE_CONTRACT entry states: a number in prose would need a source
+    # to compare against that this repository does not hold.
+    "docs/engineering/DEGRADED_OPERATION.md": (
+        "degraded",
+        "opportunistic",
+        "required",
+        "not_applicable",
+        "network",
+        "refus",
+    ),
+    "docs/security/SECRET_VAULT.md": (
+        "dpapi",
+        "envelope",
+        "ceiling",
+        "does not travel",
+        "erasure",
+        "no backup",
     ),
 }
 

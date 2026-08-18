@@ -1,13 +1,21 @@
 r"""Reading the host's architecture and toolchain, and refusing to guess.
 
-**This is the only module in the package that names** ``kernel32``, and
-``tests/architecture/test_credential_discipline.py`` enforces that alongside the
-same rule for ``advapi32`` in :mod:`globin.adapters.secrets`. The load lives
-inside :func:`windows_system_api` for the reason
-:func:`~globin.adapters.health.system_process_probe` puts its import inside a
-function: at module scope it would run when :mod:`globin.adapters` is imported,
-which the smoke test does on a non-Windows interpreter where ``WinDLL`` does not
-exist at all.
+**This module owns** ``kernel32``, and reading the architecture is one use of it
+rather than the whole of it. ``tests/architecture/test_credential_discipline.py``
+enforces that no other module loads the library, alongside the same rule for
+``advapi32`` in :mod:`globin.adapters.secrets` and ``crypt32`` in
+:mod:`globin.adapters.secret_vault`. The loads live inside their factories for
+the reason :func:`~globin.adapters.health.system_process_probe` puts its import
+inside a function: at module scope one would run when :mod:`globin.adapters` is
+imported, which the smoke test does on a non-Windows interpreter where ``WinDLL``
+does not exist at all.
+
+The second use arrived with Phase 031. :func:`windows_local_free` hands the
+secret vault the one deallocator DPAPI obliges its callers to use — **a callable,
+never the library handle** — so that the vault can free a platform allocation
+without acquiring anything else ``kernel32`` offers. The docstring there carries
+the argument; what belongs here is that this module's subject is the library, and
+the architecture probe is not all of it.
 
 **The central decision here is a refusal, and it is measured rather than
 cautious.** ``phase_028_sources.md`` S-02 records Microsoft's own statement that
@@ -42,6 +50,7 @@ import ctypes
 import os
 import shutil
 import sys
+from collections.abc import Callable
 from ctypes import wintypes
 from dataclasses import dataclass
 from typing import Any, Final
@@ -366,3 +375,67 @@ def windows_system_api() -> WindowsArchitectureApi | UnavailableSystemApi:
     library.GetCurrentProcess.argtypes = ()
     library.GetCurrentProcess.restype = wintypes.HANDLE
     return WindowsArchitectureApi(library=library, has_wow64_process2=has_wow64_process2)
+
+
+def windows_local_free() -> Callable[[int | None], None] | None:
+    """The one deallocator a DPAPI caller is obliged to use, or nothing.
+
+    Returns:
+        A callable freeing a ``LocalAlloc`` block by address, or ``None`` where
+        this host has no ``kernel32``.
+
+    **Exposed from this module rather than loaded where it is used**, because
+    ``tests/architecture/test_credential_discipline.py`` permits exactly one
+    loader per Win32 library and this module is ``kernel32``'s. Phase 031's
+    secret vault needs ``LocalFree``: Microsoft documents it under ``winbase.h``
+    with library ``Kernel32.lib`` and DLL ``Kernel32.dll``
+    (``phase_031_sources.md`` S-03), and both DPAPI functions state that the
+    output blob's ``pbData`` member **must** be freed with it (S-02). There is no
+    caller-supplied-buffer variant of either call, so the obligation cannot be
+    designed away — only the *second* free can, by passing a null description
+    pointer, and the vault does that.
+
+    **What crosses the boundary is one function, never a handle.** The
+    alternative considered was widening ``GUARDED`` to permit two loaders of
+    ``kernel32``, and it was declined because the grant would be wildly wider
+    than the need: ``kernel32`` carries ``CreateFileW``, ``CreateProcessW``,
+    ``VirtualAlloc`` and the console API, so a second permitted loader acquires
+    all of it in order to obtain one one-argument deallocator — exactly the
+    "quietly acquire the other's capability" that test's docstring names.
+    Reaching ``ctypes.windll.kernel32`` instead was declined for a worse reason:
+    it is an attribute chain with no string argument, so the checker would stay
+    green while the property it reports had become false.
+
+    ``None`` rather than a raising factory, so that a caller composes two
+    absences into one recorded state. This is the same absent-safe shape
+    :func:`windows_system_api` has, and the same
+    :data:`sys.platform` guard **before** the ``try``, because
+    :class:`ctypes.WinDLL` does not exist as an attribute on non-Windows
+    CPython — reaching for it there raises :class:`AttributeError`, not
+    :class:`OSError`.
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        library = ctypes.WinDLL("kernel32", use_last_error=True)
+    except OSError:
+        return None
+    library.LocalFree.argtypes = (wintypes.HLOCAL,)
+    library.LocalFree.restype = wintypes.HLOCAL
+
+    def free(address: int | None) -> None:
+        """Release one block, tolerating a null address.
+
+        Args:
+            address: What to free, or ``None`` where the platform filled nothing in.
+
+        Microsoft documents that "if the *hMem* parameter is **NULL**,
+        **LocalFree** ignores the parameter and returns **NULL**" (S-03), which
+        is what lets the caller put this in an unguarded ``finally``. A
+        conditional free would have a branch that only runs when an earlier call
+        failed — the branch a test is least likely to reach and the leak most
+        likely to survive.
+        """
+        library.LocalFree(address)
+
+    return free

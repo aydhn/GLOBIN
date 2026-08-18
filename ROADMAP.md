@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-030 are complete. Phase 031 is next and has not started.**
-> Nothing beyond Phase 030 is implemented. GLOBIN does not trade, does not
+> **Phases 001-031 are complete. Phase 032 is next and has not started.**
+> Nothing beyond Phase 031 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and **holds no credentials** -- it now has somewhere to
 > put one and a way to be handed one, which is still a different thing. See
 > [`README.md`](README.md).
@@ -175,10 +175,10 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Fourteen have been made. Each cost an ADR, and each is
+> **Scope amendments.** Fifteen have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
-> unchanged by all fourteen.
+> unchanged by all fifteen.
 >
 > This count said *seven* while listing eight from Phase 024 until Phase 025
 > repaired it. Nothing tests it, which is why it drifted and why it is worth
@@ -431,6 +431,33 @@ the contract:
 > [ADR-0079](docs/adr/0079-phase-030-widens-to-deliver-the-configuration-evidence-surface.md)
 > carries the whole of it.
 
+> **Fifteenth.** Phase 031 still delivers the offline and degraded installation
+> handling its title names -- a declared registry of every component GLOBIN reaches
+> for, a necessity per component, a posture folded from what each of six absent-safe
+> factories actually returned rather than from what was hoped, and a network row that
+> is declared rather than probed because a probe would be a mechanism with no caller
+> *and* would remove a guarantee the architecture tests currently prove. Alongside it,
+> the user-scoped secret vault: a DPAPI-protected envelope for key material the
+> Credential Manager's 2560-byte ceiling structurally cannot hold, admitted by
+> arithmetic rather than by policy, carrying its own integrity check because the
+> platform documents that its own may succeed on corrupted input.
+>
+> **It scores one of ADR-0021's four conditions, which is the joint-worst in the
+> programme and arrives directly after the only amendment to score four.** Nothing is
+> deferred. But Phase 292 *Credential Collection and Persistence Flow* owns storing
+> credentials **by its title** -- the third title-level collision after 263 and 280 --
+> the work overlaps two **completed** phases, 028 and 029, and the two halves do not
+> need each other. Two bridges that would have connected them are refused in the
+> record rather than left unmentioned, one of them because the store contract forbids
+> it by name.
+>
+> **That a four and a one arrived in consecutive phases is the entry's substance
+> rather than an accident of ordering**, and it is offered to Phase 032 as evidence
+> about the granularity rather than as an argument about the test.
+> [ADR-0082](docs/adr/0082-phase-031-widens-to-deliver-the-user-scoped-secret-vault.md)
+> carries the whole of it, cites neither the fourteenth's score nor the count, and
+> closes by forbidding a sixteenth from citing any of this.
+
 ---
 
 ## Phases 001-016 — Repository Foundation and Engineering Contract
@@ -481,7 +508,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 028 | Local Secret Storage Mechanism | Implement the approved local secret store so credentials never reach the repository or plain configuration; and, as the twelfth scope amendment, deliver the environment capability inventory -- native versus process architecture, emulation state, bounded toolchain discovery, and a compatibility fingerprint that excludes everything volatile. | Complete |
 | 029 | Credential Prompting and Validation Flow | Define interactive credential collection, format validation and permission verification before use; and, as the thirteenth scope amendment, deliver the dependency attestation -- a runtime inventory that can finally see a version, a second PEP 751 reader that is the specification's own, and an offline materialization gate whose network fallback is unreachable rather than un-taken. | Complete |
 | 030 | Bootstrap Health Check Suite | Implement the preflight checks that must pass before any long-running GLOBIN process starts, classifying every check by whether its answer survives the run and declaring the schedule the perishable ones imply; and, as the fourteenth scope amendment, make configuration able to explain itself -- a command-line value layer above the environment, an explicit document whose absence is fatal, per-field provenance, a declared contract version, and a semantic fingerprint separated from the one that sees where a value came from. | Complete |
-| 031 | Offline and Degraded Installation Handling | Define behaviour when the network, GPU or optional native components are unavailable. | Planned |
+| 031 | Offline and Degraded Installation Handling | Define behaviour when the network, GPU or optional native components are unavailable, declaring a necessity per component and folding a posture from what each factory actually returned; and, as the fifteenth scope amendment, deliver the user-scoped secret vault -- a DPAPI-protected envelope for material the credential store's 2560-byte ceiling refuses, admitted by arithmetic, carrying its own integrity check, and with no fallback edge between the two mechanisms. | Complete |
 | 032 | Environment Consolidation and Phase Gate Review | Reconcile the environment band and certify a reproducible host before exchange integration begins. | Planned |
 
 ---

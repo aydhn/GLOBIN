@@ -108,7 +108,10 @@ array sizes.
   and Phase 183 for `torch` specifically.
 - **Whether a device exists.** [`GPU_CAPABILITY.md`](GPU_CAPABILITY.md) owns that,
   and this consumes its answer rather than repeating the question.
-- **What happens when the GPU is absent at run time.** Phase 031 owns degraded
+- **What happens when the GPU is absent at run time.** Phase 031 answered it in
+  [`DEGRADED_OPERATION.md`](DEGRADED_OPERATION.md), and the answer is *nothing*: no
+  GLOBIN behaviour depends on a device, so the component is declared opportunistic
+  and its absence leaves the posture ready. That phase owns degraded
   operation, which is why this phase moved four capabilities in
   [`gpu-contract.toml`](gpu-contract.toml) into its ownership.
 - **Anything about the CUDA toolkit.** Phase 025 owns native provisioning.

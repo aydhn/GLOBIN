@@ -33,6 +33,13 @@ from globin.domain.bootstrap import (
     recorded_outside,
 )
 from globin.domain.configuration import ConfigLayer, config_layer
+from globin.domain.degradation import (
+    ComponentKind,
+    ComponentNecessity,
+    ComponentObservation,
+    ComponentSpec,
+    DegradationReport,
+)
 from globin.domain.environment import (
     ArchitectureCapability,
     CapabilityCategory,
@@ -312,6 +319,32 @@ class _Entitlements:
         return EntitlementReadiness(demanded=self.demanded, refused=self.refused)
 
 
+@dataclass(frozen=True, slots=True)
+class _Degradation:
+    """A degradation probe reporting one present component.
+
+    One component rather than none, so the report is non-vacuous: a survey with
+    an empty registry would pass for the same reason an unwired one fails, and
+    the two must not look alike.
+    """
+
+    report: DegradationReport | None = None
+
+    def survey(self) -> DegradationReport | None:
+        """Report what was declared and observed."""
+        if self.report is not None:
+            return self.report
+        spec = ComponentSpec(
+            identifier="component.library.example",
+            kind=ComponentKind.LIBRARY,
+            necessity=ComponentNecessity.OPPORTUNISTIC,
+        )
+        observed = ComponentObservation(
+            identifier=spec.identifier, status=CapabilityStatus.SUPPORTED
+        )
+        return DegradationReport(components=(spec,), observations=(observed,))
+
+
 def pipeline(**overrides: object) -> BootstrapPipeline:
     """A pipeline whose every probe is satisfied, with any one replaced."""
     values: dict[str, object] = {
@@ -322,6 +355,7 @@ def pipeline(**overrides: object) -> BootstrapPipeline:
         "environment": _Environment(),
         "secrets": _Secrets(),
         "entitlements": _Entitlements(),
+        "degradation": _Degradation(),
         "tree": _Tree(),
         "runtime_tree": _RuntimeTree(),
         "state": _State(documents={}),

@@ -31,6 +31,7 @@ either, which rules out a "changed from X to Y" record and a digest computed
 over a value GLOBIN would have to retain to compare against.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from globin.domain.bootstrap import SecretReadiness
@@ -45,6 +46,8 @@ from globin.domain.entitlements import (
 from globin.domain.secrets import (
     EntryFault,
     EntryProblem,
+    SecretLocator,
+    SecretProviderKind,
     SecretReference,
     SecretResolution,
     SecretSlot,
@@ -52,7 +55,7 @@ from globin.domain.secrets import (
     StoreFault,
     store_key,
 )
-from globin.errors import ConfigurationError
+from globin.errors import ConfigurationError, InternalError
 from globin.ports.secret_entry import SecretEntry
 from globin.ports.secrets import SecretStore
 
@@ -67,6 +70,15 @@ REMEDIATION: dict[StoreFault, str] = {
     StoreFault.BACKEND_REFUSED: "the credential store refused the operation",
     StoreFault.VALUE_TOO_LARGE: "the value exceeds what a credential blob can hold",
     StoreFault.VERIFICATION_FAILED: "the value read back did not match the value written",
+    StoreFault.PROVIDER_READ_ONLY: (
+        "this provider is a hand-off rather than a store, so it never accepts a write"
+    ),
+    StoreFault.PROVIDER_NOT_PERMITTED: (
+        "this profile does not permit that provider; store the value in the local store instead"
+    ),
+    StoreFault.ENVELOPE_CORRUPT: (
+        "the stored envelope failed its own integrity check; rotate the credential to replace it"
+    ),
 }
 """What an operator should do about each fault, in one bounded phrase.
 
@@ -530,3 +542,154 @@ def require_permitted(
         )
         raise ConfigurationError(msg)
     return require(store, requirement.reference)
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderRoutedStore:
+    """One store's worth of surface over several mechanisms, chosen by name.
+
+    Args:
+        providers: Every mechanism this run has, by kind.
+        locators: Which mechanism holds which reference.
+        default: The mechanism a reference with no locator uses.
+
+    Raises:
+        InternalError: If a locator names a provider that is not in
+            ``providers``, or if ``default`` is not one of them. Refused at
+            **construction**, so there is no run in which a reference routes to
+            nothing and no call site that has to handle a missing mechanism.
+
+    **There is no fallback and there is no chain.** Exactly one mechanism is
+    consulted for a reference, ever, and its fault is the answer. A store that
+    tried the vault when the Credential Manager said
+    :attr:`~globin.domain.secrets.StoreFault.ABSENT` would make "where is this
+    secret" unanswerable, would double the cost of every failed lookup, and would
+    let a value be served from a weaker mechanism than the operator believed.
+    ``SECRET_STORE_CONTRACT.md`` §3 names that last one as forbidden outright:
+    "never a quiet fall back to somewhere less protected".
+
+    **The default is not a fallback either.** It is reached only when *nobody
+    named a provider*, which is a different situation from somebody naming one
+    and being wrong — the distinction
+    :func:`~globin.domain.config_layout.profile_from` already draws about
+    profiles, and the reason a locator naming an absent mechanism is refused at
+    construction rather than quietly defaulted.
+    """
+
+    providers: Mapping[SecretProviderKind, SecretStore]
+    locators: Mapping[SecretReference, SecretLocator]
+    default: SecretProviderKind
+
+    def __post_init__(self) -> None:
+        """Refuse a routing table that could not answer."""
+        if self.default not in self.providers:
+            listed = ", ".join(sorted(kind.value for kind in self.providers))
+            msg = (
+                f"the default provider {self.default.value!r} is not among the "
+                f"mechanisms this run has ({listed or 'none'})"
+            )
+            raise InternalError(msg)
+        unknown = sorted(
+            {
+                locator.provider.value
+                for locator in self.locators.values()
+                if locator.provider not in self.providers
+            }
+        )
+        if unknown:
+            msg = (
+                f"{', '.join(unknown)} named by a locator but not among this run's "
+                f"mechanisms; a reference that routes nowhere is refused here rather "
+                f"than at the moment it is needed"
+            )
+            raise InternalError(msg)
+
+    def _for(self, reference: SecretReference) -> SecretStore:
+        """Which mechanism holds one reference.
+
+        Args:
+            reference: What is being addressed.
+
+        Returns:
+            The one store to ask. Never a sequence, and never a second attempt.
+        """
+        locator = self.locators.get(reference)
+        kind = locator.provider if locator is not None else self.default
+        return self.providers[kind]
+
+    def health(self) -> StoreFault | None:
+        """Report whether the default mechanism can be reached.
+
+        Returns:
+            The default provider's own answer.
+
+        The *default* rather than an aggregate over all of them, because an
+        aggregate would have to decide what "one of three is unreachable" means
+        and every answer to that is misleading. A per-mechanism report is what
+        ``globin secrets doctor`` is for.
+        """
+        return self.providers[self.default].health()
+
+    def resolve(
+        self, reference: SecretReference, slot: SecretSlot = SecretSlot.CURRENT
+    ) -> SecretResolution:
+        """Look one reference up in its own mechanism.
+
+        Args:
+            reference: What to resolve.
+            slot: Which copy of the material.
+
+        Returns:
+            That mechanism's resolution, whatever it is.
+        """
+        return self._for(reference).resolve(reference, slot)
+
+    def store(
+        self,
+        reference: SecretReference,
+        value: SecretValue,
+        slot: SecretSlot = SecretSlot.CURRENT,
+    ) -> StoreFault | None:
+        """Write a value to the mechanism that holds this reference.
+
+        Args:
+            reference: What to store it under.
+            value: The material.
+            slot: Which copy to write.
+
+        Returns:
+            ``None`` on success, or that mechanism's fault. A read-only
+            mechanism answers
+            :attr:`~globin.domain.secrets.StoreFault.PROVIDER_READ_ONLY`, and
+            nothing here converts that into an attempt somewhere else.
+        """
+        return self._for(reference).store(reference, value, slot)
+
+    def delete(
+        self, reference: SecretReference, slot: SecretSlot = SecretSlot.CURRENT
+    ) -> StoreFault | None:
+        """Remove a reference from the mechanism that holds it.
+
+        Args:
+            reference: What to remove.
+            slot: Which copy.
+
+        Returns:
+            ``None`` on success, or that mechanism's fault.
+        """
+        return self._for(reference).delete(reference, slot)
+
+    def inventory(self) -> tuple[SecretReference, ...]:
+        """List what every mechanism holds, by name only.
+
+        Returns:
+            The union across mechanisms, de-duplicated and sorted.
+
+        Sorted and de-duplicated because a reference could in principle be
+        declared to one mechanism and present in another's declared set, and a
+        listing that reported it twice would read as two secrets.
+        """
+        found: set[SecretReference] = set()
+        for provider in self.providers.values():
+            found.update(provider.inventory())
+        return tuple(sorted(found))

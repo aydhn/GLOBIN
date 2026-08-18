@@ -61,6 +61,7 @@ from globin.domain.bootstrap import (
     version_outcome,
 )
 from globin.domain.configuration import GlobinConfig
+from globin.domain.degradation import DegradationReport, degradation_outcome
 from globin.domain.environment import EnvironmentCapabilitySnapshot
 from globin.domain.runtime_state import (
     LIFECYCLE_FILE,
@@ -85,6 +86,7 @@ from globin.ports.bootstrap import (
     SecretProbe,
 )
 from globin.ports.configuration import ConfigurationSource
+from globin.ports.degradation import DegradationProbe
 from globin.ports.runtime_state import InstanceLock, RuntimeTreeSource, StateStore
 from globin.project_contract import PACKAGE_NAME
 
@@ -112,6 +114,10 @@ UNMEASURED_REMEDIATION: dict[str, str] = {
     "state.persistence": "Make the runtime tree usable first; nothing can be written until it is.",
     "state.previous_run": "Make the runtime tree usable first; the record is read from inside it.",
     "instance.lock": "Make the runtime tree usable first; the lock file lives inside it.",
+    "runtime.degradation": (
+        "Restore docs/engineering/degradation-contract.toml; without it GLOBIN "
+        "cannot say what it may run without."
+    ),
     "secrets.required": "Resolve the earlier refusal first.",
     "secrets.entitlement": "Resolve the earlier refusal first.",
 }
@@ -169,6 +175,7 @@ class BootstrapPipeline:
     lock: InstanceLock
     layout: RuntimeLayout
     configuration_sources: tuple[ConfigurationSource, ...] = ()
+    degradation: DegradationProbe | None = None
 
     def run(self, *, stop_at_first_refusal: bool = True) -> BootstrapOutcome:
         """Perform the checks and assemble what they justify.
@@ -270,6 +277,7 @@ class _RunState:
     secret_readiness: SecretReadiness
     entitlement_readiness: EntitlementReadiness
     runtime_root: RecordedPath
+    degradation_report: DegradationReport | None = None
     refused: bool = False
     baseline: RuntimeBaseline | None = None
     baseline_problem: str = ""
@@ -311,6 +319,9 @@ class _RunState:
             },
             "paths": self.paths.declared(),
             "dependencies": self.dependency_readiness.as_record(),
+            "degradation": (
+                self.degradation_report.as_record() if self.degradation_report is not None else {}
+            ),
             "secrets": self.secret_readiness.as_record(),
             "entitlements": self.entitlement_readiness.as_record(),
             "environment": (None if self.environment is None else self.environment.as_record()),
@@ -730,6 +741,28 @@ def _lock_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
     return lock_outcome(acquired=not problem, problem=problem)
 
 
+def _degradation_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
+    """Survey which declared components this host actually has.
+
+    Args:
+        pipeline: The pipeline, for its degradation probe.
+        state: The run state.
+
+    Returns:
+        The outcome of ``runtime.degradation``.
+
+    A pipeline with no probe surveys nothing and reports unmeasured, which is the
+    honest answer for a caller that did not wire one — the same treatment an
+    unreadable contract gets, and the reason the field defaults rather than being
+    required of every existing construction.
+    """
+    if pipeline.degradation is None:
+        state.degradation_report = None
+    else:
+        state.degradation_report = pipeline.degradation.survey()
+    return degradation_outcome(state.degradation_report)
+
+
 def _secrets_step(pipeline: BootstrapPipeline, state: _RunState) -> CheckOutcome:
     """Read whether required secret references resolve.
 
@@ -790,6 +823,7 @@ def steps() -> tuple[Callable[[BootstrapPipeline, _RunState], CheckOutcome], ...
         _persistence_step,
         _previous_run_step,
         _lock_step,
+        _degradation_step,
         _secrets_step,
         _entitlement_step,
     )

@@ -392,6 +392,154 @@ class ProjectRuntimeTree:
 
 
 @dataclass(frozen=True, slots=True)
+class AtomicDocumentWriter:
+    """The publication sequence, addressed by path rather than by area.
+
+    Args:
+        operations: The filesystem steps, substitutable one at a time.
+
+    The sequence is fixed and is not negotiable: a uniquely-named temporary file
+    **in the destination's own directory**, the encoded document, ``flush``,
+    ``fsync`` on the descriptor, close, then ``replace``. Python's own
+    documentation gives that order for ``fsync``, and the temporary file may not
+    live in the platform temporary directory because a rename is only atomic
+    within one filesystem — putting it elsewhere would silently turn the atomic
+    step into a copy.
+
+    **Extracted in Phase 031 so that one writer serves two addressing schemes.**
+    :class:`AtomicStateStore` addresses a document by
+    :class:`~globin.domain.runtime_state.RuntimeArea`; the secret vault is
+    deliberately *not* an area — its answer to the question that enumeration
+    poses, *may this be deleted*, is **no** — and it needs exactly this sequence.
+    A second copy of it is the drift ``docs/engineering/SOURCE_OF_TRUTH.md``
+    exists to prevent, and the sequence is the one thing here that must not be
+    got subtly differently twice.
+
+    The caller supplies an already-resolved target, because the two schemes
+    validate a name differently and neither validation belongs to the writing.
+    """
+
+    operations: FileOperations
+
+    def publish(self, target: Path, document: Mapping[str, object], *, label: str) -> None:
+        """Write one document atomically.
+
+        Args:
+            target: Where it goes, already validated by the caller.
+            document: What to write.
+            label: What to call the parent directory in a failure message.
+
+        Raises:
+            ValidationError: If the document is not representable as JSON.
+            RuntimePersistenceError: If it could not be published. The previous
+                document, if any, is left intact.
+
+        The encoding happens **before** anything is opened, so a document that
+        cannot be written does not leave a temporary file behind — and, more
+        importantly, does not truncate anything.
+        """
+        encoded = render(document)
+        try:
+            self.operations.makedirs(target.parent)
+        except OSError as fault:
+            msg = f"{label} could not be created: {fault.strerror or fault}"
+            raise RuntimePersistenceError(msg) from fault
+
+        stem = f"{TEMPORARY_PREFIX}{os.getpid()}-{target.name}{TEMPORARY_SUFFIX}"
+        temporary = target.parent / stem
+        try:
+            self._write(temporary, encoded)
+            self.operations.replace(temporary, target)
+        except OSError as fault:
+            self._discard_quietly(temporary)
+            msg = f"{target.name} could not be published: {fault.strerror or fault}"
+            raise RuntimePersistenceError(msg) from fault
+
+    def read(self, target: Path) -> Mapping[str, object] | None:
+        """Read one document back.
+
+        Args:
+            target: Where it lives, already validated by the caller.
+
+        Returns:
+            The parsed document, or ``None`` when there is no such file.
+
+        Raises:
+            ValidationError: If the file is not a JSON object.
+            RuntimePersistenceError: If it exists and could not be read.
+
+        Corrupt and absent are refused differently on purpose: they mean opposite
+        things, and only one of them is worth telling an operator about.
+        """
+        try:
+            text = target.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return None
+        except OSError as fault:
+            msg = f"{target.name} could not be read: {fault.strerror or fault}"
+            raise RuntimePersistenceError(msg) from fault
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError as fault:
+            msg = f"{target.name} is not valid JSON: {fault}"
+            raise ValidationError(msg) from fault
+        if not isinstance(parsed, dict):
+            held = type(parsed).__name__
+            msg = f"{target.name} holds a {held}, and a state document is an object"
+            raise ValidationError(msg)
+        return parsed
+
+    def discard(self, target: Path) -> None:
+        """Remove one document, if it is there.
+
+        Args:
+            target: Where it lives, already validated by the caller.
+
+        Raises:
+            RuntimePersistenceError: If it exists and could not be removed.
+        """
+        try:
+            self.operations.unlink(target)
+        except OSError as fault:
+            msg = f"{target.name} could not be removed: {fault.strerror or fault}"
+            raise RuntimePersistenceError(msg) from fault
+
+    def _write(self, temporary: Path, encoded: str) -> None:
+        r"""Write and durably flush the temporary file.
+
+        Args:
+            temporary: Where to write.
+            encoded: The rendered document.
+
+        Raises:
+            OSError: If any stage fails. Left to :meth:`publish`, which is where
+                the temporary artefact is cleaned up and the fault is renamed.
+
+        ``newline=""`` rather than ``"\\n"``: the document already ends in one, and
+        letting the platform translate it would make the bytes differ between
+        hosts for a document whose whole point is to be comparable.
+        """
+        with temporary.open("w", encoding="utf-8", newline="") as handle:
+            handle.write(encoded)
+            self.operations.flush(handle)
+            self.operations.fsync(handle.fileno())
+
+    def _discard_quietly(self, path: Path) -> None:
+        """Remove a temporary artefact, never masking the fault that caused it.
+
+        Args:
+            path: The temporary file.
+
+        A failure to clean up is deliberately swallowed. The caller is already
+        raising about something more important, and replacing that message with
+        "and also the temporary file could not be removed" would bury the fault
+        an operator has to act on.
+        """
+        with suppress(OSError):
+            self.operations.unlink(path)
+
+
+@dataclass(frozen=True, slots=True)
 class AtomicStateStore:
     """Publishes small JSON documents so no reader sees one half-written.
 
@@ -400,18 +548,29 @@ class AtomicStateStore:
         layout: The declared tree.
         operations: The filesystem steps, substitutable one at a time.
 
-    The publication sequence is fixed and is not negotiable: a uniquely-named
-    temporary file **in the destination's own directory**, the encoded document,
-    ``flush``, ``fsync`` on the descriptor, close, then ``replace``. Python's own
-    documentation gives that order for ``fsync``, and the temporary file may not
-    live in the platform temporary directory because a rename is only atomic
-    within one filesystem — putting it elsewhere would silently turn the atomic
-    step into a copy.
+    The publication sequence lives in :class:`AtomicDocumentWriter` and is shared
+    with the secret vault. What this class adds is the *addressing*: a
+    :class:`~globin.domain.runtime_state.RuntimeArea` and a filename, with the
+    name refused where it could leave the area.
     """
 
     root: Path
     layout: RuntimeLayout
     operations: FileOperations
+
+    def _writer(self) -> AtomicDocumentWriter:
+        """The publication sequence, bound to this store's operations.
+
+        Returns:
+            The writer.
+
+        A method rather than a field, so this class's constructor keeps the three
+        arguments every caller and every test already passes. Constructing it here
+        is a call in a method body, which is ordinary; a default in the class body
+        would be a call at import and
+        ``tests/architecture/test_architecture_contract.py`` forbids one.
+        """
+        return AtomicDocumentWriter(operations=self.operations)
 
     def _directory(self, area: RuntimeArea) -> Path:
         """Where one area is.
@@ -461,55 +620,7 @@ class AtomicStateStore:
         importantly, does not truncate anything.
         """
         target = self._target(area, name)
-        encoded = render(document)
-        try:
-            self.operations.makedirs(target.parent)
-        except OSError as fault:
-            msg = f"{area.value} could not be created: {fault.strerror or fault}"
-            raise RuntimePersistenceError(msg) from fault
-
-        temporary = target.parent / f"{TEMPORARY_PREFIX}{os.getpid()}-{name}{TEMPORARY_SUFFIX}"
-        try:
-            self._write(temporary, encoded)
-            self.operations.replace(temporary, target)
-        except OSError as fault:
-            self._discard_quietly(temporary)
-            msg = f"{name} could not be published: {fault.strerror or fault}"
-            raise RuntimePersistenceError(msg) from fault
-
-    def _write(self, temporary: Path, encoded: str) -> None:
-        r"""Write and durably flush the temporary file.
-
-        Args:
-            temporary: Where to write.
-            encoded: The rendered document.
-
-        Raises:
-            OSError: If any stage fails. Left to :meth:`publish`, which is where
-                the temporary artefact is cleaned up and the fault is renamed.
-
-        ``newline=""`` rather than ``"\\n"``: the document already ends in one, and
-        letting the platform translate it would make the bytes differ between
-        hosts for a document whose whole point is to be comparable.
-        """
-        with temporary.open("w", encoding="utf-8", newline="") as handle:
-            handle.write(encoded)
-            self.operations.flush(handle)
-            self.operations.fsync(handle.fileno())
-
-    def _discard_quietly(self, path: Path) -> None:
-        """Remove a temporary artefact, never masking the fault that caused it.
-
-        Args:
-            path: The temporary file.
-
-        A failure to clean up is deliberately swallowed. The caller is already
-        raising about something more important, and replacing that message with
-        "and also the temporary file could not be removed" would bury the fault
-        an operator has to act on.
-        """
-        with suppress(OSError):
-            self.operations.unlink(path)
+        self._writer().publish(target, document, label=area.value)
 
     def read(self, area: RuntimeArea, name: str) -> Mapping[str, object] | None:
         """Read one document back.
@@ -527,23 +638,7 @@ class AtomicStateStore:
                 purpose: they mean opposite things, and only one of them is worth
                 telling an operator about.
         """
-        target = self._target(area, name)
-        try:
-            text = target.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            return None
-        except OSError as fault:
-            msg = f"{name} could not be read: {fault.strerror or fault}"
-            raise RuntimePersistenceError(msg) from fault
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError as fault:
-            msg = f"{name} is not valid JSON: {fault}"
-            raise ValidationError(msg) from fault
-        if not isinstance(parsed, dict):
-            msg = f"{name} holds a {type(parsed).__name__}, and a state document is an object"
-            raise ValidationError(msg)
-        return parsed
+        return self._writer().read(self._target(area, name))
 
     def discard(self, area: RuntimeArea, name: str) -> None:
         """Remove one document, if it is there.
@@ -556,12 +651,7 @@ class AtomicStateStore:
             ValidationError: If the name could leave the area.
             RuntimePersistenceError: If it exists and could not be removed.
         """
-        target = self._target(area, name)
-        try:
-            self.operations.unlink(target)
-        except OSError as fault:
-            msg = f"{name} could not be removed: {fault.strerror or fault}"
-            raise RuntimePersistenceError(msg) from fault
+        self._writer().discard(self._target(area, name))
 
 
 @dataclass(frozen=True, slots=True)

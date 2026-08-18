@@ -192,7 +192,7 @@ readable.
 
 | Question | Owner |
 |---|---|
-| What a running GLOBIN does when a component is missing or degraded | Phase 031 |
+| What a running GLOBIN does when a component is missing or degraded | 031, delivered — [`DEGRADED_OPERATION.md`](DEGRADED_OPERATION.md) |
 | The preflight *suite*, its scheduling and its periodicity | Phase 030 |
 | Whether the environment band was drawn at the right granularity | Phase 032 |
 | Building `.venv` — still `scripts/bootstrap.ps1`, and only that | 017/020, delivered |

@@ -1,0 +1,166 @@
+# GLOBIN degradation contract — Phase 031
+#
+# What GLOBIN reaches for, whether it may run without each thing, and what an
+# absence costs. Read by `globin.adapters.degradation` and recomputed on every
+# run; nothing here is a measurement.
+#
+# NOT A SNAPSHOT, AND NOT A BASELINE. This file declares an *interface* — the
+# component set and each one's necessity — in the way `gpu-contract.toml`
+# declares which fields may be asked for without recording what any of them
+# answered. No version, no driver, no host measurement appears here, so nothing
+# goes red because a machine changed.
+#
+# ADDING A ROW IS A DECISION. `necessity = "required"` means GLOBIN refuses to
+# start on a host without it, and that refusal reaches an operator who cannot
+# read this file. The bar is in `docs/engineering/DEGRADED_OPERATION.md`: a
+# component is required only when its absence makes a declared GLOBIN capability
+# both unperformable *and* unreportable. Every component whose stand-in still
+# publishes a truthful record degrades instead — which today is all of them.
+#
+# `reached_through` is a tripwire in both directions.
+# `tests/architecture/test_degradation_discipline.py` asserts that every path
+# named here resolves to something real, and that every module defining an
+# absent-safe stand-in appears here. A seventh factory added without a row fails
+# the suite rather than being silently unsurveyed.
+#
+# `owner_phase = 0` means nobody owes an answer, because the stand-in *is* the
+# answer. A non-zero phase must not have been delivered yet.
+
+schema = 1
+
+# The host this contract was written against, cross-checked against
+# `runtime-contract.toml` so the two cannot drift into describing different
+# machines. Same shape as `gpu-contract.toml`'s.
+[target]
+system = "Windows"
+architecture = "AMD64"
+
+# --- Libraries reached through an absent-safe factory ------------------------
+
+[[component]]
+id = "component.library.psutil"
+kind = "library"
+necessity = "opportunistic"
+reached_through = "globin.adapters.health.system_process_probe"
+withdraws = []
+owner_phase = 0
+absence_means = """
+Process memory, CPU and handle counters are unmeasured. The health snapshot is
+still produced and still says why each field is absent, so nothing is silently
+zero. Opportunistic rather than optional because `health.checks()` already
+declares those checks as tolerating an unknown, and the CI quality job installs
+psutil on no run at all — a tier that made this amber would make it amber for
+ever.
+"""
+
+[[component]]
+id = "component.library.opentelemetry"
+kind = "library"
+necessity = "optional"
+reached_through = "globin.adapters.telemetry_otel.opentelemetry_bridge"
+withdraws = ["telemetry.export.otlp"]
+owner_phase = 0
+absence_means = """
+Telemetry cannot be exported over OTLP. Metrics are still recorded in-process and
+still readable through the diagnostics surface. Optional rather than
+opportunistic because export is a declared capability with a configuration switch
+an operator can turn on, and losing it silently would mean a switch that appears
+to work and does nothing.
+"""
+
+[[component]]
+id = "component.library.prometheus_client"
+kind = "library"
+necessity = "optional"
+reached_through = "globin.adapters.telemetry_prometheus.prometheus_publisher"
+withdraws = ["telemetry.export.prometheus"]
+owner_phase = 0
+absence_means = """
+Telemetry cannot be published in the Prometheus exposition format by that
+library. The loopback endpoint still serves its own text rendering. Optional for
+the same reason as the entry above.
+"""
+
+# --- Native libraries, each with exactly one permitted loader ----------------
+
+[[component]]
+id = "component.native.kernel32"
+kind = "native"
+necessity = "optional"
+reached_through = "globin.adapters.environment.windows_system_api"
+withdraws = ["environment.native_architecture", "secrets.vault"]
+owner_phase = 0
+absence_means = """
+The host's native architecture is recorded as UNKNOWN rather than guessed, which
+ADR-0075 requires because GetNativeSystemInfo reports an ARM64 host as if it were
+x86. The DPAPI vault also becomes unavailable, because LocalFree is a kernel32
+export and the vault is handed a callable from this module. Degraded rather than
+blocking: not knowing an architecture is a state ADR-0045 makes cheap, and a host
+that cannot answer is still allowed to run.
+"""
+
+[[component]]
+id = "component.native.advapi32"
+kind = "native"
+necessity = "required"
+reached_through = "globin.adapters.secrets.windows_credential_store"
+withdraws = ["secrets.store"]
+owner_phase = 0
+absence_means = """
+There is no local secret store on this host, so no credential can be resolved.
+Declared REQUIRED, and observed NOT_APPLICABLE while `required_references()` is
+empty — which is the honest pair today: nothing yet needs a credential, so the
+question does not arise, and the moment Phase 038 registers one the same
+declaration begins to refuse a start. Declaring it required outright would refuse
+a start today for a capability nothing uses, which is building ahead; declaring
+it optional would leave the required tier producible by nothing at all.
+"""
+
+[[component]]
+id = "component.native.crypt32"
+kind = "native"
+necessity = "optional"
+reached_through = "globin.adapters.secret_vault.secret_vault"
+withdraws = ["secrets.vault"]
+owner_phase = 0
+absence_means = """
+Key material larger than the Credential Manager's 2560-byte ceiling cannot be
+stored or read. Nothing GLOBIN does today needs it — the required set is empty —
+so this degrades rather than blocks, and the Credential Manager continues to hold
+everything that fits.
+"""
+
+# --- Things GLOBIN does not reach yet ----------------------------------------
+
+[[component]]
+id = "component.device.gpu"
+kind = "device"
+necessity = "opportunistic"
+reached_through = ""
+withdraws = []
+owner_phase = 183
+absence_means = """
+Nothing. No GLOBIN behaviour depends on a device, every row in
+`gpu-contract.toml` is declared optional, and ADR-0060 records that absence is a
+state rather than a failure. Observed NOT_APPLICABLE with reason NOT_YET_REACHED,
+never UNKNOWN: the question does not arise, which is different from a question
+nobody could answer. Detection is Phase 023's and is not repeated here; Phase 183
+is the phase that would first make something depend on a device.
+"""
+
+[[component]]
+id = "component.network.egress"
+kind = "network"
+necessity = "opportunistic"
+reached_through = ""
+withdraws = []
+owner_phase = 45
+absence_means = """
+Nothing. GLOBIN makes no outbound call, and that is a tested property rather than
+an aspiration: an autouse fixture refuses every outbound socket, one module may
+name `socket` and cannot spell an address, and the materialization gate reaches no
+network because it imports nothing that could. No probe is performed here, and
+adding one would both create a mechanism with no caller and remove a guarantee
+the architecture tests currently prove. Phase 045 is the first phase with a
+caller and owns measuring this; Phase 297 owns refusing a live start on it.
+"""

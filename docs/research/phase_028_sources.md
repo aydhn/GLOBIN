@@ -309,5 +309,5 @@ S-06 and S-09 — and each says so where it did.
 |---|---|
 | How a credential is collected from an operator, and validated before first use | Phase 029 |
 | The wider health-check suite a long-running process needs | Phase 030 |
-| Behaviour when the network, GPU or optional native components are unavailable | Phase 031 |
+| Behaviour when the network, GPU or optional native components are unavailable | 031, delivered — [`../engineering/DEGRADED_OPERATION.md`](../engineering/DEGRADED_OPERATION.md) |
 | Which permissions a Binance key carries, and what an environment *is* | Phases 035 and 039 |

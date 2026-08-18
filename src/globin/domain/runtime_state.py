@@ -186,6 +186,8 @@ class RuntimeLayout:
         run: The live instance's lock and metadata.
         tmp: Per-run scratch space.
         logs: Bounded diagnostic records. The only area that is appended to.
+        vault: Protected secret envelopes. **Not a** :class:`RuntimeArea`, and
+            the omission is the decision — see below.
 
     Raises:
         ValidationError: If any segment could leave the tree.
@@ -193,6 +195,25 @@ class RuntimeLayout:
     Every field is a single segment, validated on construction. A layout that
     could escape its own root cannot be built, so the adapter never has to hold a
     value it must then refuse.
+
+    **``vault`` is declared here and is deliberately absent from**
+    :class:`RuntimeArea`. That enumeration exists, in its own words, so that a
+    component asking for somewhere to write "has to answer the question the
+    enumeration poses: may this be deleted, and when." Every one of the five
+    answers *yes*. A vault answers *never — deleting it destroys material that
+    cannot be regenerated*, which is not one of the answers this vocabulary has.
+
+    Keeping it out is what makes the rest stay true: :meth:`areas` does not
+    return it, so ``prepare()`` does not create it, ``boundary_outcome`` does not
+    count it, ``FilesystemTreeProbe`` does not walk it and ``runtime_anchors``
+    does not report it. Every one of those is correct, and none would be if it
+    were a sixth member. It is validated by the same
+    :func:`segment_problems` as the others through :meth:`declared`, because a
+    segment that could leave the tree is refused wherever it is going.
+
+    Added by Phase 031. ``docs/engineering/RUNTIME_FILESYSTEM.md`` carries the
+    operator-facing rule, including the one thing that must be said loudly: this
+    directory is the only part of the tree that is **not** disposable.
     """
 
     namespace: str = "GLOBIN"
@@ -201,6 +222,7 @@ class RuntimeLayout:
     run: str = "run"
     tmp: str = "tmp"
     logs: str = "logs"
+    vault: str = "vault"
 
     def __post_init__(self) -> None:
         """Refuse any segment that is not a plain directory name."""
@@ -225,6 +247,7 @@ class RuntimeLayout:
             "run": self.run,
             "tmp": self.tmp,
             "logs": self.logs,
+            "vault": self.vault,
         }
 
     def segment_for(self, area: RuntimeArea) -> str:

@@ -184,6 +184,7 @@ launcher reads these, so changing one is a breaking change.
 | `dependency.lock` | Declared, locked and installed |
 | `config.valid` | The configuration binds and validates |
 | `paths.runtime` | The declared roots are usable |
+| `runtime.degradation` | Every declared optional component is present or accounted for |
 | `secrets.required` | Every required reference resolves |
 | `secrets.entitlement` | Every required credential is permitted to do what is asked of it |
 | `bootstrap.ready` | The aggregate |

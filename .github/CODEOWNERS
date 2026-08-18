@@ -72,3 +72,7 @@
 # --- Decisions and binding instructions.
 /docs/adr/                      @aydhn
 /AGENTS.md                      @aydhn
+
+# --- The secret vault. The only module that protects material at rest, and the
+# only permitted loader of crypt32. Added in Phase 031; see docs/security/SECRET_VAULT.md.
+/src/globin/adapters/secret_vault.py   @aydhn

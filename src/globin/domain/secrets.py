@@ -45,6 +45,7 @@ which key type is used (Phases 029 and 038), and what an environment *is*
 """
 
 import hmac
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -172,6 +173,38 @@ class StoreFault(StrEnum):
     BACKEND_REFUSED = "backend_refused"
     VALUE_TOO_LARGE = "value_too_large"
     VERIFICATION_FAILED = "verification_failed"
+
+    PROVIDER_READ_ONLY = "provider_read_only"
+    """This mechanism never writes, so the operation had no meaning here.
+
+    Added by Phase 031. Distinct from :attr:`BACKEND_REFUSED`, which says *the
+    platform said no*: this says *this mechanism has no write at all*, and the
+    two send an operator to different places. ``SECURITY_BASELINE.md`` §2 permits
+    the environment "only as a hand-off, never as storage", and a provider that
+    could write there would make it the resting place that sentence forbids.
+    """
+
+    PROVIDER_NOT_PERMITTED = "provider_not_permitted"
+    """GLOBIN's own policy refuses this mechanism under this profile.
+
+    Added by Phase 031. Reported as :attr:`BACKEND_REFUSED` it would send an
+    operator hunting for a platform fault that does not exist; the cause is a
+    line of policy, and the remediation is to use a mechanism the profile allows
+    rather than to repair anything.
+    """
+
+    ENVELOPE_CORRUPT = "envelope_corrupt"
+    """A stored envelope failed its own integrity check and was not decrypted.
+
+    Added by Phase 031, and it exists because the platform's own check cannot be
+    relied on. ``CryptUnprotectData``'s documentation states that on corruption
+    it "may return ERROR_INVALID_DATA, ERROR_INVALID_PARAMETER, or in some cases
+    **may succeed with corrupted output**", and that applications must not rely
+    on a specific code to detect tampering (``phase_031_sources.md`` S-04). The
+    envelope therefore carries a digest of its own, checked *before* the platform
+    is reached — so this fault means the file was refused rather than decrypted
+    wrongly.
+    """
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -484,6 +517,230 @@ def store_key(reference: SecretReference, slot: SecretSlot = SecretSlot.CURRENT)
         msg = f"a store key cannot be built from an incomplete reference: {parts}"
         raise ValidationError(msg)
     return KEY_SEPARATOR.join(parts).lower()
+
+
+VARIABLE_ALPHABET: Final[str] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+"""What may appear in an environment variable name GLOBIN agrees to read.
+
+Upper case and underscore, which is the platform convention and — unlike
+:data:`NAME_ALPHABET` — is *not* folded, because a variable name is compared by
+the operating system rather than by GLOBIN. Windows matches these
+case-insensitively and :data:`os.environ` upper-cases its keys there, so a
+lower-case spelling would work on one host and not another; requiring the
+conventional form makes the two agree.
+"""
+
+MAX_VARIABLE_LENGTH: Final[int] = 128
+"""The longest environment variable name a locator may name.
+
+Not a platform limit. It is a bound on what GLOBIN will accept so that a locator
+cannot carry an unbounded string into a record, for the reason every other length
+in this module has one.
+"""
+
+CONFIGURATION_PREFIX: Final[str] = "GLOBIN_"
+"""The prefix that marks a variable as configuration rather than a secret.
+
+Restated here rather than imported. :mod:`globin.domain.configuration` owns the
+value and reaches diagnostics, health, support and watchdog to do its own job;
+binding the secret store to all of that for one string would be a coupling the
+layer does not need. ``tests/contract/test_secrets_contract.py`` compares the two
+constants, so the restatement is checked rather than trusted.
+"""
+
+
+class SecretProviderKind(StrEnum):
+    """Which mechanism holds a secret's material.
+
+    A mechanism, never an instance. Adding a member is adopting a store; it is
+    not naming a deployment, and nothing here says which environment or which
+    machine.
+
+    ``SECRET_STORE_CONTRACT.md`` §7 permits material at rest in a file only under
+    conditions the vault meets and the Credential Manager does not need; that the
+    two are *disjoint by arithmetic* — one takes what fits
+    :data:`MAX_SECRET_BYTES`, the other what does not — is what keeps a second
+    mechanism from becoming a second answer to one question.
+    """
+
+    CREDENTIAL_MANAGER = "credential_manager"
+    DPAPI_VAULT = "dpapi_vault"
+    ENVIRONMENT = "environment"
+
+
+def provider_writable(provider: SecretProviderKind) -> bool:
+    """Whether this mechanism may be written to at all.
+
+    Args:
+        provider: The mechanism.
+
+    Returns:
+        ``False`` for :attr:`SecretProviderKind.ENVIRONMENT`, which is a hand-off
+        and not a store — ``SECURITY_BASELINE.md`` §2: "Environment variables are
+        permitted only as a hand-off, never as storage."
+
+    **A property of the mechanism, so a caller can refuse a write before
+    collecting material rather than after.** That ordering is the one
+    :func:`~globin.application.secrets.require_permitted` already argues for:
+    there is no branch in which a secret is collected and then discarded, because
+    a value that never existed cannot leak.
+    """
+    return provider is not SecretProviderKind.ENVIRONMENT
+
+
+def provider_permitted(
+    provider: SecretProviderKind,
+    profile: str,
+    *,
+    allowed: Mapping[str, Sequence[str]],
+) -> bool:
+    """Whether this provider may be used under this profile.
+
+    Args:
+        provider: The mechanism.
+        profile: The run's resolved profile name.
+        allowed: Provider value to the profiles that permit it. **Supplied rather
+            than compiled in**: three of the four profile names are venue
+            vocabulary, and ``tests/architecture/test_identifier_discipline.py``
+            refuses them as a live constant anywhere under ``globin.domain``.
+
+    Returns:
+        Whether it is permitted. **A provider absent from the mapping is
+        permitted**, so the gate applies only where a phase has declared one and
+        adding a mechanism does not silently disable it.
+
+    The same division :func:`~globin.domain.config_layout.resolve_profile` draws:
+    the domain bounds the shape, the composition root owns the set. What arrives
+    here is a decision about *this run*; the adapter downstream holds a boolean
+    rather than a policy, so it cannot re-decide.
+    """
+    permitted = allowed.get(provider.value)
+    if permitted is None:
+        return True
+    return profile in permitted
+
+
+def variable_problems(name: str) -> tuple[str, ...]:
+    """Judge whether a string may name an environment variable GLOBIN reads.
+
+    Args:
+        name: The candidate variable name.
+
+    Returns:
+        One sentence per reason it may not be, empty when it may.
+
+    Four refusals: empty, longer than :data:`MAX_VARIABLE_LENGTH`, containing a
+    character outside :data:`VARIABLE_ALPHABET`, or **beginning with**
+    :data:`CONFIGURATION_PREFIX`.
+
+    **The last is the one that matters, and it is not hypothetical.**
+    :class:`~globin.adapters.configuration.EnvironmentConfigurationSource` raises
+    on any ``GLOBIN_`` variable that
+    :func:`~globin.domain.observability.is_sensitive` matches — and that
+    function's fragments include ``api_key``, ``secret``, ``credential``,
+    ``token`` and ``private_key``, so every plausible name for a secret variable
+    matches. Left unchecked, an operator naming one ``GLOBIN_VENUE_API_KEY``
+    would make **every subsequent GLOBIN start-up refuse**, with a message about
+    configuration, over a variable they set for the secret store. Refusing at the
+    point the name is *chosen* turns a confusing downstream failure into a local
+    sentence that names the rule.
+    """
+    problems: list[str] = []
+    if not name:
+        problems.append("an environment variable name may not be empty")
+        return tuple(problems)
+    if len(name) > MAX_VARIABLE_LENGTH:
+        problems.append(
+            f"an environment variable name may be at most {MAX_VARIABLE_LENGTH} "
+            f"characters, and this one is {len(name)}"
+        )
+    outside = sorted({character for character in name if character not in VARIABLE_ALPHABET})
+    if outside:
+        spelled = ", ".join(repr(character) for character in outside)
+        problems.append(
+            f"an environment variable name may hold only upper-case letters, digits "
+            f"and underscores, and this one holds {spelled}"
+        )
+    if name.startswith(CONFIGURATION_PREFIX):
+        problems.append(
+            f"{name!r} begins with {CONFIGURATION_PREFIX!r}, which marks a variable as "
+            f"GLOBIN configuration; a credential-shaped variable with that prefix is "
+            f"refused before it is read and would make every later start-up fail "
+            f"(see docs/security/SECURITY_BASELINE.md)"
+        )
+    return tuple(problems)
+
+
+@dataclass(frozen=True, slots=True, order=True)
+class SecretLocator:
+    """Which provider holds one reference's material, and where inside it.
+
+    Args:
+        provider: The mechanism.
+        reference: What it holds.
+        variable: The environment variable to read. Non-empty **exactly when**
+            the provider is :attr:`SecretProviderKind.ENVIRONMENT`.
+
+    Raises:
+        ValidationError: If ``variable`` disagrees with ``provider``, or names a
+            variable :func:`variable_problems` refuses.
+
+    **Beside the reference, never a field on it**, and that placement is the
+    decision this type exists to record. :class:`SecretReference` is frozen with
+    ``order=True`` and is a dictionary key, a sort key and a manifest field
+    throughout; a fourth field would reorder every existing sort by its position
+    alone. Worse, it would force a choice between two bad outcomes: either
+    :func:`store_key` grows a component — which ADR-0074 records as a
+    delete-and-recreate migration for every credential already written — or it
+    ignores a field the reference carries, so two references comparing unequal
+    produce one key. That second outcome is the silent collision the case-folding
+    argument was written against.
+
+    ``provider`` is the first field so that ordering groups locators by
+    mechanism, which is the rendering an inventory wants.
+    """
+
+    provider: SecretProviderKind
+    reference: SecretReference
+    variable: str = ""
+
+    def __post_init__(self) -> None:
+        """Refuse a locator whose variable and provider disagree."""
+        if self.provider is SecretProviderKind.ENVIRONMENT:
+            if not self.variable:
+                msg = (
+                    f"{self.provider.value} names no variable for "
+                    f"{self.reference.name!r}, and a hand-off with no variable "
+                    f"has nowhere to read from"
+                )
+                raise ValidationError(msg)
+            problems = variable_problems(self.variable)
+            if problems:
+                raise ValidationError("; ".join(problems))
+        elif self.variable:
+            msg = (
+                f"{self.provider.value} reads no environment variable, so "
+                f"{self.variable!r} would be carried and never used"
+            )
+            raise ValidationError(msg)
+
+    def as_record(self) -> dict[str, object]:
+        """This locator as a publishable record.
+
+        Returns:
+            The provider, the reference's parts and the variable name.
+
+        **The variable's name, never its value.** A name is ordinary data and is
+        what an operator needs in order to fix a missing hand-off; the value is
+        the secret, and nothing here can reach it.
+        """
+        return {
+            "provider": self.provider.value,
+            "environment": self.reference.environment.text,
+            "kind": self.reference.kind.value,
+            "name": self.reference.name,
+            "variable": self.variable,
+        }
 
 
 PEM_ARMOUR: Final[str] = "-----BEGIN"

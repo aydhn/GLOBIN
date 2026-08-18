@@ -86,6 +86,7 @@ EXPECTED_MAPPING: dict[str, str] = {
     "state.previous_run": "RUNTIME_STATE_CORRUPT",
     "instance.lock": "INSTANCE_ALREADY_ACTIVE",
     "environment.capability": "ENVIRONMENT_INCOMPATIBLE",
+    "runtime.degradation": "ENVIRONMENT_INCOMPATIBLE",
     "secrets.required": "SECRETS_UNREADY",
     "secrets.entitlement": "CREDENTIAL_NOT_ENTITLED",
     "bootstrap.ready": "GATE_FAILED",

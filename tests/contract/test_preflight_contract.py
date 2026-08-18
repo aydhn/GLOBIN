@@ -66,7 +66,15 @@ def test_every_documented_durability_matches_the_code(suite_text: str) -> None:
         assert documented[spec.identifier] == spec.durability.name
 
 
-SPELLED: dict[int, str] = {7: "seven", 10: "ten", 11: "eleven", 12: "twelve", 18: "eighteen"}
+SPELLED: dict[int, str] = {
+    7: "seven",
+    8: "eight",
+    10: "ten",
+    11: "eleven",
+    12: "twelve",
+    18: "eighteen",
+    19: "nineteen",
+}
 """How the document spells the counts it states.
 
 A map rather than a library, and a :exc:`KeyError` when the split moves outside it

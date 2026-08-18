@@ -16,6 +16,7 @@ assert it appears in no stream and no record.
 
 import io
 import json
+from pathlib import Path
 from typing import Final
 
 import pytest
@@ -28,13 +29,14 @@ from globin.domain.secrets import (
     EntryProblem,
     SecretEntryOutcome,
     SecretKind,
+    SecretProviderKind,
     SecretReference,
     SecretResolution,
     SecretSlot,
     SecretValue,
     StoreFault,
 )
-from globin.runtime.cli import main
+from globin.runtime.cli import SECRETS_DOCTOR, SECRETS_SUBCOMMANDS, main
 
 pytestmark = pytest.mark.integration
 
@@ -521,3 +523,92 @@ def test_a_refused_format_names_every_rule_it_broke_and_no_material(
     assert "refused_format" in out
     assert "surrounding_whitespace" in err
     assert "too_large" in err
+
+
+# ---------------------------------------------------------------------------
+# The seventh verb
+# ---------------------------------------------------------------------------
+
+
+def test_doctor_reports_every_mechanism_without_reading_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A per-mechanism capability report, and nothing an operator stored.
+
+    `SECRET_STORE_CONTRACT.md` section 5 permits a health check precisely because
+    it reports nothing it found. This asserts the same of `doctor`: the store
+    double records every call it receives, and none of them is a resolve.
+    """
+    store = _Store()
+    monkeypatch.setattr(
+        "globin.runtime.cli.build_secret_providers",
+        lambda _state: {
+            SecretProviderKind.CREDENTIAL_MANAGER: store,
+            SecretProviderKind.ENVIRONMENT: _Store(),
+        },
+    )
+    code, out, _ = run("secrets", "doctor")
+    assert code == int(ExitCode.OK)
+    assert "credential_manager" in out
+    assert "environment" in out
+
+
+def test_doctor_reports_rather_than_gates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An unavailable mechanism is worth knowing about, not worth refusing on.
+
+    The gate for whether GLOBIN may start is `bootstrap check`; a report that
+    failed would make an informational command fail on a machine that works.
+    """
+    monkeypatch.setattr(
+        "globin.runtime.cli.build_secret_providers",
+        lambda _state: {
+            SecretProviderKind.DPAPI_VAULT: _Store(fault=StoreFault.BACKEND_UNAVAILABLE),
+        },
+    )
+    code, out, _ = run("secrets", "doctor")
+    assert code == int(ExitCode.OK)
+    assert "backend_unavailable" in out
+
+
+def test_doctor_says_which_mechanisms_never_accept_a_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hand-off is not a store, and an operator should not have to discover that.
+
+    `SECURITY_BASELINE.md` section 2 permits the environment "only as a hand-off,
+    never as storage", so the report says so before somebody tries.
+    """
+    monkeypatch.setattr(
+        "globin.runtime.cli.build_secret_providers",
+        lambda _state: {
+            SecretProviderKind.CREDENTIAL_MANAGER: _Store(),
+            SecretProviderKind.ENVIRONMENT: _Store(),
+        },
+    )
+    _, out, _ = run("secrets", "doctor")
+    assert "read-only" in out
+    assert "read-write" in out
+
+
+def test_doctor_renders_a_document_under_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Standard output carries JSON and nothing else."""
+    monkeypatch.setattr(
+        "globin.runtime.cli.build_secret_providers",
+        lambda _state: {SecretProviderKind.CREDENTIAL_MANAGER: _Store()},
+    )
+    _, out, _ = run("secrets", "doctor", "--json")
+    document = json.loads(out)
+    assert document["providers"][0]["provider"] == "credential_manager"
+
+
+def test_the_seventh_verb_is_named_by_the_contract() -> None:
+    """Section 5 defines the surface, and the code may not exceed it.
+
+    The contract was amended in the same commit that added the verb, which is the
+    order that matters: a command surface that grew first and was described
+    afterwards is a contract following the code.
+    """
+    root = Path(__file__).resolve().parents[2]
+    contract = (root / "docs/security/SECRET_STORE_CONTRACT.md").read_text(encoding="utf-8")
+    assert "per-mechanism capability report" in contract
+    assert SECRETS_DOCTOR in SECRETS_SUBCOMMANDS

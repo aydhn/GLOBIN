@@ -32,6 +32,16 @@ secrets.yaml
 secrets.yml
 *.secret
 *.token
+# Phase 031's DPAPI envelopes. They live outside this tree, under %LOCALAPPDATA%,
+# so this is defence in depth against a mistaken in-tree write rather than the
+# primary control -- written before the first byte exists, for the reason stated
+# at the top of this file.
+#
+# A SUFFIX RATHER THAN A DIRECTORY, deliberately. A bare `vault/` would match at
+# every depth and would swallow a future `tools/quality/vault/` or
+# `src/globin/vault/` silently, with `git add -A` reporting nothing -- which is
+# exactly how Phase 018 lost `tools/quality/wheels/` to an unanchored `wheels/`.
+*.vault.json
 telegram_token.txt
 
 # --- Python bytecode / caches ----------------------------------------------

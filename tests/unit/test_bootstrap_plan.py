@@ -207,6 +207,11 @@ def test_every_check_identifier_is_stable_and_machine_readable() -> None:
         "state.persistence",
         "state.previous_run",
         "instance.lock",
+        # Phase 031. Placed before the two secrets checks on purpose: "is there a
+        # credential store on this machine at all" is the precondition for "did
+        # each reference resolve", so an operator on a host with no store is told
+        # to fix the machine rather than to fix a credential.
+        "runtime.degradation",
         "secrets.required",
         # Phase 029. Placed after `secrets.required` because a credential that
         # does not resolve cannot be asked what it is permitted to do, and

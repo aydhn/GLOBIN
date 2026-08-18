@@ -35,15 +35,32 @@ from globin.runtime.composition import PACKAGE_RELATIVE_PATH, ROOT_PACKAGE
 
 GUARDED: Final[dict[str, str]] = {
     "advapi32": "globin.adapters.secrets",
+    "crypt32": "globin.adapters.secret_vault",
     "kernel32": "globin.adapters.environment",
 }
 """Which Win32 library each module is the sole permitted loader of.
 
-`advapi32` carries the credential functions and `kernel32` the architecture
-ones. They are separate entries rather than one rule about "Win32" because the
-two adapters are absent-safe for *different* reasons — one for a logon session
-with no credential set, one for a Windows release predating an API — and folding
-them together would let one module quietly acquire the other's capability.
+`advapi32` carries the credential functions, `crypt32` the data-protection ones
+and `kernel32` the architecture ones. They are separate entries rather than one
+rule about "Win32" because the three adapters are absent-safe for *different*
+reasons — a logon session with no credential set, a non-Windows interpreter, and
+a Windows release predating an API — and folding them together would let one
+module quietly acquire another's capability.
+
+**Phase 031 kept this a `dict[str, str]` rather than widening it to permit two
+loaders of `kernel32`, and the reason is worth recording where the map is.** The
+DPAPI vault is obliged to call `LocalFree`, which is a `kernel32` export
+(`docs/research/phase_031_sources.md` S-02, S-03). Widening the entry would have
+handed `globin.adapters.secret_vault` the whole of the broadest DLL on Windows —
+`CreateFileW`, `CreateProcessW`, `VirtualAlloc`, the console API — in order to
+obtain one one-argument deallocator, which is exactly the "quietly acquire
+another's capability" this docstring warns about. It would also have degraded the
+non-vacuity check below: over a tuple of permitted modules, asserting *any* of
+them loads the library stops proving that a particular one still does.
+
+So the vault is handed a `local_free` **callable** by
+`globin.adapters.environment`, which owns `kernel32`. One function crosses the
+boundary, never a handle.
 """
 
 
@@ -129,14 +146,14 @@ def test_the_permitted_adapter_does_load_it(repo_root: Path, library: str, permi
     assert library in _loaded_libraries(_parse(source))
 
 
-def test_neither_factory_loads_its_library_at_import(repo_root: Path) -> None:
+def test_no_factory_loads_its_library_at_import(repo_root: Path) -> None:
     """The load must be inside a function, which is what makes the absence safe.
 
     `test_architecture_contract.py` already forbids a *layer package* performing
     work at import, and it catches calls in module and class bodies. This states
-    the specific consequence for these two modules, because it is the property
+    the specific consequence for these three modules, because it is the property
     the CI story depends on: `globin.adapters` is imported by the smoke test on
-    hosts where neither library exists.
+    hosts where none of the three libraries exists.
     """
     package = repo_root / PACKAGE_RELATIVE_PATH
     offenders: list[str] = []

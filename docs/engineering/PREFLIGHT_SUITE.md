@@ -65,11 +65,12 @@ unconsidered answer be believed for ever.
 | `state.persistence` | `PERISHABLE` |
 | `state.previous_run` | `STABLE` |
 | `instance.lock` | `PERISHABLE` |
+| `runtime.degradation` | `PERISHABLE` |
 | `secrets.required` | `PERISHABLE` |
 | `secrets.entitlement` | `PERISHABLE` |
 | `bootstrap.ready` | `PERISHABLE` |
 
-Eleven stable, seven perishable. The table is a restatement of `checks()`, and
+Eleven stable, eight perishable. The table is a restatement of `checks()`, and
 `tests/contract/test_preflight_contract.py` compares the two in both directions, so
 a row that drifts fails the suite rather than misleading a reader.
 
@@ -168,7 +169,7 @@ run rather than two renderings of it.
 | Question | Phase |
 |---|---|
 | What each check measures and what its exit code means | 021, delivered — [`BOOTSTRAP.md`](BOOTSTRAP.md) |
-| Behaviour when the network, GPU or optional native components are unavailable | 031 |
+| Behaviour when the network, GPU or optional native components are unavailable | 031, delivered — [`DEGRADED_OPERATION.md`](DEGRADED_OPERATION.md) |
 | Whether the band's phases are drawn at the right granularity | 032 |
 | Blocking a **live** launch on connectivity, credentials and risk | 297 |
 | A process that runs long enough to need a re-take, and the loop that performs it | 297 and beyond |

@@ -40,6 +40,8 @@ that certifies — and the one criterion it could not — is in
 | How is a credential handed to GLOBIN, and what decides it may be used? | [`docs/security/CREDENTIAL_FLOW.md`](docs/security/CREDENTIAL_FLOW.md), [ADR-0077](docs/adr/0077-a-credential-is-collected-at-a-console-and-a-permission-is-declared-rather-than-verified.md) |
 | Could this lock actually be installed on this machine, offline? | [`docs/engineering/DEPENDENCY_MATERIALIZATION.md`](docs/engineering/DEPENDENCY_MATERIALIZATION.md), [ADR-0078](docs/adr/0078-the-second-lock-reader-is-the-reference-implementation-and-a-cache-is-not-a-source-of-trust.md) |
 | Where does a secret actually live, and what will never display one? | [`docs/security/SECRET_STORE.md`](docs/security/SECRET_STORE.md), [ADR-0074](docs/adr/0074-the-secret-store-is-the-windows-credential-manager-and-rotation-is-constructed.md) |
+| Where does a key too large for the store live, and what does that not promise? | [`docs/security/SECRET_VAULT.md`](docs/security/SECRET_VAULT.md), [ADR-0083](docs/adr/0083-a-second-secret-mechanism-is-admitted-by-arithmetic-and-carries-its-own-integrity-check.md) |
+| What may GLOBIN run without, and what does it refuse to start without? | [`docs/engineering/DEGRADED_OPERATION.md`](docs/engineering/DEGRADED_OPERATION.md), [`docs/engineering/degradation-contract.toml`](docs/engineering/degradation-contract.toml) |
 | How does a running GLOBIN answer questions about itself over HTTP? | [`docs/engineering/DIAGNOSTICS_ENDPOINT.md`](docs/engineering/DIAGNOSTICS_ENDPOINT.md), [ADR-0072](docs/adr/0072-the-diagnostics-surface-is-loopback-only-read-only-and-bounded-by-construction.md) |
 | How do I write documentation? | [`docs/engineering/DOCUMENTATION_STANDARD.md`](docs/engineering/DOCUMENTATION_STANDARD.md) |
 | How is the system structured? | [`docs/architecture/README.md`](docs/architecture/README.md) |
@@ -571,8 +573,10 @@ degrades rather than blocks**, which is what keeps CI's runner from going red fo
 ever. Exit code **24**, and it is deliberately not `10`: that means the host failed
 the declared contract, this means it satisfies it and lacks a capability.
 
-**Six libraries are now absent-safe.** `advapi32` and `kernel32` join the four, each
-reached through one factory in one adapter, each with an architecture tripwire.
+**Six libraries are now absent-safe** -- `psutil`, `opentelemetry`, `prometheus_client`,
+`advapi32`, `kernel32` and, since Phase 031, `crypt32` -- each reached through one
+factory in one adapter, each with an architecture tripwire. Phase 031 also made
+*which arm each one took* something GLOBIN records rather than discards.
 
 **Do not widen the bind address for remote access.** The type will not let you, and the
 supported shape is a separate authenticated, TLS-capable collector that scrapes
@@ -779,6 +783,50 @@ Nothing writes that file. Read a survivor's recorded argument before changing it
 
 Tests run against the source tree with no install step, because
 `pythonpath = ["src"]` is set in `pyproject.toml`. There is no build in Phase 1.
+
+Phase 031 gave GLOBIN a way to say **what it is running without**, and somewhere to
+put a key that does not fit.
+
+```bash
+.venv\Scripts\globin.exe secrets doctor
+```
+
+Six absent-safe factories each choose between a working implementation and a
+recording stand-in, and **which arm they took was thrown away** -- it survived
+nowhere but an untyped dictionary inside one command, covering two of the six. A
+declared registry now carries a **necessity** per component and a posture is folded
+from what each factory actually returned. Three tiers: `required` refuses a start,
+`optional` starts and names what stopped working, `opportunistic` changes nothing --
+that third one being Phase 030's inherited rule, because a capability the registry
+*predicted* absent must not make a host amber. **`advapi32` is declared required and
+observed not-applicable** while nothing needs a credential, so the tier is real today
+without refusing a start for a capability no caller uses. **The network is declared,
+not probed**: a probe would be a mechanism with no caller *and* would remove a
+guarantee the architecture tests currently prove. No new exit code -- 24 is reused
+and **26 stays free**.
+
+Alongside it, as the **fifteenth scope amendment**, a DPAPI vault -- and it scores
+**one of ADR-0021's four conditions**, which ADR-0082 says plainly rather than argues
+around. The store takes what fits its 2560-byte ceiling and the vault takes what does
+not, reading **the same constant**, so the two are disjoint by arithmetic and there is
+**no fallback edge** between them. `belongs_in_vault` takes no key type: a private key
+that fits belongs in the store.
+
+**The envelope carries its own integrity check, verified before the platform is
+reached** -- Microsoft documents that `CryptUnprotectData` may succeed *with corrupted
+output* and says not to rely on a code to detect tampering. The digest is **not** a
+secret fingerprint: DPAPI derives a fresh key per call, so two protections of one
+value differ. `CRYPTPROTECT_LOCAL_MACHINE` is defined **precisely so its absence can be
+asserted**; the prompt structure is null and no such type exists in the package.
+`LocalFree` crosses the module boundary as **one function, never a library handle**.
+
+**The vault is a sibling directory, not a sixth `RuntimeArea`** -- all five areas
+answer *yes* to "may this be deleted" and a vault answers *never*. It is created by
+the first write, so its existence is itself evidence something was stored. **It does
+not travel** between accounts or machines, and there is no backup: recovery is
+re-enrolment. Details:
+[`docs/engineering/DEGRADED_OPERATION.md`](docs/engineering/DEGRADED_OPERATION.md) and
+[`docs/security/SECRET_VAULT.md`](docs/security/SECRET_VAULT.md).
 
 ---
 

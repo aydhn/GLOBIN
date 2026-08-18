@@ -146,6 +146,8 @@ a future reader can judge whether the reason still holds.
 | [0079](0079-phase-030-widens-to-deliver-the-configuration-evidence-surface.md) | Phase 030 widens to deliver the configuration evidence surface | Accepted |
 | [0080](0080-a-check-declares-whether-its-answer-survives-the-run.md) | A check declares whether its answer survives the run | Accepted |
 | [0081](0081-configuration-explains-itself-through-two-fingerprints-and-one-manifest.md) | Configuration explains itself through two fingerprints and one manifest | Accepted |
+| [0082](0082-phase-031-widens-to-deliver-the-user-scoped-secret-vault.md) | Phase 031 widens to deliver the user-scoped secret vault | Accepted |
+| [0083](0083-a-second-secret-mechanism-is-admitted-by-arithmetic-and-carries-its-own-integrity-check.md) | A second secret mechanism is admitted by arithmetic and carries its own integrity check | Accepted |
 
 ## Relationship to other documents
 

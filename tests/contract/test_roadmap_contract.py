@@ -134,7 +134,7 @@ def test_roadmap_band_headings_match_the_code_skeleton(roadmap_text: str) -> Non
 #: diff. Raise it only when the phase genuinely satisfies
 #: ``docs/engineering/DEFINITION_OF_DONE.md`` — never in advance, and never to
 #: make a failing test pass.
-LAST_COMPLETED_PHASE: int = 30
+LAST_COMPLETED_PHASE: int = 31
 
 
 def test_no_future_phase_is_marked_complete(roadmap_rows: list[RoadmapRow]) -> None:

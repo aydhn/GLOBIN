@@ -564,6 +564,12 @@ def checks() -> tuple[CheckSpec, ...]:
         CheckSpec(
             "instance.lock", "instance", ExitCode.INSTANCE_ALREADY_ACTIVE, Durability.PERISHABLE
         ),
+        CheckSpec(
+            "runtime.degradation",
+            "runtime",
+            ExitCode.ENVIRONMENT_INCOMPATIBLE,
+            Durability.PERISHABLE,
+        ),
         CheckSpec("secrets.required", "secrets", ExitCode.SECRETS_UNREADY, Durability.PERISHABLE),
         CheckSpec(
             "secrets.entitlement",

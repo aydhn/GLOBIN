@@ -191,6 +191,11 @@ category = "governance"
 reason = "What makes a control's absence a decision rather than an oversight."
 
 [[sensitive_path]]
+path = "src/globin/adapters/secret_vault.py"
+category = "security-policy"
+reason = "The only module that protects or unprotects material at rest, and the only permitted loader of crypt32."
+
+[[sensitive_path]]
 path = "AGENTS.md"
 category = "governance"
 reason = "Binding instructions for automated contributors, including the hard prohibitions."
