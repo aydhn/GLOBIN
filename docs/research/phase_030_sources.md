@@ -174,3 +174,21 @@ registered key can say anything about a venue.
   one, which is the treatment `tools/quality/drift` gives an unrecorded baseline. A
   caller that could not tell the two apart would eventually report a machine as
   unchanged because it had never been looked at.
+
+### S-11 — `binance-common` published 4.3.0, under the same interpreter cap as 4.2.0
+
+- **Canonical location:** PyPI JSON API, per-version endpoint —
+  `https://pypi.org/pypi/binance-common/4.3.0/json`
+- **Accessed:** 2026-08-18
+- **Authority:** Primary — the index's own record of the release.
+- **Supports:** The release reports `requires_python` of `<3.15,>=3.10` and publishes
+  `binance_common-4.3.0-py3-none-any.whl` beside an sdist — the same cap and the same
+  pure-Python wheel shape 4.2.0 had.
+- **Implication for GLOBIN:** The recorded survey was re-cut for the version alone.
+  **The verdict did not change and was not allowed to be assumed**: the cap still
+  admits the pinned 3.14 line, and a release that had tightened it would have had to
+  change the verdict rather than the version. Nothing is installed, resolved or
+  adopted — `binance-common` remains surveyed against Phase 045 and imported nowhere.
+  The per-version endpoint was used rather than the package root, because the root
+  document is large enough to be truncated by a fetching tool and a truncated read
+  once produced a wrong "latest version".
