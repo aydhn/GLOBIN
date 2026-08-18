@@ -32,8 +32,8 @@ created, which is ``ENGINEERING_CONTRACT.md`` invariant 5 and the reason
 import json
 import sys
 import tomllib
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final, TextIO
 
@@ -58,6 +58,7 @@ from globin.adapters.identifiers import new_run_id
 from globin.adapters.observability import new_correlation_id
 from globin.adapters.telemetry_otel import opentelemetry_bridge
 from globin.adapters.telemetry_prometheus import prometheus_publisher
+from globin.application.provisioning import ProvisioningOutcome, ProvisioningProposal
 from globin.application.secrets import (
     ENTRY_REMEDIATION,
     REMEDIATION,
@@ -108,6 +109,7 @@ from globin.domain.identifiers import EnvironmentId
 from globin.domain.metrics import declared_series, metrics
 from globin.domain.observability import redact
 from globin.domain.preflight import PreflightOutcome
+from globin.domain.provisioning import NetworkPolicy, ProvisioningPlan
 from globin.domain.runtime_state import RuntimeArea
 from globin.domain.secrets import (
     EntryFault,
@@ -138,6 +140,7 @@ from globin.runtime.composition import (
     build_grant_register,
     build_health_collector,
     build_logger,
+    build_provisioning,
     build_runtime_state,
     build_secret_entry,
     build_secret_providers,
@@ -341,8 +344,52 @@ needs both halves — every fault in one pass, and a refusal — and it needs th
 one thing neither can say: which of the answers were true only when taken.
 """
 
-BOOTSTRAP_SUBCOMMANDS: Final[tuple[str, ...]] = (CHECK, EVIDENCE, PREFLIGHT)
+PLAN: Final[str] = "plan"
+"""Say what would change. Read-only, and read-only by construction: the planner
+is in the domain layer, which may perform no I/O, and a read-only wiring hands it
+a runner that refuses anything but the declared probes."""
+
+SETUP: Final[str] = "setup"
+"""Bring missing pieces into existence.
+
+**Not the cold-start path**, and the documentation says so first. This command is
+installed *into* the environment it would create, so it cannot be how that
+environment first appears; `scripts/bootstrap.ps1` remains that. What this is for
+is completing and repairing an environment that already has a `globin` in it,
+which is the honest scope and what makes the interruption marker worth having."""
+
+REPAIR: Final[str] = "repair"
+"""Correct what exists and is wrong. The only route to a destructive action, and
+only with ``--recreate``."""
+
+NETWORK_FLAG: Final[str] = "--network"
+"""What this run may reach: ``offline``, ``cache-only`` or ``online-allowed``.
+
+Declared by an operator, never probed. Defaults to ``offline``, because the one
+command that mutates a host must not also be the one that reaches the network
+without being asked."""
+
+RECREATE_FLAG: Final[str] = "--recreate"
+"""Permit the one destructive action. Meaningful only with ``repair``."""
+
+RETIRED_WORDS: Final[dict[str, str]] = {"verify": f"{BOOTSTRAP} {PREFLIGHT}"}
+"""Words that name something real under a different spelling.
+
+``verify`` is the obvious name for "run every check and gate", and that is
+exactly what ``bootstrap preflight`` already is. Adding a synonym would give one
+subject two owners, which `DOCUMENTATION_STANDARD.md` forbids --- and the word is
+already taken at this repository's shell, where `scripts/verify.ps1` means
+something else entirely. A bare "unrecognised argument" teaches nothing, so the
+refusal names the command to use instead.
+
+A contract test asserts every value here is a command line `parse` accepts, so
+the redirect cannot rot into pointing at something that no longer exists."""
+
+BOOTSTRAP_SUBCOMMANDS: Final[tuple[str, ...]] = (CHECK, EVIDENCE, PREFLIGHT, PLAN, SETUP, REPAIR)
 """What may follow ``bootstrap``. ``check`` is the default and changes nothing."""
+
+BOOTSTRAP_MUTATING: Final[tuple[str, ...]] = (SETUP, REPAIR)
+"""Which subcommands may change the host. Everything else is read-only."""
 
 DIAGNOSTICS_SUBCOMMANDS: Final[tuple[str, ...]] = (
     SNAPSHOT,
@@ -376,6 +423,13 @@ Commands:
   bootstrap check     Refuse to start unless every check passes. Stops at the
                       first refusal. This is the gate a launcher runs.
   bootstrap evidence  Run the gate and write .globin/bootstrap/bootstrap-manifest.json.
+  bootstrap plan      Say what would change to make this host ready, and what
+                      each change costs. Writes nothing.
+  bootstrap setup     Bring missing pieces into existence. Not the cold-start
+                      path -- this command lives in the environment it would
+                      create; scripts/bootstrap.ps1 is what makes one first.
+  bootstrap repair    Correct what exists and is wrong. --recreate permits the
+                      one destructive action.
   bootstrap preflight Run every check, refuse unless all of them pass, and
                       report which answers were true only when taken. This is
                       the gate a launcher runs before a long-running process.
@@ -429,6 +483,10 @@ Options:
                       what an environment guarantees is Phase 035's question.
   --kind KIND         api_key, api_secret or private_key.
   --name NAME         The credential's logical name.
+  --network POLICY    What a provisioning run may reach: offline (the default),
+                      cache-only or online-allowed. Declared, never probed.
+  --recreate          Permit the one destructive action. Only with `bootstrap
+                      repair`, and shown by `bootstrap plan --recreate`.
   --config PATH       An explicit configuration document, above the four this
                       layout computes and below the environment. Unlike those
                       four its absence is fatal. Resolved to an absolute path,
@@ -501,6 +559,11 @@ class Invocation:
     config: str = ""
     overrides: tuple[str, ...] = ()
     field: str = ""
+    network: str = ""
+    """What a provisioning run may reach, as the operator spelled it. Empty means
+    the default, which is offline."""
+    recreate: bool = False
+    """Whether the operator permitted the one destructive action."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -582,17 +645,67 @@ def _parse_bootstrap(rest: Sequence[str]) -> Invocation:
     subcommand = CHECK
     if words and not words[0].startswith("-"):
         subcommand = words.pop(0)
+        if subcommand in RETIRED_WORDS:
+            msg = (
+                f"there is no `{subcommand}`; `{RETIRED_WORDS[subcommand]}` runs every "
+                f"check and gates"
+            )
+            raise UsageError(msg)
         if subcommand not in BOOTSTRAP_SUBCOMMANDS:
             msg = f"unrecognised argument: {subcommand!r}"
             raise UsageError(msg)
-    options = _options(words, f"{BOOTSTRAP} {subcommand}")
+
+    # `--network` and `--recreate` are read here rather than in `_options`, which
+    # five command groups share and which must go on accepting exactly the four
+    # configuration options.
+    network = ""
+    recreate = False
+    remaining: list[str] = []
+    pending = list(words)
+    while pending:
+        word = pending.pop(0)
+        if word == NETWORK_FLAG:
+            if network:
+                msg = f"{NETWORK_FLAG} was given more than once"
+                raise UsageError(msg)
+            network = _valued(pending, NETWORK_FLAG, network)
+            continue
+        if word == RECREATE_FLAG:
+            if recreate:
+                msg = f"{RECREATE_FLAG} was given more than once"
+                raise UsageError(msg)
+            recreate = True
+            continue
+        remaining.append(word)
+
+    if network and subcommand not in {PLAN, *BOOTSTRAP_MUTATING}:
+        msg = (
+            f"{NETWORK_FLAG} means nothing with {subcommand}, which changes nothing and "
+            f"reaches nothing; it applies to `{BOOTSTRAP} {PLAN}`, `{BOOTSTRAP} {SETUP}` "
+            f"and `{BOOTSTRAP} {REPAIR}`"
+        )
+        raise UsageError(msg)
+    if recreate and subcommand not in {PLAN, REPAIR}:
+        msg = (
+            f"{RECREATE_FLAG} means nothing with {subcommand}; the destructive rebuild is "
+            f"`{BOOTSTRAP} {REPAIR} {RECREATE_FLAG}`, and `{BOOTSTRAP} {PLAN} "
+            f"{RECREATE_FLAG}` shows what it would do"
+        )
+        raise UsageError(msg)
+    if network and network not in {policy.value for policy in NetworkPolicy}:
+        offered = ", ".join(sorted(policy.value for policy in NetworkPolicy))
+        msg = f"{NETWORK_FLAG} takes one of {offered}, and {network!r} is not one of them"
+        raise UsageError(msg)
+
+    options = _options(remaining, f"{BOOTSTRAP} {subcommand}")
     if options.as_json and subcommand == EVIDENCE:
         msg = (
             f"{JSON_FLAG} means nothing with {EVIDENCE}, which writes a file; "
             f"use `{BOOTSTRAP} {CHECK} {JSON_FLAG}` to read the same document on standard output"
         )
         raise UsageError(msg)
-    return _invocation(f"{BOOTSTRAP} {subcommand}", options)
+    invocation = _invocation(f"{BOOTSTRAP} {subcommand}", options)
+    return replace(invocation, network=network, recreate=recreate)
 
 
 def _options(words: Sequence[str], context: str) -> Options:
@@ -1009,6 +1122,9 @@ def _bootstrap(invocation: Invocation, *, out: TextIO, err: TextIO, start: Path 
         overrides=overrides,
     )
 
+    if invocation.command.rsplit(" ", 1)[-1] in {PLAN, SETUP, REPAIR}:
+        return _provision(invocation, out=out, err=err, start=start)
+
     if invocation.command.endswith(PREFLIGHT):
         verdict = bootstrap.preflight()
         if invocation.as_json:
@@ -1029,6 +1145,152 @@ def _bootstrap(invocation: Invocation, *, out: TextIO, err: TextIO, start: Path 
     if wanted_evidence:
         _record(bootstrap, outcome, out=out, err=err, as_json=invocation.as_json)
     return int(outcome.exit_code)
+
+
+def _provision(invocation: Invocation, *, out: TextIO, err: TextIO, start: Path | None) -> int:
+    """Run ``bootstrap plan``, ``setup`` or ``repair``.
+
+    Args:
+        invocation: What was asked for.
+        out: Where the answer goes.
+        err: Where the human summary goes when JSON was asked for.
+        start: Where to begin the search for the project root.
+
+    Returns:
+        The exit code.
+
+    The three verbs share one handler because they share one shape: measure,
+    derive a plan, and then either print it or apply it. What differs is a
+    read-only wiring and an admitted-mutation set, both of which are arguments.
+    """
+    verb = invocation.command.rsplit(" ", 1)[-1]
+    policy = NetworkPolicy(invocation.network) if invocation.network else NetworkPolicy.OFFLINE
+    overrides = parse_overrides(invocation.overrides)
+    provisioning = build_provisioning(
+        Path.cwd() if start is None else start,
+        policy=policy,
+        read_only=verb == PLAN,
+        recreate=invocation.recreate,
+        profile=resolve_run_profile(invocation.profile or None),
+        explicit=_explicit_document(invocation),
+        overrides=overrides,
+    )
+
+    if verb == PLAN:
+        proposal = provisioning.propose()
+        outstanding = provisioning.outstanding()
+        document = {
+            **proposal.as_record(),
+            "outstanding": None if outstanding is None else outstanding.as_record(),
+        }
+        if invocation.as_json:
+            print(render_json_document(document), file=out)
+            print(render_plan_human(proposal, outstanding), end="", file=err)
+        else:
+            print(render_plan_human(proposal, outstanding), end="", file=out)
+        return int(proposal.exit_code)
+
+    outcome = (
+        provisioning.setup() if verb == SETUP else provisioning.repair(recreate=invocation.recreate)
+    )
+    if invocation.as_json:
+        print(render_json_document(outcome.as_record()), file=out)
+        print(render_journal_human(outcome), end="", file=err)
+    else:
+        print(render_journal_human(outcome), end="", file=out)
+    return int(outcome.exit_code)
+
+
+def render_json_document(document: Mapping[str, object]) -> str:
+    """One mapping as the canonical JSON every command here emits.
+
+    Args:
+        document: What to render.
+
+    Returns:
+        Sorted keys, compact separators, ASCII only.
+    """
+    return json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def render_plan_human(proposal: ProvisioningProposal, outstanding: ProvisioningPlan | None) -> str:
+    """What ``bootstrap plan`` prints.
+
+    Args:
+        proposal: What was measured and what would change.
+        outstanding: What an interrupted run left behind, if anything.
+
+    Returns:
+        The report, ending in a newline.
+
+    Every mutating line names its class, whether it is destructive and what it
+    needs, because those are the three things an operator approving a plan is
+    deciding about.
+    """
+    lines: list[str] = []
+    if outstanding is not None:
+        lines.append(
+            "INCOMPLETE  a previous run was interrupted part-way and left a claim behind.\n"
+            "            `globin bootstrap repair` clears it.\n"
+        )
+    plan = proposal.plan
+    if plan.empty:
+        lines.append("Nothing to do. Every check this command can answer for already passes.\n")
+        return "".join(lines)
+
+    lines.append(f"Plan ({plan.policy.value}), {len(plan.actions)} action(s):\n")
+    for action in plan.actions:
+        spec = action.spec
+        marks = [spec.mutation.value]
+        if spec.destructive:
+            marks.append("DESTRUCTIVE")
+        if spec.network is not spec.network.NONE:
+            marks.append(f"needs {spec.network.value}")
+        lines.append(f"  {action.identifier:22} [{', '.join(marks)}]\n")
+        lines.append(f"    {action.reason}\n")
+        lines.append(
+            f"    then: {spec.postcondition} passes; on interruption: {spec.recovery.value}\n"
+        )
+
+    refused = plan.refused_by_policy()
+    if refused:
+        lines.append(
+            f"\n{len(refused)} action(s) the {plan.policy.value} policy forbids: "
+            f"{', '.join(action.identifier for action in refused)}\n"
+        )
+    lines.append("\nNothing has been changed. `globin bootstrap setup` applies this.\n")
+    return "".join(lines)
+
+
+def render_journal_human(outcome: ProvisioningOutcome) -> str:
+    """What ``bootstrap setup`` and ``bootstrap repair`` print.
+
+    Args:
+        outcome: What was intended and what happened.
+
+    Returns:
+        The report, ending in a newline.
+    """
+    lines: list[str] = []
+    journal = outcome.journal
+    if not journal.steps:
+        lines.append("Nothing to do. Every check this command can answer for already passes.\n")
+        return "".join(lines)
+
+    for step in journal.steps:
+        lines.append(f"  {step.outcome.value.upper():14} {step.action.identifier}\n")
+        if step.detail:
+            lines.append(f"    {step.detail}\n")
+
+    if outcome.after is None:
+        lines.append(
+            "\nThe run did not complete, so nothing was re-measured and the environment "
+            "is left part-way. The claim it wrote is still there.\n"
+        )
+        return "".join(lines)
+
+    lines.append("\n" + render_human(outcome.after))
+    return "".join(lines)
 
 
 def _record(

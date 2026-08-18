@@ -98,7 +98,15 @@ from globin.adapters.health import (
     system_process_probe,
 )
 from globin.adapters.observability import StreamLogSink, ThresholdLogSink, new_correlation_id
+from globin.adapters.provisioning import (
+    BoundedProcessRunner,
+    MarkerEnvironmentClaim,
+    PathToolProbe,
+    ReadOnlyProcessRunner,
+    RuntimeTreeExecutor,
+)
 from globin.adapters.runtime_state import (
+    AtomicDocumentWriter,
     AtomicStateStore,
     FileOperations,
     PlatformShutdownSignals,
@@ -130,6 +138,12 @@ from globin.application.health import HealthCollector
 from globin.application.lifecycle import Lifecycle
 from globin.application.observability import Logger
 from globin.application.preflight import PreflightRun
+from globin.application.provisioning import (
+    ProvisioningApply,
+    ProvisioningOutcome,
+    ProvisioningPlanRun,
+    ProvisioningProposal,
+)
 from globin.application.secrets import ProviderRoutedStore
 from globin.application.support import BundleBuilder, Candidate
 from globin.application.telemetry import MetricStore, metric_store
@@ -158,6 +172,7 @@ from globin.domain.configuration import (
 from globin.domain.diagnostics import MAXIMUM_BACKUP_COUNT
 from globin.domain.entitlements import required_credentials, required_references
 from globin.domain.preflight import PreflightOutcome, PreflightSuite, build_suite
+from globin.domain.provisioning import NetworkPolicy, ProvisioningPlan
 from globin.domain.runtime_state import (
     INSTANCE_FILE,
     LIFECYCLE_FILE,
@@ -172,10 +187,11 @@ from globin.domain.secrets import (
 )
 from globin.domain.support import ArtifactKind, safe_member_name
 from globin.domain.watchdog import WatchdogEpisode
-from globin.errors import ConfigurationError
+from globin.errors import ConfigurationError, InternalError
 from globin.ports.clock import Clock, MonotonicClock
 from globin.ports.configuration import ConfigurationSource
 from globin.ports.entitlements import GrantRegister
+from globin.ports.provisioning import CapabilityProbe, ProcessRunner
 from globin.ports.runtime_state import ShutdownSignals
 from globin.ports.secret_entry import SecretEntry
 from globin.ports.secrets import SecretStore
@@ -1638,3 +1654,190 @@ def build_diagnostics_endpoint(
         spawn=threading.Thread if spawn is None else spawn,
     )
     return endpoint, gate
+
+
+PROVISIONING_LOCK_FILE: Final[str] = "provisioning.lock"
+"""The lock a mutating provisioning run holds.
+
+Beside ``instance.lock`` in the same area, and deliberately **not** that lock. The
+coordinator's is a whole-application mutex; a ``setup`` holding it would make its
+own ``instance.lock`` check fail against itself, so this is a second
+:class:`~globin.adapters.runtime_state.WindowsInstanceLock` with a different name
+and the same mechanism. No second adapter, and no second idea of what holding a
+lock means.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class Provisioning:
+    """A wired provisioning surface.
+
+    Args:
+        bootstrap: The wired bootstrap this composes. Not a second pipeline.
+        planner: How a plan is produced. Read-only.
+        applier: How a plan is applied, or ``None`` for a read-only wiring.
+        claim: How a half-built environment is marked.
+        capability: How the host's tools are discovered.
+        root: Where the project was found, or ``None``.
+        paths: The declared runtime tree inside the project.
+    """
+
+    bootstrap: Bootstrap
+    planner: ProvisioningPlanRun
+    applier: ProvisioningApply | None
+    claim: MarkerEnvironmentClaim
+    capability: CapabilityProbe
+    root: Path | None
+    paths: RuntimePaths
+
+    def propose(self) -> ProvisioningProposal:
+        """Measure the host and say what would change.
+
+        Returns:
+            The proposal. Nothing is written.
+        """
+        return self.planner.run()
+
+    def setup(self) -> ProvisioningOutcome:
+        """Bring missing pieces into existence.
+
+        Returns:
+            What was done.
+
+        Raises:
+            InternalError: If this surface was wired read-only. A caller reaching
+                a mutating verb through a read-only wiring has a bug, not bad
+                input.
+        """
+        return self._applier().setup()
+
+    def repair(self, *, recreate: bool = False) -> ProvisioningOutcome:
+        """Correct what exists and is wrong.
+
+        Args:
+            recreate: Whether the destructive rebuild is permitted.
+
+        Returns:
+            What was done.
+
+        Raises:
+            InternalError: If this surface was wired read-only.
+        """
+        return self._applier().repair(recreate=recreate)
+
+    def outstanding(self) -> ProvisioningPlan | None:
+        """What an interrupted run left behind, if anything.
+
+        Returns:
+            The claim a previous run did not release, or ``None``.
+        """
+        return self.claim.outstanding()
+
+    def _applier(self) -> ProvisioningApply:
+        """The applier, refused when this surface is read-only."""
+        if self.applier is None:
+            msg = "this provisioning surface was wired read-only and cannot apply a plan"
+            raise InternalError(msg)
+        return self.applier
+
+
+def build_process_runner(root: Path, *, read_only: bool) -> ProcessRunner:
+    """How child processes are started for one command.
+
+    Args:
+        root: Where a child runs.
+        read_only: Whether to permit only the declared probes.
+
+    Returns:
+        The runner.
+
+    **A read-only command gets a runner that refuses anything but a probe**, in
+    production and not only under test. That is what makes ``bootstrap check``
+    and ``bootstrap plan`` read-only by construction rather than by review: an
+    edit that made the planner try to build something would raise at the runner
+    instead of building it.
+    """
+    runner = BoundedProcessRunner(working_directory=root)
+    if read_only:
+        return ReadOnlyProcessRunner(inner=runner)
+    return runner
+
+
+def build_provisioning(
+    start: Path,
+    *,
+    policy: NetworkPolicy = NetworkPolicy.OFFLINE,
+    read_only: bool = True,
+    recreate: bool = False,
+    sources: Sequence[ConfigurationSource] | None = None,
+    runtime_state: RuntimeState | None = None,
+    profile: str | None = None,
+    explicit: Path | None = None,
+    overrides: Mapping[str, str] | None = None,
+) -> Provisioning:
+    """Wire the provisioning surface against wherever the project turns out to be.
+
+    Args:
+        start: Where to begin the search for the project root.
+        policy: What this run may reach. Defaults to
+            :attr:`~globin.domain.provisioning.NetworkPolicy.OFFLINE`, because the
+            one command that mutates a host must not also be the one that reaches
+            the network without being asked.
+        read_only: Whether to wire a runner that refuses anything but a probe.
+        recreate: Whether a destructive rebuild may be planned.
+        sources: Configuration sources, weakest first.
+        runtime_state: The wired mutable tree.
+        profile: Which profile to resolve.
+        explicit: An explicit configuration document.
+        overrides: Command-line configuration values.
+
+    Returns:
+        The wired surface.
+
+    **This calls :func:`build_bootstrap` rather than re-wiring fourteen probes.**
+    Wiring the pipeline separately would create a second way to assemble the same
+    thing, and the two would drift --- the reason :meth:`Bootstrap.preflight`
+    gives about itself.
+    """
+    state = build_runtime_state() if runtime_state is None else runtime_state
+    bootstrap = build_bootstrap(
+        start,
+        sources=sources,
+        runtime_state=state,
+        profile=profile,
+        explicit=explicit,
+        overrides=overrides,
+    )
+    working = bootstrap.root if bootstrap.root is not None else start
+    runner = build_process_runner(working, read_only=read_only)
+    capability = PathToolProbe(runner=runner)
+    planner = ProvisioningPlanRun(
+        pipeline=bootstrap.pipeline,
+        capabilities=capability,
+        policy=policy,
+        recreate=recreate,
+    )
+    claim = MarkerEnvironmentClaim(
+        writer=AtomicDocumentWriter(operations=FileOperations()),
+        root=state.root,
+        layout=state.layout,
+    )
+    applier: ProvisioningApply | None = None
+    if not read_only:
+        applier = ProvisioningApply(
+            proposal=planner,
+            executor=RuntimeTreeExecutor(tree=state.tree, layout=state.layout),
+            claim=claim,
+            lock=WindowsInstanceLock(
+                root=state.root, layout=state.layout, name=PROVISIONING_LOCK_FILE
+            ),
+        )
+    return Provisioning(
+        bootstrap=bootstrap,
+        planner=planner,
+        applier=applier,
+        claim=claim,
+        capability=capability,
+        root=bootstrap.root,
+        paths=bootstrap.paths,
+    )
