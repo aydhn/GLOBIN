@@ -103,6 +103,25 @@ report the same thing.
 
 ---
 
+### The configuration group
+
+Phase 030 added a fifth top-level word. It resolves configuration the way a run does
+and reports on it; it writes no document, because `tomllib` cannot.
+
+```bash
+.venv\Scripts\globin.exe config validate
+```
+
+```bash
+.venv\Scripts\globin.exe config explain logging.min_severity
+```
+
+Five verbs -- `validate`, `explain`, `dump`, `fingerprint`, `evidence` -- and two
+options every configuration-resolving command now accepts: `--config PATH` for an
+explicit document, and `--set KEY=VALUE` for one value for one invocation. Both are
+part of the precedence chain, at either end of it.
+[`CONFIGURATION_EVIDENCE.md`](CONFIGURATION_EVIDENCE.md) has the whole of it.
+
 ## Exit codes
 
 `0`, `1`, `2` and `3` keep the meanings every gate under `tools/` gives them.
@@ -129,6 +148,9 @@ reason without parsing English.
 | 21 | The runtime state could not be written |
 | 22 | A diagnostic could not be produced, which is not a health verdict |
 | 23 | The watchdog ended this process, which did not stop when asked. **No command returns this** — the watchdog terminates rather than returning, so a launcher seeing it knows the run did not choose its own ending. See [`RUNTIME_WATCHDOG.md`](RUNTIME_WATCHDOG.md). |
+| 24 | This host satisfies the runtime contract and lacks a required capability. Deliberately not `10`: that means the host failed the declared contract, this means it satisfies it and cannot do something. See [`ENVIRONMENT_CAPABILITY.md`](ENVIRONMENT_CAPABILITY.md). |
+| 25 | A required credential is not permitted to do what GLOBIN asks of it. Deliberately not `15`: that means store a credential, this means change a key's permissions at the venue. See [`../security/CREDENTIAL_FLOW.md`](../security/CREDENTIAL_FLOW.md). |
+| 26 | Free. |
 
 Unmeasured outranks failed: a check that could not run has not passed, and
 reporting it as a specific failure would claim knowledge nobody has.
@@ -154,6 +176,7 @@ launcher reads these, so changing one is a breaking change.
 | `project.root` | Where the project is, found by bounded upward search |
 | `runtime.host` | The operating system and its release |
 | `runtime.architecture` | The processor architecture and pointer width |
+| `environment.capability` | What this host can do, and whether that is enough |
 | `python.implementation` | CPython, and not a free-threaded build |
 | `python.version` | The declared minor line exactly, the patch as a floor |
 | `python.environment` | `sys.prefix` is the project's own `.venv` |
@@ -162,6 +185,7 @@ launcher reads these, so changing one is a breaking change.
 | `config.valid` | The configuration binds and validates |
 | `paths.runtime` | The declared roots are usable |
 | `secrets.required` | Every required reference resolves |
+| `secrets.entitlement` | Every required credential is permitted to do what is asked of it |
 | `bootstrap.ready` | The aggregate |
 
 `globin.domain.bootstrap.checks()` is the registry, and it is a function so that
@@ -358,6 +382,26 @@ The full contract, including what happens on each kind of ending, is in
 [`RUNTIME_FILESYSTEM.md`](RUNTIME_FILESYSTEM.md).
 
 ---
+
+## What Phase 030 added
+
+Not a check. **A column**, and the schedule that follows from it.
+
+Every registered check now declares a `Durability` beside the exit code it already
+declared: whether its answer survives the run, or was true only when taken. Eleven of
+the eighteen are stable. Nothing about what any check *measures* changed.
+
+```bash
+.venv\Scripts\globin.exe bootstrap preflight
+```
+
+`bootstrap preflight` is the third combination of two switches that already existed:
+it runs every check like `doctor` **and** gates like `bootstrap check`, and it reports
+which of its passing answers were instantaneous. It introduces no exit code, because
+a preflight refusal is already describable by the failing check's own.
+
+The classification, the re-take schedule, and why nothing executes one yet are in
+[`PREFLIGHT_SUITE.md`](PREFLIGHT_SUITE.md).
 
 ## Handoff to Phase 023
 

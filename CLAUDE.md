@@ -55,6 +55,8 @@ that certifies — and the one criterion it could not — is in
 | Does the library I need have a wheel for that Python? | [`docs/engineering/WHEEL_AVAILABILITY.md`](docs/engineering/WHEEL_AVAILABILITY.md), [`docs/engineering/wheel-survey.toml`](docs/engineering/wheel-survey.toml) |
 | Is this machine still the one the gates were measured on? | [`docs/engineering/ENVIRONMENT_DRIFT.md`](docs/engineering/ENVIRONMENT_DRIFT.md), [`docs/engineering/drift-policy.toml`](docs/engineering/drift-policy.toml) |
 | What version of a dependency will actually be installed? | [`docs/engineering/DEPENDENCY_LOCKING.md`](docs/engineering/DEPENDENCY_LOCKING.md), [`docs/engineering/lock-policy.toml`](docs/engineering/lock-policy.toml) |
+| Which checks must pass before a long-running process starts, and which answers decay? | [`docs/engineering/PREFLIGHT_SUITE.md`](docs/engineering/PREFLIGHT_SUITE.md), [ADR-0080](docs/adr/0080-a-check-declares-whether-its-answer-survives-the-run.md) |
+| Which source set this value, and what changed since last run? | [`docs/engineering/CONFIGURATION_EVIDENCE.md`](docs/engineering/CONFIGURATION_EVIDENCE.md), [ADR-0081](docs/adr/0081-configuration-explains-itself-through-two-fingerprints-and-one-manifest.md) |
 | How does a GLOBIN process decide it may start? | [`docs/engineering/BOOTSTRAP.md`](docs/engineering/BOOTSTRAP.md), [ADR-0056](docs/adr/0056-phase-021-widens-to-deliver-the-application-bootstrap.md) |
 | Does the installed numerical stack actually compute correctly? | [`docs/engineering/SCIENTIFIC_STACK.md`](docs/engineering/SCIENTIFIC_STACK.md), [`docs/engineering/stack-contract.toml`](docs/engineering/stack-contract.toml) |
 | Where does a running GLOBIN keep state, and how does it stop? | [`docs/engineering/RUNTIME_FILESYSTEM.md`](docs/engineering/RUNTIME_FILESYSTEM.md), [ADR-0059](docs/adr/0059-the-mutable-runtime-tree-is-user-local-and-one-coordinator-is-proved-by-a-lock.md) |
@@ -616,6 +618,48 @@ means store a credential, the other means change a key's permissions at the venu
 **`required` is still empty, and now empty by derivation** -- the registry exists and
 Phase 038 fills it. Details:
 [`docs/security/CREDENTIAL_FLOW.md`](docs/security/CREDENTIAL_FLOW.md).
+
+Phase 030 turned the eighteen-check registry into a **suite**, and made configuration
+**explain itself**.
+
+```bash
+.venv\Scripts\globin.exe bootstrap preflight
+```
+
+```bash
+.venv\Scripts\globin.exe config explain logging.min_severity
+```
+
+Every check now declares whether its answer **survives the run**; eleven of the eighteen
+do. `config.valid` is stable **because the snapshot is immutable**, not because documents
+are -- an operator may edit `config/` mid-run and the process is not reading it again.
+`state.previous_run` is stable because re-taking it later would read *this* run's record.
+`RecheckPolicy` is validated at construction and **nothing executes it**: no process runs
+long enough, so a scheduler would be a mechanism with no caller. `bootstrap preflight`
+runs everything *and* gates -- the third combination of two switches that already existed
+-- and adds **no exit code**. 26 stays free.
+
+The precedence chain gained a source at **each end**, and the whole order follows one
+rule -- narrowness. `--config PATH` sits above the four computed documents and **its
+absence is fatal** where theirs is not; `--set KEY=VALUE` sits above the environment and
+is validated against `known_keys()`, so there is no arbitrary path to accept. **Only keys
+an operator typed enter that layer**, or the strongest source would set everything on
+every run.
+
+**Two fingerprints, and the split is the deliverable.** The semantic one excludes origins
+-- moving a file is not a change -- and the evidence one includes them, so a value that
+began arriving from the environment instead of a committed document *is*. **Comparison
+reads digests, never displays**: two redacted displays are always equal, so a drift report
+built on them would say "unchanged" about exactly the fields it could not see. **No
+baseline is `unmeasured`, not clean.**
+
+Two defects were found rather than built, and both are worth knowing. A
+`ConfigurationError` clause written around the whole of `_bootstrap` silently turned a
+Phase 021 exit code from `17` into `14` -- the existing suite caught it. And
+`tomllib.TOMLDecodeError` is a **`ValueError`**, so neither `main` nor the pipeline caught
+it; the path was unreachable until `--config` made it reachable. Details:
+[`docs/engineering/PREFLIGHT_SUITE.md`](docs/engineering/PREFLIGHT_SUITE.md) and
+[`docs/engineering/CONFIGURATION_EVIDENCE.md`](docs/engineering/CONFIGURATION_EVIDENCE.md).
 
 Phase 029 also gave the *running* application eyes for its own dependencies, and added
 a gate for whether they could be installed at all:

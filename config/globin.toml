@@ -19,12 +19,18 @@
 # This file is committed and world-readable; treat it as a public document,
 # because it is one.
 #
-# WHICH DOCUMENTS ARE READ, AND IN WHAT ORDER, IS NOT SETTLED HERE. Phase 026
-# defines where documents live and what they are called. Phase 027 defines
-# precedence between defaults, files, environment variables and launcher
-# selection -- so today nothing loads this file, and `build_configuration` still
-# resolves the declared defaults. That is the roadmap's own split rather than an
-# omission. See `docs/engineering/CONFIGURATION_LAYOUT.md`.
+# WHICH DOCUMENTS ARE READ, AND IN WHAT ORDER. Phase 026 defined where documents
+# live and what they are called; Phase 027 defined the precedence between defaults,
+# files, environment variables and launcher selection, and this file has been read
+# since. Phase 030 added a source at each end -- an explicit `--config` document
+# above the four computed ones, and `--set` above everything -- and made the
+# resolution explain itself: `globin config explain <key>` names the layer that won
+# and how many were overruled. See `docs/engineering/CONFIGURATION_LAYOUT.md` and
+# `docs/engineering/CONFIGURATION_EVIDENCE.md`.
+#
+# A DOCUMENT MAY DECLARE WHICH CONTRACT IT WAS WRITTEN FOR, with a top-level
+# `config_schema_version = 1`. Omitting it means this version. Declaring one this
+# GLOBIN does not read is refused rather than guessed at.
 #
 # The sections below are the three the model declares. Their keys and permitted
 # values are in `docs/CONFIGURATION_POLICY.md`, which is compared against the code
@@ -36,3 +42,7 @@
 [diagnostics]
 
 [watchdog]
+
+[telemetry]
+
+[diagnostics_http]

@@ -173,6 +173,17 @@ say is which *kind* of source set the value — and it then names the variable, 
 is the part an operator can act on.
 """
 
+COMMAND_LINE_ORIGIN: Final[str] = "command line"
+"""The origin recorded for values a launcher set with ``--set``.
+
+A word rather than a path, for the reason :data:`ENVIRONMENT_ORIGIN` gives, and
+**the strongest origin there is**. The order the whole precedence follows is
+narrowness: a committed document is set for every invocation, an environment
+variable for a shell session, and a flag for exactly one run. The narrowest act
+wins because it is the one somebody performed most deliberately and the one
+they are most likely to be watching the result of.
+"""
+
 ENVIRONMENT_PREFIX: Final[str] = "GLOBIN_"
 """What every environment variable GLOBIN reads begins with.
 

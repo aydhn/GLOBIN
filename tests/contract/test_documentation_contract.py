@@ -141,6 +141,7 @@ REQUIRED_DOCS: tuple[str, ...] = (
     "docs/research/phase_027_sources.md",
     "docs/research/phase_028_sources.md",
     "docs/research/phase_029_sources.md",
+    "docs/research/phase_030_sources.md",
     "docs/engineering/GPU_BENEFIT.md",
     "docs/engineering/RUNTIME_HEALTH.md",
     "docs/engineering/SUPPORT_BUNDLE.md",

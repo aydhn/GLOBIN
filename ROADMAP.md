@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-029 are complete. Phase 030 is next and has not started.**
-> Nothing beyond Phase 029 is implemented. GLOBIN does not trade, does not
+> **Phases 001-030 are complete. Phase 031 is next and has not started.**
+> Nothing beyond Phase 030 is implemented. GLOBIN does not trade, does not
 > connect to any exchange, and **holds no credentials** -- it now has somewhere to
 > put one and a way to be handed one, which is still a different thing. See
 > [`README.md`](README.md).
@@ -175,14 +175,17 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Thirteen have been made. Each cost an ADR, and each is
+> **Scope amendments.** Fourteen have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
-> unchanged by all thirteen.
+> unchanged by all fourteen.
 >
 > This count said *seven* while listing eight from Phase 024 until Phase 025
 > repaired it. Nothing tests it, which is why it drifted and why it is worth
-> reading sceptically.
+> reading sceptically. **It had drifted again by Phase 030**, in two ways at once:
+> the count read thirteen while the list stopped at eleven, and the tenth was
+> filed below the eleventh. Phase 030 repaired both and added its own, which is
+> why three entries below carry that phase's number.
 >
 > **First.** Phase 003 originally read *Coding Standards and Static Analysis
 > Baseline*, and Phase 013 read *Continuous Verification Script and Quality
@@ -320,30 +323,6 @@ the contract:
 > decision. A tenth amendment inherits nothing from this one and must additionally
 > say whether it too collides with a title.
 >
-> **Eleventh, and taken against this document's own refusal.** Phase 027 still
-> delivers the environment variable and profile resolution its title names -- one
-> declared document order, one declared profile order, the environment above every
-> document, and a preflight that resolves what a run resolves rather than the declared
-> defaults it used to validate. Alongside it, the loopback diagnostics surface:
-> liveness, readiness, a redacted runtime health projection and a
-> Prometheus/OpenMetrics scrape, read-only and bounded, on an address a value type
-> refuses to widen.
->
-> **The paragraph above says an eleventh "is not another argument to be weighed", and
-> that sentence was put to the owner verbatim** along with the two courses it implies --
-> bring the granularity review forward now, or deliver the titled scope alone. The owner
-> chose to proceed. **It scores two of ADR-0021's four conditions**, and the two it
-> fails are the two the tenth failed: work is displaced (Phase 280 *Operational Metrics
-> Collection* and Phase 315 *Live Monitoring and Escalation* own collection and
-> escalation; this phase neither collects, retains, dashboards nor alerts, and names
-> them), and the two halves do not need each other. Three in a row is worse than two.
->
-> **Nothing here answers the granularity question.** It remains Phase 032's, now with
-> eleven amendments in front of it, and a twelfth may cite neither this record nor the
-> owner's having overridden the refusal once.
-> [ADR-0070](docs/adr/0070-phase-027-widens-to-deliver-the-loopback-diagnostics-surface.md)
-> carries the whole of it.
-
 > **Tenth.** Phase 026 still delivers the configuration file layout and the paper,
 > demo, testnet and live profile structure its title names, and now also gives the
 > running application its telemetry foundation: a provider-neutral typed contract, a
@@ -371,6 +350,86 @@ the contract:
 > than to write an eleventh argument. **Phase 032 must therefore examine whether Phases
 > 017-032 were drawn at a granularity that describes the work, with all ten amendments
 > in front of it.** An eleventh before then is not another argument to be weighed.
+
+> **Eleventh, and taken against this document's own refusal.** Phase 027 still
+> delivers the environment variable and profile resolution its title names -- one
+> declared document order, one declared profile order, the environment above every
+> document, and a preflight that resolves what a run resolves rather than the declared
+> defaults it used to validate. Alongside it, the loopback diagnostics surface:
+> liveness, readiness, a redacted runtime health projection and a
+> Prometheus/OpenMetrics scrape, read-only and bounded, on an address a value type
+> refuses to widen.
+>
+> **The paragraph above says an eleventh "is not another argument to be weighed", and
+> that sentence was put to the owner verbatim** along with the two courses it implies --
+> bring the granularity review forward now, or deliver the titled scope alone. The owner
+> chose to proceed. **It scores two of ADR-0021's four conditions**, and the two it
+> fails are the two the tenth failed: work is displaced (Phase 280 *Operational Metrics
+> Collection* and Phase 315 *Live Monitoring and Escalation* own collection and
+> escalation; this phase neither collects, retains, dashboards nor alerts, and names
+> them), and the two halves do not need each other. Three in a row is worse than two.
+>
+> **Nothing here answers the granularity question.** It remains Phase 032's, now with
+> eleven amendments in front of it, and a twelfth may cite neither this record nor the
+> owner's having overridden the refusal once.
+> [ADR-0070](docs/adr/0070-phase-027-widens-to-deliver-the-loopback-diagnostics-surface.md)
+> carries the whole of it.
+
+> **Twelfth.** Phase 028 still delivers the local secret store its title names -- the
+> Windows Credential Manager reached through `ctypes`, a reference that is ordinary data
+> beside a value that has no string form, one case-folding key builder, and a rotation
+> that moves the previous value aside before writing the new one. Alongside it, the
+> environment capability inventory: native architecture separated from process
+> architecture and measured only through the API that can tell them apart, emulation
+> state, bounded toolchain discovery, and a compatibility fingerprint that excludes
+> everything volatile.
+>
+> **It scores two of ADR-0021's four conditions.** Nothing is deferred and no title
+> changes; work is displaced, and the two halves do not need each other -- a credential
+> store does not require an inventory of the host, and the inventory would be just as
+> true without one.
+> [ADR-0073](docs/adr/0073-phase-028-widens-to-deliver-the-environment-capability-inventory.md)
+> carries it.
+>
+> **Thirteenth.** Phase 029 still delivers the credential prompting and validation flow
+> its title names -- six verbs and no seventh, interactive collection that refuses a pipe
+> before `getpass` is called, and a permission model with no member meaning *confirmed*.
+> Alongside it, the dependency attestation: a runtime inventory that can finally see a
+> version, a second PEP 751 reader that is the specification's own implementation, and an
+> offline materialization gate whose network fallback is unreachable rather than un-taken.
+>
+> **It scores two of four**, and its own record closes by saying that a fourteenth
+> inherits nothing from it, may not cite it, and may not cite the count above.
+> [ADR-0076](docs/adr/0076-phase-029-widens-to-deliver-the-dependency-attestation.md)
+> carries it.
+>
+> **Fourteenth.** Phase 030 still delivers the bootstrap health check suite its title
+> names -- the eighteen-check registry classified by whether each answer survives the run,
+> a re-take schedule that cannot be constructed if it could not be honoured, and a
+> `bootstrap preflight` that runs every check *and* gates. Alongside it, configuration
+> made able to explain itself: a command-line value layer above the environment, an
+> explicit document whose absence is fatal where the four computed ones are optional,
+> per-field provenance, a declared contract version, a bounded document size, and a
+> semantic fingerprint held apart from one that sees where a value came from.
+>
+> **It scores four of ADR-0021's four conditions, and that is the first time.**
+> *Nothing displaced*: the configuration layout and its precedence are Phases 026 and 027,
+> both complete, and a completed phase cannot be displaced. *Nothing deferred*: the titled
+> scope ships whole in the same commit. *No phase owns the work*: Phase 291 *Interactive
+> Configuration Wizard* owns **collecting** configuration an operator has not supplied,
+> which this neither does nor enables, and Phase 283 owns backing it up; neither owns
+> explaining a resolution. *The two halves need each other*: `config.valid` is one of the
+> eighteen checks the suite is made of, and a suite that gates a long-running process on
+> configuration while reporting one sentence when it refuses is not a gate anybody can act
+> on.
+>
+> **Scoring four does not answer the granularity question, and this record does not claim
+> it does.** That question is still Phase 032's, now with fourteen amendments in front of
+> it. What this one can add to it is a data point rather than an argument: an amendment
+> that passes all four conditions was available inside a band whose granularity is under
+> review, which is evidence about the phase boundary rather than about the test.
+> [ADR-0079](docs/adr/0079-phase-030-widens-to-deliver-the-configuration-evidence-surface.md)
+> carries the whole of it.
 
 ---
 
@@ -421,7 +480,7 @@ host, including honest verification of GPU capability rather than assumption.
 | 027 | Environment Variable and Profile Resolution | Implement deterministic precedence between defaults, files, environment variables and launcher selection; and, as the eleventh scope amendment, give the running application its loopback diagnostics surface -- liveness, readiness, a redacted runtime health projection and a Prometheus/OpenMetrics scrape, bounded and read-only, on an address a value type refuses to widen. | Complete |
 | 028 | Local Secret Storage Mechanism | Implement the approved local secret store so credentials never reach the repository or plain configuration; and, as the twelfth scope amendment, deliver the environment capability inventory -- native versus process architecture, emulation state, bounded toolchain discovery, and a compatibility fingerprint that excludes everything volatile. | Complete |
 | 029 | Credential Prompting and Validation Flow | Define interactive credential collection, format validation and permission verification before use; and, as the thirteenth scope amendment, deliver the dependency attestation -- a runtime inventory that can finally see a version, a second PEP 751 reader that is the specification's own, and an offline materialization gate whose network fallback is unreachable rather than un-taken. | Complete |
-| 030 | Bootstrap Health Check Suite | Implement the preflight checks that must pass before any long-running GLOBIN process starts. | Planned |
+| 030 | Bootstrap Health Check Suite | Implement the preflight checks that must pass before any long-running GLOBIN process starts, classifying every check by whether its answer survives the run and declaring the schedule the perishable ones imply; and, as the fourteenth scope amendment, make configuration able to explain itself -- a command-line value layer above the environment, an explicit document whose absence is fatal, per-field provenance, a declared contract version, and a semantic fingerprint separated from the one that sees where a value came from. | Complete |
 | 031 | Offline and Degraded Installation Handling | Define behaviour when the network, GPU or optional native components are unavailable. | Planned |
 | 032 | Environment Consolidation and Phase Gate Review | Reconcile the environment band and certify a reproducible host before exchange integration begins. | Planned |
 

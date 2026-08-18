@@ -141,9 +141,23 @@ comment explaining why a number is what it is.
 
 `find_project_root` walks up from the working directory, so an installed `globin`
 run from an arbitrary directory finds no root and therefore no configuration — and
-runs on declared defaults, exactly as it does today. In the intended deployment the
-launchers Phase 289 owns set the working directory inside the checkout. Reporting
-which documents were located belongs with the rest of the resolution question.
+runs on declared defaults. In the intended deployment the launchers Phase 289 owns
+set the working directory inside the checkout.
+
+**Phase 030 did not repair this, and gave it an escape and a witness instead.** The
+escape is `--config PATH`, which is resolved to an absolute path, so an operator who
+needs a specific document from an arbitrary directory names one and gets it — and
+gets a refusal rather than silence if it is not there. The witness is
+[`CONFIGURATION_EVIDENCE.md`](CONFIGURATION_EVIDENCE.md): `config explain` names every
+layer that was consulted, including the ones that contributed nothing, so "no
+configuration was found" is now something a run *says* rather than something a
+reader has to infer from values that look like defaults.
+
+**Implicit discovery is still working-directory dependent**, and no amount of
+reporting changes that. Repairing it would mean choosing a search rule — an installed
+package's location, an environment variable naming a root, a registry entry — and
+every one of those is a precedence decision of the kind this document exists to keep
+out of the layout.
 
 ---
 
@@ -151,8 +165,8 @@ which documents were located belongs with the rest of the resolution question.
 
 | Question | Phase |
 |---|---|
-| Which documents are consulted, in what order, and whether a missing one is fatal | 027 |
-| How a profile name reaches the process | 027 |
+| Which documents are consulted, in what order, and whether a missing one is fatal | 027, delivered — [`../CONFIGURATION_POLICY.md`](../CONFIGURATION_POLICY.md) |
+| How a profile name reaches the process | 027, delivered — [ADR-0071](../adr/0071-configuration-precedence-is-declared-and-an-environment-variable-is-a-derived-name.md) |
 | Where a secret is stored and how it is supplied | 028 |
 | What an environment is, and how production, testnet and demo differ | 035 |
 | Which product and environment pairs are usable | 036 |

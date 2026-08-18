@@ -47,8 +47,10 @@ from globin.adapters.bootstrap import (
 )
 from globin.adapters.clock import SystemClock, SystemMonotonicClock
 from globin.adapters.configuration import (
+    CliConfigurationSource,
     EnvironmentConfigurationSource,
     OptionalDocumentSource,
+    RequiredDocumentSource,
     TomlConfigurationSource,
 )
 from globin.adapters.dependency import installed_versions
@@ -121,6 +123,7 @@ from globin.application.diagnostics_http import DiagnosticsService
 from globin.application.health import HealthCollector
 from globin.application.lifecycle import Lifecycle
 from globin.application.observability import Logger
+from globin.application.preflight import PreflightRun
 from globin.application.support import BundleBuilder, Candidate
 from globin.application.telemetry import MetricStore, metric_store
 from globin.application.watchdog import RuntimeWatchdog
@@ -147,6 +150,7 @@ from globin.domain.configuration import (
 )
 from globin.domain.diagnostics import MAXIMUM_BACKUP_COUNT
 from globin.domain.entitlements import required_credentials, required_references
+from globin.domain.preflight import PreflightOutcome, PreflightSuite, build_suite
 from globin.domain.runtime_state import (
     INSTANCE_FILE,
     LIFECYCLE_FILE,
@@ -386,6 +390,8 @@ def build_config_sources(
     profile: str,
     environment: Mapping[str, str] | None = None,
     layout: ConfigLayout | None = None,
+    explicit: Path | None = None,
+    overrides: Mapping[str, str] | None = None,
 ) -> tuple[ConfigurationSource, ...]:
     """Every configuration source, weakest first.
 
@@ -397,10 +403,16 @@ def build_config_sources(
             are named.
         environment: The variables to read, defaulting to this process's own.
         layout: The layout to read, defaulting to the declared one.
+        explicit: A document named on the command line, or ``None``. Resolved to
+            an absolute path here, so that the same document named from two
+            working directories is the same source.
+        overrides: Values a launcher set with ``--set``, already validated by
+            :func:`~globin.adapters.configuration.parse_overrides`.
 
     Returns:
         The sources in the order :func:`~globin.domain.configuration.resolve` folds
-        them, with the environment last.
+        them: the four computed documents, an explicit one, the environment, and
+        the command line.
 
     **This function is Phase 027's answer, assembled in one place.** The document
     order is :func:`~globin.domain.config_layout.precedence`'s and is not restated
@@ -424,6 +436,24 @@ def build_config_sources(
     consequence is that it runs on declared defaults plus whatever the environment
     says.
 
+    **Phase 030 added the two ends and kept the middle.** An explicit document sits
+    above the four computed ones because naming a file is a narrower act than
+    having written one into the tree, and the command line sits above everything
+    because a flag applies to exactly one run. The order the whole chain follows is
+    that one rule — narrowness — rather than five separate judgements, which is
+    what makes a seventh source's position a question with an answer instead of a
+    preference.
+
+    **An explicit document is required where the computed four are optional.** It
+    is wrapped in a :class:`~globin.adapters.configuration.RequiredDocumentSource`
+    rather than an optional one, so a path with a typo in it refuses instead of
+    contributing an empty layer that nobody would notice.
+
+    **The command-line source is always present, even when it sets nothing.** An
+    empty layer is the identity element of the fold, so the chain has one shape,
+    and the provenance can show that the source was consulted rather than leaving
+    a reader to infer it from an absence.
+
     No file is opened here. Each source records its path and reads it when the
     resolution runs.
     """
@@ -434,7 +464,14 @@ def build_config_sources(
         for role in precedence():
             path = configuration_document(repo_root, role, profile, declared)
             documents.append(OptionalDocumentSource(TomlConfigurationSource(path), str(path)))
-    return (*documents, EnvironmentConfigurationSource(variables))
+    if explicit is not None:
+        chosen = explicit.resolve()
+        documents.append(RequiredDocumentSource(TomlConfigurationSource(chosen), str(chosen)))
+    return (
+        *documents,
+        EnvironmentConfigurationSource(variables),
+        CliConfigurationSource({} if overrides is None else overrides),
+    )
 
 
 def build_clock() -> Clock:
@@ -566,6 +603,24 @@ class Bootstrap:
             What the run concluded.
         """
         return self.pipeline.run(stop_at_first_refusal=stop_at_first_refusal)
+
+    def preflight(self, suite: PreflightSuite | None = None) -> PreflightOutcome:
+        """Perform every check and judge it as a suite.
+
+        Args:
+            suite: The classification and re-take schedule, defaulting to
+                :func:`~globin.domain.preflight.build_suite`.
+
+        Returns:
+            What the run concluded, and how long the verdict stays true.
+
+        A method on the wired object rather than a fifth builder, because it needs
+        exactly what :meth:`run` needs and nothing else. Wiring it separately would
+        create a second way to assemble the same pipeline, and the two would drift.
+        """
+        return PreflightRun(
+            pipeline=self.pipeline, suite=build_suite() if suite is None else suite
+        ).run()
 
     def record(self, outcome: BootstrapOutcome) -> RecordedPath:
         """Write one run's evidence.
@@ -843,6 +898,8 @@ def build_bootstrap(
     sources: Sequence[ConfigurationSource] | None = None,
     runtime_state: RuntimeState | None = None,
     profile: str | None = None,
+    explicit: Path | None = None,
+    overrides: Mapping[str, str] | None = None,
 ) -> Bootstrap:
     """Wire the bootstrap against wherever the project turns out to be.
 
@@ -859,6 +916,8 @@ def build_bootstrap(
             production; a test supplies one rooted in a temporary directory so
             that running the suite never touches a real user profile.
         profile: The resolved profile, which decides which two documents are named.
+        explicit: A document named on the command line, or ``None``.
+        overrides: Values a launcher set with ``--set``, or ``None``.
 
     Returns:
         The wired :class:`Bootstrap`.
@@ -882,7 +941,11 @@ def build_bootstrap(
     root = find_project_root(start.resolve())
     state = build_runtime_state() if runtime_state is None else runtime_state
     selected = resolve_run_profile() if profile is None else profile
-    chain = build_config_sources(root, selected) if sources is None else tuple(sources)
+    chain = (
+        build_config_sources(root, selected, explicit=explicit, overrides=overrides)
+        if sources is None
+        else tuple(sources)
+    )
     return Bootstrap(
         pipeline=BootstrapPipeline(
             baseline=TomlRuntimeBaselineSource(

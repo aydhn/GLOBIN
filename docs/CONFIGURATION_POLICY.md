@@ -202,6 +202,41 @@ Keys are flat and dotted rather than nested. A nested merge would have to answer
 whether a table replaces its counterpart or merges into it, and every answer to
 that question surprises somebody; flattening removes the question.
 
+**Phase 030 was asked for a recursive deep merge and refused it, on that reasoning
+rather than on inertia.** The request came with the rest of that phase's brief, and
+what it would have bought — nested tables merging into one another — is exactly the
+ambiguity the paragraph above removes. What it would have cost is every one of the
+thirty-seven settings, `resolve`, `as_config` and their contract tests rewritten to
+serve a shape no document in this repository uses. The refusal is recorded here so
+that a later phase proposing it again starts from the argument rather than from the
+absence of one.
+
+**Phase 030 added a source at each end**, and the order is not a fifth judgement: it
+is the same rule the four already followed, which is **narrowness**. A committed
+document applies to every invocation; an explicit `--config` document to every
+invocation that names it; an environment variable to a shell session; a `--set` flag
+to exactly one run. The narrowest act wins, because it is the one somebody performed
+most deliberately and the one whose result they are most likely to be watching.
+
+| # | Source | Origin | Phase |
+|---|---|---|---|
+| 0 | Typed code defaults | `defaults` | 007 |
+| 1 | `config/globin.toml` | its path | 026 |
+| 2 | `config/profiles/<profile>.toml` | its path | 026 |
+| 3 | `config/local/globin.toml` | its path | 026 |
+| 4 | `config/local/profiles/<profile>.toml` | its path | 026 |
+| 5 | `--config PATH` | its absolute path | 030 |
+| 6 | `GLOBIN_*` environment variables | `environment` | 027 |
+| 7 | `--set KEY=VALUE` | `command line` | 030 |
+
+**Only keys an operator actually typed enter the command-line layer.** A parser
+default reaching the strongest source would make it set every setting on every run,
+and no document below it could ever win — the failure a highest-priority overlay has
+to be built to avoid rather than to document.
+
+Which source won each key, and how many were overruled on the way, is answerable
+since Phase 030: [`engineering/CONFIGURATION_EVIDENCE.md`](engineering/CONFIGURATION_EVIDENCE.md).
+
 ---
 
 ## Refusal
@@ -218,6 +253,13 @@ known. The fold itself never refuses anything and never raises.
 | A layer with no origin, or one key set twice | `ValidationError` | The caller. Within one document a repeated key has no defensible reading. |
 | A document that is not valid TOML | `TOMLDecodeError` | The operator. Left unwrapped, because the line and column are worth more than a reworded message. |
 | A known setting with no resolved value | `InternalError` | Nobody: this is a GLOBIN defect, reachable only by resolving without the defaults. |
+| A `--set` argument carrying no `=` | `ConfigurationError` | The operator. An override is written `key=value`. |
+| A `--set` key that is not a setting | `ConfigurationError` | The operator. The registry it is checked against is `known_keys()`, so there is no arbitrary path to accept. |
+| A `--set` key that is credential-shaped | `ConfigurationError` | The operator. Refused on the *name*, so the value is never read and never appears in the message. |
+| The same `--set` key twice | `ConfigurationError` | The operator. One override per setting. |
+| A document named by `--config` that is not there | `ConfigurationError` | The operator. Unlike the four computed documents, a named one must exist: GLOBIN will not start on values nobody chose. |
+| A document larger than the declared ceiling | `ConfigurationError` | The operator. Almost always a path naming something that is not a configuration file. |
+| A document declaring an unsupported `config_schema_version` | `ConfigurationError` | The operator. Refused in both directions; there is no migration engine and nothing is upgraded silently. |
 
 **An unknown key is refused, never ignored.** A typo that silently disables a
 setting an operator believes they have set is the failure this whole mechanism
@@ -240,6 +282,7 @@ is a decision rather than a regression.
 |---|---|
 | Where configuration files live, what they are called, and what profiles exist | 026, delivered — [`engineering/CONFIGURATION_LAYOUT.md`](engineering/CONFIGURATION_LAYOUT.md) |
 | Which sources are consulted, in what order, and how environment variables and launcher selection fit | 027, delivered — the `Precedence` section above, and [ADR-0071](adr/0071-configuration-precedence-is-declared-and-an-environment-variable-is-a-derived-name.md) |
+| Which source won a given key, what the resolution digests to, and what changed since last time | 030, delivered — [`engineering/CONFIGURATION_EVIDENCE.md`](engineering/CONFIGURATION_EVIDENCE.md) |
 | The rules a secret is handled under | 015, delivered — [`security/SECURITY_BASELINE.md`](security/SECURITY_BASELINE.md) |
 | Where a secret is stored, and how it is supplied | 028, delivered — [`security/SECRET_STORE.md`](security/SECRET_STORE.md) |
 | How a credential is collected from an operator, and what it is permitted to do | 029, delivered — [`security/CREDENTIAL_FLOW.md`](security/CREDENTIAL_FLOW.md) |

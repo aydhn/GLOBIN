@@ -33,3 +33,7 @@
 [diagnostics]
 
 [watchdog]
+
+[telemetry]
+
+[diagnostics_http]

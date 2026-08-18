@@ -345,9 +345,7 @@ Recorded here so that their absence is a decision rather than an oversight.
 
 | Deferred | Owning phase |
 |---|---|
-| Runtime dependencies, and the `pylock.toml` that must accompany the first one | 021 |
 | Packaging build verification | 017-032 |
-| Secret *storage* — the rules are Phase 015's and are now written; the store itself is not | 028, with credential collection in 029 |
 
 Five rows have left this table when the phases owning them delivered. Docstring
 linting and naming conventions were Phase 013's and are now part of the `D` rules

@@ -143,6 +143,9 @@ a future reader can judge whether the reason still holds.
 | [0076](0076-phase-029-widens-to-deliver-the-dependency-attestation.md) | Phase 029 widens to deliver the dependency attestation | Accepted |
 | [0077](0077-a-credential-is-collected-at-a-console-and-a-permission-is-declared-rather-than-verified.md) | A credential is collected at a console, and a permission is declared rather than verified | Accepted |
 | [0078](0078-the-second-lock-reader-is-the-reference-implementation-and-a-cache-is-not-a-source-of-trust.md) | The second lock reader is the reference implementation, and a cache is not a source of trust | Accepted |
+| [0079](0079-phase-030-widens-to-deliver-the-configuration-evidence-surface.md) | Phase 030 widens to deliver the configuration evidence surface | Accepted |
+| [0080](0080-a-check-declares-whether-its-answer-survives-the-run.md) | A check declares whether its answer survives the run | Accepted |
+| [0081](0081-configuration-explains-itself-through-two-fingerprints-and-one-manifest.md) | Configuration explains itself through two fingerprints and one manifest | Accepted |
 
 ## Relationship to other documents
 

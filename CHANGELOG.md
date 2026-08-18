@@ -19,6 +19,76 @@ can be opened and read.
 
 ## [Unreleased]
 
+### A check says whether its answer survives the run
+
+- **The registry became a suite.** Every one of the eighteen registered checks now
+  declares a `Durability` beside the exit code it already declared -- `STABLE` when
+  the answer cannot change while this process runs, `PERISHABLE` when it was true
+  only when taken. Eleven are stable. The line is drawn at *who changes the thing
+  being measured*: an operator doing something deliberate outside GLOBIN, or ordinary
+  operation.
+- **Three of the calls are argued rather than assumed.** `config.valid` is stable
+  **because the configuration snapshot is immutable**, not because documents are;
+  `state.previous_run` is stable because re-taking it later would read *this* run's
+  record and answer a different question under the same name; `bootstrap.ready` is
+  perishable because an aggregate is no stronger than its weakest input.
+- **A re-take schedule that cannot exist in an unhonourable form.** `RecheckPolicy`
+  refuses an interval outside one second to one hour, and refuses a `bool` -- `True`
+  is one millisecond, which is the accident that looks like it worked. The default
+  is a minute, deliberately far slower than the watchdog's second, because the two
+  ask different questions.
+- **Nothing executes a re-take.** GLOBIN has no long-running process, so the policy
+  is declared and validated rather than run. A scheduler with no caller would be
+  tested only against itself.
+- **`bootstrap preflight`** runs every check *and* gates -- the third combination of
+  two switches that already existed -- and marks the passes that were instantaneous.
+  It adds **no exit code**: a preflight refusal is already describable by the failing
+  check's own, so 26 stays free.
+
+### Configuration explains itself
+
+- **A value layer on the command line, and an explicit document below it.**
+  `--set KEY=VALUE` is the strongest source and is validated against `known_keys()`,
+  the registry derived from the dataclasses, so there is no arbitrary path to accept
+  and a credential-shaped key is refused before its value is read. `--config PATH`
+  sits above the four computed documents and below the environment, is resolved to an
+  absolute path, and **its absence is fatal** where theirs is not.
+- **The whole order follows one rule.** A committed document applies to every
+  invocation, an explicit one to every invocation that names it, a variable to a shell
+  session, a flag to one run. The narrowest act wins.
+- **Per-field provenance.** `globin config explain <key>` names the layer that won,
+  its priority, and how many weaker layers it overruled. The origin has been carried
+  since Phase 007; what was missing was a projection of it.
+- **Two fingerprints, held apart on purpose.** The semantic one excludes origins and
+  answers *were these two runs configured the same way*; the evidence one includes
+  them and answers *did anything about how this resolved move*. They disagree exactly
+  where they should.
+- **Drift, and a state that is not clean.** Two snapshots compare to added, removed,
+  changed and re-origined keys. **No baseline reports `unmeasured` rather than
+  nothing-changed**, because a first run has established nothing at all.
+- **A document may declare its contract version**, and an unsupported one is refused
+  in both directions. There is no migration engine; what exists is the boundary at
+  which one could later be written.
+- **A bounded document size**, so a path naming a log or an archive is refused as the
+  wrong shape rather than reported as a parse error four million bytes in.
+- **No value leaves.** Displays are redacted by key name through the same redactor the
+  logger uses; comparison reads domain-separated digests, because two redacted
+  displays are always equal and a report built on them would say "unchanged" about
+  precisely the fields it could not see.
+
+### Two defects found rather than built
+
+- **An exception clause written one level too wide silently changed an exit code.** A
+  `ConfigurationError` handler placed around the whole of `_bootstrap` also caught
+  `Bootstrap.record`'s refusal to write evidence outside a project root, turning a
+  Phase 021 answer of `17` into `14`. The existing suite caught it; the clause was
+  narrowed to the one step that can refuse before any check runs.
+- **`tomllib.TOMLDecodeError` is a `ValueError`**, so neither the pipeline's
+  `(GlobinError, OSError)` clause nor `main`'s saw it. Until `--config` existed the
+  path was unreachable rather than handled -- every document the chain read was a
+  committed one. The command line now maps it to exit code `14` while keeping the
+  decoder's line and column, and the exception is still not wrapped.
+
 ### A credential can be handed to GLOBIN, and refused before it is used
 
 - **Collection is interactive only, and three refusals happen before material

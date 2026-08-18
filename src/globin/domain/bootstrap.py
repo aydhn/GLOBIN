@@ -93,6 +93,34 @@ class CheckStatus(StrEnum):
     UNMEASURED = "unmeasured"
 
 
+class Durability(StrEnum):
+    """How long one check's answer stays true.
+
+    A check is a measurement, and a measurement is taken at an instant. For a
+    command that reports and exits, that distinction costs nothing: the instant
+    the answer describes and the instant the process ends are the same one. For a
+    process that keeps running it is the whole question, and it is the reason
+    Phase 030 exists as a *suite* rather than as more entries in a registry.
+
+    ``STABLE`` means the answer cannot change while this process runs, so taking
+    it once is taking it for the run. ``PERISHABLE`` means it was true when taken
+    and may since have stopped being true, so a long-running process must take it
+    again or stop claiming it.
+
+    The line is drawn at **who changes the thing being measured**. An operating
+    system, an interpreter, an architecture and a set of installed distributions
+    are changed by an operator doing something deliberate outside GLOBIN, and a
+    process that saw them change under itself has bigger problems than a stale
+    check. Free space, a directory's existence and an exclusive lock are changed
+    by ordinary operation — by GLOBIN itself, by another process, by anything on
+    the machine — which is what makes re-taking them meaningful rather than
+    paranoid.
+    """
+
+    STABLE = "stable"
+    PERISHABLE = "perishable"
+
+
 class ExitCode(IntEnum):
     """The process's answer, one value per kind of refusal.
 
@@ -441,11 +469,22 @@ class CheckSpec:
         exit_code: What the process returns when this check fails. Declared once
             here so that no call site can invent a second answer for the same
             failure.
+        durability: Whether the answer stays true for as long as this process
+            runs. Declared here for the same reason ``exit_code`` is: it is a
+            property of the check rather than of any one run, and a caller that
+            decided it for itself would be a second answer.
+
+    ``durability`` defaults to :attr:`Durability.PERISHABLE`, which is the
+    conservative answer rather than the common one. A nineteenth check whose
+    author did not think about the question is treated as decaying, so the worst
+    a missing declaration causes is a re-measurement nobody needed. The opposite
+    default would let an unconsidered check be quietly believed for ever.
     """
 
     identifier: str
     category: str
     exit_code: ExitCode
+    durability: Durability = Durability.PERISHABLE
 
 
 AGGREGATE_CHECK: Final[str] = "bootstrap.ready"
@@ -476,26 +515,63 @@ def checks() -> tuple[CheckSpec, ...]:
     ``bootstrap.ready`` is last and is the aggregate. Its own exit code is the
     generic one, which it produces only when nothing before it failed — that is,
     when the report itself could not be completed.
+
+    **Every row declares its :class:`Durability`, and eleven of the eighteen are
+    stable.** Phase 030 added the column rather than a second table, because a
+    classification kept beside the registry cannot describe a check the registry
+    no longer has. Three of the calls are worth reading twice:
+
+    - ``config.valid`` is ``STABLE`` **because the configuration snapshot is
+      immutable**, not because the documents are. An operator may edit
+      ``config/`` while GLOBIN runs; the process is not reading it again, so the
+      values this check judged are the values it will use until it stops. The
+      stability is Phase 007's design showing through rather than an assumption
+      about operator behaviour.
+    - ``state.previous_run`` is ``STABLE`` because it asks about history. The
+      previous run ended before this one began, so its record cannot change —
+      and re-taking the check later would read *this* run's record and answer a
+      different question with the same name.
+    - ``bootstrap.ready`` is ``PERISHABLE`` because an aggregate is no stronger
+      than its weakest input, and seven of its inputs decay.
     """
     return (
-        CheckSpec("project.root", "project", ExitCode.PATHS_UNUSABLE),
-        CheckSpec("runtime.host", "runtime", ExitCode.HOST_UNSUPPORTED),
-        CheckSpec("runtime.architecture", "runtime", ExitCode.HOST_UNSUPPORTED),
-        CheckSpec("environment.capability", "environment", ExitCode.ENVIRONMENT_INCOMPATIBLE),
-        CheckSpec("python.implementation", "python", ExitCode.INTERPRETER_MISMATCH),
-        CheckSpec("python.version", "python", ExitCode.INTERPRETER_MISMATCH),
-        CheckSpec("python.environment", "python", ExitCode.ENVIRONMENT_MISMATCH),
-        CheckSpec("project.identity", "project", ExitCode.PROJECT_UNIDENTIFIED),
-        CheckSpec("dependency.lock", "dependency", ExitCode.DEPENDENCY_UNREADY),
-        CheckSpec("config.valid", "config", ExitCode.CONFIGURATION_INVALID),
-        CheckSpec("paths.runtime", "paths", ExitCode.PATHS_UNUSABLE),
-        CheckSpec("paths.boundary", "paths", ExitCode.PATHS_UNUSABLE),
-        CheckSpec("state.persistence", "state", ExitCode.RUNTIME_PERSISTENCE_FAILED),
-        CheckSpec("state.previous_run", "state", ExitCode.RUNTIME_STATE_CORRUPT),
-        CheckSpec("instance.lock", "instance", ExitCode.INSTANCE_ALREADY_ACTIVE),
-        CheckSpec("secrets.required", "secrets", ExitCode.SECRETS_UNREADY),
-        CheckSpec("secrets.entitlement", "secrets", ExitCode.CREDENTIAL_NOT_ENTITLED),
-        CheckSpec("bootstrap.ready", "bootstrap", ExitCode.GATE_FAILED),
+        CheckSpec("project.root", "project", ExitCode.PATHS_UNUSABLE, Durability.STABLE),
+        CheckSpec("runtime.host", "runtime", ExitCode.HOST_UNSUPPORTED, Durability.STABLE),
+        CheckSpec("runtime.architecture", "runtime", ExitCode.HOST_UNSUPPORTED, Durability.STABLE),
+        CheckSpec(
+            "environment.capability",
+            "environment",
+            ExitCode.ENVIRONMENT_INCOMPATIBLE,
+            Durability.STABLE,
+        ),
+        CheckSpec(
+            "python.implementation", "python", ExitCode.INTERPRETER_MISMATCH, Durability.STABLE
+        ),
+        CheckSpec("python.version", "python", ExitCode.INTERPRETER_MISMATCH, Durability.STABLE),
+        CheckSpec("python.environment", "python", ExitCode.ENVIRONMENT_MISMATCH, Durability.STABLE),
+        CheckSpec("project.identity", "project", ExitCode.PROJECT_UNIDENTIFIED, Durability.STABLE),
+        CheckSpec("dependency.lock", "dependency", ExitCode.DEPENDENCY_UNREADY, Durability.STABLE),
+        CheckSpec("config.valid", "config", ExitCode.CONFIGURATION_INVALID, Durability.STABLE),
+        CheckSpec("paths.runtime", "paths", ExitCode.PATHS_UNUSABLE, Durability.PERISHABLE),
+        CheckSpec("paths.boundary", "paths", ExitCode.PATHS_UNUSABLE, Durability.PERISHABLE),
+        CheckSpec(
+            "state.persistence",
+            "state",
+            ExitCode.RUNTIME_PERSISTENCE_FAILED,
+            Durability.PERISHABLE,
+        ),
+        CheckSpec("state.previous_run", "state", ExitCode.RUNTIME_STATE_CORRUPT, Durability.STABLE),
+        CheckSpec(
+            "instance.lock", "instance", ExitCode.INSTANCE_ALREADY_ACTIVE, Durability.PERISHABLE
+        ),
+        CheckSpec("secrets.required", "secrets", ExitCode.SECRETS_UNREADY, Durability.PERISHABLE),
+        CheckSpec(
+            "secrets.entitlement",
+            "secrets",
+            ExitCode.CREDENTIAL_NOT_ENTITLED,
+            Durability.PERISHABLE,
+        ),
+        CheckSpec("bootstrap.ready", "bootstrap", ExitCode.GATE_FAILED, Durability.PERISHABLE),
     )
 
 

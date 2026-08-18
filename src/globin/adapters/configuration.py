@@ -27,10 +27,18 @@ chain is assembled, instead of being a boolean somebody has to look up.
 """
 
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from pathlib import Path
+from typing import Final
 
+from globin.domain.config_evidence import (
+    SCHEMA_VERSION_KEY,
+    check_schema_version,
+    document_size_problem,
+)
 from globin.domain.configuration import (
+    COMMAND_LINE_ORIGIN,
     ENVIRONMENT_ORIGIN,
     ENVIRONMENT_PREFIX,
     KEY_SEPARATOR,
@@ -38,6 +46,7 @@ from globin.domain.configuration import (
     ConfigLayer,
     config_layer,
     environment_names,
+    known_keys,
 )
 from globin.domain.observability import is_sensitive
 from globin.errors import ConfigurationError
@@ -124,11 +133,28 @@ class TomlConfigurationSource:
                 fatal or merely means "this layer is empty" depends on which
                 source it is, and that is Phase 027's decision rather than this
                 adapter's to guess.
+
+        **The size is checked before the parse, and the version before the
+        flatten.** Both are refusals the document itself asks for, and both would
+        be reported as something else if they ran later: an oversized file becomes
+        a decode error about a byte offset nobody can act on, and a document
+        written for a contract this GLOBIN does not read becomes a list of unknown
+        keys. Neither check interprets a value, so the division this module opens
+        with still holds — the version is handed to
+        :func:`~globin.domain.config_evidence.check_schema_version`, which is the
+        domain's.
         """
+        origin = str(self._path)
+        problem = document_size_problem(self._path.stat().st_size, origin)
+        if problem:
+            raise ConfigurationError(problem)
         with self._path.open("rb") as handle:
             document = tomllib.load(handle)
-        origin = str(self._path)
-        return config_layer(origin, flatten(document, origin))
+        settings = dict(document)
+        declared = settings.pop(SCHEMA_VERSION_KEY, None)
+        if declared is not None:
+            check_schema_version(declared, origin)
+        return config_layer(origin, flatten(settings, origin))
 
 
 def reserved_variables() -> tuple[str, ...]:
@@ -203,6 +229,59 @@ class OptionalDocumentSource:
             return self._inner.layer()
         except (FileNotFoundError, NotADirectoryError):
             return config_layer(self._origin, {})
+
+
+class RequiredDocumentSource:
+    """A source whose document must be there.
+
+    Args:
+        inner: The source to consult.
+        origin: What to call the document in a refusal.
+
+    **The deliberate mirror of** :class:`OptionalDocumentSource`, and the pair is
+    what makes ``--config`` mean something. The four computed documents are
+    optional because an absent one means the operator wrote none; a document an
+    operator *named* is different in kind, and starting on values they did not
+    choose because their path had a typo in it is the failure the flag exists to
+    prevent.
+
+    The absence is turned into a :exc:`~globin.errors.ConfigurationError` rather
+    than left as an :exc:`OSError`, because the exit code an operator gets should
+    say "the configuration did not validate" and not "the bootstrap failed in a
+    way it does not account for". Everything else — an unreadable file, malformed
+    TOML, an unflattenable key — already propagates as itself.
+    """
+
+    def __init__(self, inner: ConfigurationSource, origin: str) -> None:
+        """Bind the wrapper to a source.
+
+        Args:
+            inner: The source to consult.
+            origin: What the document is called in a refusal.
+        """
+        self._inner = inner
+        self._origin = origin
+
+    def layer(self) -> ConfigLayer:
+        """Read the document, refusing if it is not there.
+
+        Returns:
+            The inner source's layer.
+
+        Raises:
+            ConfigurationError: If the document is absent.
+            OSError: As the inner source, for every absence-like failure that is
+                not the document simply not existing.
+            tomllib.TOMLDecodeError: As the inner source.
+        """
+        try:
+            return self._inner.layer()
+        except (FileNotFoundError, NotADirectoryError) as fault:
+            msg = (
+                f"{self._origin}: the configuration document named on the command line "
+                f"is not there; GLOBIN will not start on values that were not chosen"
+            )
+            raise ConfigurationError(msg) from fault
 
 
 class EnvironmentConfigurationSource:
@@ -286,3 +365,161 @@ class EnvironmentConfigurationSource:
             )
             raise ConfigurationError(msg)
         return config_layer(ENVIRONMENT_ORIGIN, settings)
+
+
+ASSIGNMENT_SEPARATOR: Final[str] = "="
+"""What separates a key from its value in a ``--set`` argument."""
+
+
+def parse_overrides(assignments: Sequence[str]) -> dict[str, str]:
+    """Read ``key=value`` arguments into settings, refusing anything else.
+
+    Args:
+        assignments: The raw arguments, one per ``--set``.
+
+    Returns:
+        Dotted keys mapped to their values, as strings.
+
+    Raises:
+        ConfigurationError: If an argument carries no separator, names no
+            setting, is credential-shaped, or repeats a key. Every offender is
+            reported at once, which is the treatment
+            :class:`EnvironmentConfigurationSource` already gives a bad variable.
+
+    **The typed field registry this validates against is**
+    :func:`~globin.domain.configuration.known_keys`, which is derived from the
+    dataclasses rather than written out. So ``--set`` is a generic-looking flag
+    with none of the generic flag's usual failure: there is no arbitrary path to
+    accept, no place to add a key without adding a setting, and a name that is not
+    a setting is refused before the value is looked at.
+
+    **A credential-shaped key is refused before its value is read**, exactly as in
+    the environment. The check is on the *name*, so the value never enters a
+    layer, never reaches redaction, and never appears in the message.
+
+    Values stay strings. ``as_config`` already reads ``"true"`` and ``"9464"``,
+    and a second reader would be a second set of rules — the argument
+    :class:`EnvironmentConfigurationSource` makes about itself.
+    """
+    settings: dict[str, str] = {}
+    malformed: list[str] = []
+    credentials: list[str] = []
+    unknown: list[str] = []
+    repeated: list[str] = []
+    recognised = set(known_keys())
+    for assignment in assignments:
+        if ASSIGNMENT_SEPARATOR not in assignment:
+            malformed.append(assignment)
+            continue
+        key, _, value = assignment.partition(ASSIGNMENT_SEPARATOR)
+        if is_sensitive(key):
+            credentials.append(key)
+        elif key not in recognised:
+            unknown.append(key)
+        elif key in settings:
+            repeated.append(key)
+        else:
+            settings[key] = value
+    _refuse_overrides(
+        malformed=malformed,
+        credentials=credentials,
+        unknown=unknown,
+        repeated=repeated,
+        recognised=recognised,
+    )
+    return settings
+
+
+def _refuse_overrides(
+    *,
+    malformed: Sequence[str],
+    credentials: Sequence[str],
+    unknown: Sequence[str],
+    repeated: Sequence[str],
+    recognised: AbstractSet[str],
+) -> None:
+    """Raise for whichever kind of bad override was given.
+
+    Args:
+        malformed: Arguments carrying no separator.
+        credentials: Keys whose name looks credential-shaped.
+        unknown: Keys naming no setting.
+        repeated: Keys given more than once.
+        recognised: Every settable key, for the message.
+
+    Raises:
+        ConfigurationError: If any category is non-empty.
+
+    Separated from :func:`parse_overrides` so that the collection loop stays one
+    readable pass. The order is deliberate: a credential is reported before an
+    unknown key, so an operator who typed a secret is told the rule rather than
+    told they misspelled a setting name.
+    """
+    if malformed:
+        msg = (
+            f"{COMMAND_LINE_ORIGIN}: {', '.join(repr(item) for item in malformed)} "
+            f"carries no {ASSIGNMENT_SEPARATOR!r}; an override is written key=value"
+        )
+        raise ConfigurationError(msg)
+    if credentials:
+        msg = (
+            f"{COMMAND_LINE_ORIGIN}: {', '.join(credentials)} "
+            f"{'looks' if len(credentials) == 1 else 'look'} like a credential; "
+            f"no secret reaches GLOBIN through configuration, so no such setting "
+            f"exists and the value was not read "
+            f"(see docs/security/SECURITY_BASELINE.md)"
+        )
+        raise ConfigurationError(msg)
+    if unknown:
+        msg = (
+            f"{COMMAND_LINE_ORIGIN}: {', '.join(unknown)} "
+            f"{'names' if len(unknown) == 1 else 'name'} no setting; "
+            f"settable keys are {sorted(recognised)}"
+        )
+        raise ConfigurationError(msg)
+    if repeated:
+        msg = (
+            f"{COMMAND_LINE_ORIGIN}: {', '.join(sorted(set(repeated)))} "
+            f"was given more than once; one override per setting"
+        )
+        raise ConfigurationError(msg)
+
+
+class CliConfigurationSource:
+    """Supplies a configuration layer from what a launcher set on the command line.
+
+    Args:
+        settings: Dotted keys mapped to their values, already validated by
+            :func:`parse_overrides`.
+
+    **Only keys the operator actually typed are here**, which is what stops an
+    omitted flag from overwriting a lower source. A parser that carried defaults
+    into this layer would make the strongest source set every setting on every
+    run, and no document below it could ever win — the failure mode a
+    highest-priority overlay has to be built to avoid rather than to document.
+
+    It is the strongest source in the chain. The reasoning is
+    :data:`~globin.domain.configuration.COMMAND_LINE_ORIGIN`'s: precedence runs on
+    narrowness, and a flag is narrower than a variable.
+    """
+
+    def __init__(self, settings: Mapping[str, str]) -> None:
+        """Bind the source to a set of overrides.
+
+        Args:
+            settings: The validated overrides.
+        """
+        self._settings = dict(settings)
+
+    def layer(self) -> ConfigLayer:
+        """Return the overrides as one layer.
+
+        Returns:
+            A :class:`~globin.domain.configuration.ConfigLayer` whose origin is
+            :data:`~globin.domain.configuration.COMMAND_LINE_ORIGIN`.
+
+        An invocation that set nothing returns an empty layer rather than being
+        left out of the chain, so that the resolution always has the same shape
+        and a reader of the provenance can see that the source was consulted.
+        """
+        return config_layer(COMMAND_LINE_ORIGIN, dict(self._settings))

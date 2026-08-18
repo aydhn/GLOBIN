@@ -31,6 +31,7 @@ created, which is ``ENGINEERING_CONTRACT.md`` invariant 5 and the reason
 
 import json
 import sys
+import tomllib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +44,10 @@ from globin.adapters.bootstrap import (
     build,
     find_project_root,
 )
+from globin.adapters.config_evidence import build as build_config_manifest
+from globin.adapters.config_evidence import publish_snapshot, read_snapshot
+from globin.adapters.config_evidence import write as write_config_manifest
+from globin.adapters.configuration import parse_overrides
 from globin.adapters.environment import (
     DECLARED_TOOLCHAIN,
     PathToolchainProbe,
@@ -60,13 +65,23 @@ from globin.application.secrets import (
     rotate_from_entry,
     set_from_entry,
 )
-from globin.domain.bootstrap import BootstrapOutcome, CheckStatus, ExitCode
+from globin.domain.bootstrap import BootstrapOutcome, CheckStatus, ExitCode, RuntimePaths
+from globin.domain.config_evidence import (
+    ConfigProvenance,
+    compare,
+    effective_values,
+    evidence_fingerprint,
+    provenance_of,
+    snapshot_of,
+)
 from globin.domain.configuration import (
     DiagnosticsHttpConfig,
     GlobinConfig,
     as_config,
     config_fingerprint,
+    default_layer,
 )
+from globin.domain.configuration import resolve as resolve_layers
 from globin.domain.diagnostics_http import SCHEMA as ENDPOINT_SCHEMA
 from globin.domain.diagnostics_http import SCHEMA_VERSION as ENDPOINT_SCHEMA_VERSION
 from globin.domain.diagnostics_http import (
@@ -91,9 +106,11 @@ from globin.domain.environment import (
 from globin.domain.health import RuntimeHealthSnapshot, RuntimeHealthState
 from globin.domain.identifiers import EnvironmentId
 from globin.domain.metrics import declared_series, metrics
+from globin.domain.observability import redact
+from globin.domain.preflight import PreflightOutcome
 from globin.domain.runtime_state import RuntimeArea
 from globin.domain.secrets import SecretKind, SecretReference
-from globin.errors import ConfigurationError, GlobinError, ValidationError
+from globin.errors import ConfigurationError, GlobinError, InternalError, ValidationError
 from globin.ports.entitlements import GrantRegister
 from globin.ports.secret_entry import SecretEntry
 from globin.ports.secrets import SecretStore
@@ -191,6 +208,34 @@ above `GLOBIN_PROFILE`, which is above the declared default. Accepted by every
 command that resolves configuration, because a report about a profile other than the
 one a launcher would use would be a report about a different process.
 """
+CONFIG_FLAG: Final[str] = "--config"
+"""An explicit configuration document, above the four this layout computes.
+
+**A source selection rather than a field.** It says *which document to read*, not
+what any setting is, so it never appears in the provenance as a value and the
+answer to "why is this setting what it is" still names the document rather than
+the flag that pointed at it.
+
+Unlike the four computed documents, **its absence is fatal.** A missing
+``config/local/globin.toml`` means the operator wrote none; a missing
+``--config`` means they named one that is not there, and starting anyway on
+values they did not choose is the failure this flag exists to make impossible.
+The path is resolved to an absolute one before it is read, so two invocations
+naming the same document from different working directories are the same
+invocation.
+"""
+
+SET_FLAG: Final[str] = "--set"
+"""One configuration value, for this invocation only. Repeatable.
+
+The strongest source in the chain, and the narrowest act an operator can perform:
+a committed document applies to every run, a variable to a shell session, and this
+to one. **The typed field registry it is checked against is**
+:func:`~globin.domain.configuration.known_keys`, derived from the dataclasses, so
+there is no arbitrary path to accept and a key that is not a setting is refused
+before its value is looked at.
+"""
+
 HELP_WORDS: Final[tuple[str, ...]] = ("-h", "--help")
 """Both spellings of the help request.
 
@@ -218,7 +263,34 @@ SECRETS_WRITING: Final[tuple[str, ...]] = (SET, ROTATE)
 one invites somebody to script a prompt.
 """
 
-BOOTSTRAP_SUBCOMMANDS: Final[tuple[str, ...]] = (CHECK, EVIDENCE)
+CONFIG: Final[str] = "config"
+"""Ask the configuration about itself. Resolves; changes nothing.
+
+Five verbs, and every one of them reads. ``tomllib`` cannot write, so GLOBIN is
+structurally incapable of editing a document an operator wrote — which is the
+argument ``CONFIGURATION_LAYOUT.md`` makes for the parser, arriving here as a
+property of the command group rather than as a rule somebody has to keep.
+"""
+
+VALIDATE: Final[str] = "validate"
+EXPLAIN: Final[str] = "explain"
+DUMP: Final[str] = "dump"
+FINGERPRINT: Final[str] = "fingerprint"
+
+CONFIG_SUBCOMMANDS: Final[tuple[str, ...]] = (VALIDATE, EXPLAIN, DUMP, FINGERPRINT, EVIDENCE)
+"""What may follow ``config``. ``validate`` is the default and changes nothing."""
+
+PREFLIGHT: Final[str] = "preflight"
+"""Run every check, gate on the result, and say how long the verdict lasts.
+
+**The third combination of two switches that already existed, not a fourth
+pipeline.** ``bootstrap check`` stops at the first refusal and gates; ``doctor``
+runs everything and reports. A launcher about to start a long-running process
+needs both halves — every fault in one pass, and a refusal — and it needs the
+one thing neither can say: which of the answers were true only when taken.
+"""
+
+BOOTSTRAP_SUBCOMMANDS: Final[tuple[str, ...]] = (CHECK, EVIDENCE, PREFLIGHT)
 """What may follow ``bootstrap``. ``check`` is the default and changes nothing."""
 
 DIAGNOSTICS_SUBCOMMANDS: Final[tuple[str, ...]] = (
@@ -239,8 +311,9 @@ invites somebody to add it to a script that runs every minute; a verb reads like
 the deliberate act it is.
 """
 
-USAGE: Final[str] = """usage: globin [--version] [doctor|bootstrap|diagnostics|secrets]
+USAGE: Final[str] = """usage: globin [--version] [doctor|bootstrap|config|diagnostics|secrets]
                      [subcommand] [--json] [--profile NAME]
+                     [--config PATH] [--set KEY=VALUE]
 
 GLOBIN's local entry point. It performs no network access of any kind: no
 exchange is contacted and no order is placed. Since Phase 029 one command
@@ -252,6 +325,9 @@ Commands:
   bootstrap check     Refuse to start unless every check passes. Stops at the
                       first refusal. This is the gate a launcher runs.
   bootstrap evidence  Run the gate and write .globin/bootstrap/bootstrap-manifest.json.
+  bootstrap preflight Run every check, refuse unless all of them pass, and
+                      report which answers were true only when taken. This is
+                      the gate a launcher runs before a long-running process.
   diagnostics snapshot  Measure this runtime once and report its health.
   diagnostics bundle    Write a redacted support archive and print its digest.
   diagnostics memory    Snapshot with the allocator tracer on, then off again.
@@ -262,6 +338,15 @@ Commands:
   diagnostics endpoint  Report the loopback diagnostics surface: whether it is
                         enabled, where it would bind, which routes answer, and
                         every bound it runs inside. Binds nothing.
+  config validate     Resolve every source and bind the model. Refuses on the
+                      first thing that will not bind. Reads; writes nothing.
+  config explain [KEY]  Say which source won, at what priority, and how many
+                      weaker layers it overruled. All keys, or one.
+  config dump         The effective validated configuration, redacted and in a
+                      stable order. Refuses if it would not bind.
+  config fingerprint  The semantic digest, and the one that includes origins.
+  config evidence     Write .globin/config/config-manifest.json, and record this
+                      run as the baseline the next drift report compares against.
   secrets set         Collect a credential at this terminal and store it.
                       Interactive only; refuses a pipe, and refuses --json.
   secrets rotate      Collect a replacement, keeping the previous value
@@ -283,6 +368,13 @@ Options:
                       what an environment guarantees is Phase 035's question.
   --kind KIND         api_key, api_secret or private_key.
   --name NAME         The credential's logical name.
+  --config PATH       An explicit configuration document, above the four this
+                      layout computes and below the environment. Unlike those
+                      four its absence is fatal. Resolved to an absolute path,
+                      so the working directory cannot change what is read.
+  --set KEY=VALUE     One setting, for this invocation only. Repeatable, and
+                      the strongest source there is. The key must be a declared
+                      setting; anything else is refused before its value is read.
   --profile NAME      Which configuration profile to resolve. Outranks
                       GLOBIN_PROFILE, which outranks the declared default.
                       A name that is not a declared profile is refused, never
@@ -343,6 +435,31 @@ class Invocation:
     environment: str = ""
     kind: str = ""
     name: str = ""
+    config: str = ""
+    overrides: tuple[str, ...] = ()
+    field: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Options:
+    """The options every configuration-resolving command accepts.
+
+    Args:
+        as_json: Whether the machine-readable document was asked for.
+        profile: The profile a launcher asked for, or an empty string.
+        config: An explicit document, or an empty string.
+        overrides: Raw ``key=value`` arguments, in the order they were given and
+            not yet validated.
+
+    A record rather than a widening tuple. :func:`_options` returned two values
+    until Phase 030 needed four, and a four-tuple is where a caller starts
+    unpacking in the wrong order without the type checker noticing.
+    """
+
+    as_json: bool = False
+    profile: str = ""
+    config: str = ""
+    overrides: tuple[str, ...] = ()
 
 
 def parse(argv: Sequence[str]) -> Invocation:
@@ -372,12 +489,13 @@ def parse(argv: Sequence[str]) -> Invocation:
         _no_more(words[1:], head)
         return Invocation(command=VERSION)
     if head == DOCTOR:
-        as_json, profile = _options(words[1:], DOCTOR)
-        return Invocation(command=DOCTOR, as_json=as_json, profile=profile)
+        return _invocation(DOCTOR, _options(words[1:], DOCTOR))
     if head == BOOTSTRAP:
         return _parse_bootstrap(words[1:])
     if head == DIAGNOSTICS:
         return _parse_diagnostics(words[1:])
+    if head == CONFIG:
+        return _parse_config(words[1:])
     if head == SECRETS:
         return _parse_secrets(words[1:])
     msg = f"unrecognised argument: {head!r}"
@@ -404,40 +522,55 @@ def _parse_bootstrap(rest: Sequence[str]) -> Invocation:
         if subcommand not in BOOTSTRAP_SUBCOMMANDS:
             msg = f"unrecognised argument: {subcommand!r}"
             raise UsageError(msg)
-    as_json, profile = _options(words, f"{BOOTSTRAP} {subcommand}")
-    if as_json and subcommand == EVIDENCE:
+    options = _options(words, f"{BOOTSTRAP} {subcommand}")
+    if options.as_json and subcommand == EVIDENCE:
         msg = (
             f"{JSON_FLAG} means nothing with {EVIDENCE}, which writes a file; "
             f"use `{BOOTSTRAP} {CHECK} {JSON_FLAG}` to read the same document on standard output"
         )
         raise UsageError(msg)
-    return Invocation(command=f"{BOOTSTRAP} {subcommand}", as_json=as_json, profile=profile)
+    return _invocation(f"{BOOTSTRAP} {subcommand}", options)
 
 
-def _options(words: Sequence[str], context: str) -> tuple[bool, str]:
-    """Accept ``--json`` and ``--profile NAME``, and nothing else.
+def _options(words: Sequence[str], context: str) -> Options:
+    """Accept the four configuration options, and nothing else.
 
     Args:
         words: The remaining words.
         context: What they followed, for the message.
 
     Returns:
-        Whether ``--json`` was given, and the requested profile or an empty string.
+        What was asked for, as an :class:`Options`.
 
     Raises:
-        UsageError: If anything else appears, if either option appears twice, or if
-            ``--profile`` is given without a name.
+        UsageError: If anything else appears, if a single-valued option appears
+            twice, or if any option that takes a value is given without one.
 
-    **The name is not validated here.** Whether a spelling is a declared profile is
-    :func:`~globin.domain.config_layout.profile_from`'s question, and answering it in
-    the parser would put the set of profiles in two places. What this refuses is a
-    *shape* problem: a missing name, or a name that is itself another option — the
-    case that would otherwise silently swallow ``--json`` and leave the caller
+    **No name and no override is validated here.** Whether a spelling is a
+    declared profile is :func:`~globin.domain.config_layout.profile_from`'s
+    question, and whether a key is a setting is
+    :func:`~globin.adapters.configuration.parse_overrides`'s; answering either in
+    the parser would put the register in two places. What this refuses is a
+    *shape* problem: a missing value, or a value that is itself another option —
+    the case that would otherwise silently swallow ``--json`` and leave the caller
     believing they asked for it.
+
+    **``--set`` is the one option that may repeat**, because one override per
+    setting is the point and refusing the second would make the flag able to
+    change exactly one thing. A key repeated *across* two ``--set`` arguments is
+    still refused, one layer down, where the key is known to be a key.
+
+    **No abbreviation is accepted, here or anywhere.** Every word is compared for
+    equality against a spelled constant, so ``--prof`` is an unrecognised argument
+    rather than a prefix match. That is not a setting to switch on: the parser has
+    no prefix logic to disable, which is the property
+    ``argparse``'s ``allow_abbrev`` has to be remembered for.
     """
     remaining = list(words)
     as_json = False
     profile = ""
+    config = ""
+    overrides: list[str] = []
     while remaining:
         word = remaining.pop(0)
         if word == JSON_FLAG:
@@ -447,17 +580,87 @@ def _options(words: Sequence[str], context: str) -> tuple[bool, str]:
             as_json = True
             continue
         if word == PROFILE_FLAG:
-            if profile:
-                msg = f"{PROFILE_FLAG} was given twice"
-                raise UsageError(msg)
+            profile = _valued(remaining, PROFILE_FLAG, profile)
+            continue
+        if word == CONFIG_FLAG:
+            config = _valued(remaining, CONFIG_FLAG, config)
+            continue
+        if word == SET_FLAG:
             if not remaining or remaining[0].startswith("-"):
-                msg = f"{PROFILE_FLAG} needs a profile name"
+                msg = f"{SET_FLAG} needs a key=value assignment"
                 raise UsageError(msg)
-            profile = remaining.pop(0)
+            overrides.append(remaining.pop(0))
             continue
         msg = f"unrecognised argument after {context}: {word!r}"
         raise UsageError(msg)
-    return as_json, profile
+    return Options(as_json=as_json, profile=profile, config=config, overrides=tuple(overrides))
+
+
+def _valued(remaining: list[str], flag: str, current: str) -> str:
+    """Take one option's value off the front of the remaining words.
+
+    Args:
+        remaining: The words still to read. Mutated.
+        flag: Which option is being read, for the message.
+        current: What it already holds, so a repeat can be refused.
+
+    Returns:
+        The value.
+
+    Raises:
+        UsageError: If the option was already given, or has no value.
+    """
+    if current:
+        msg = f"{flag} was given twice"
+        raise UsageError(msg)
+    if not remaining or remaining[0].startswith("-"):
+        msg = f"{flag} needs a value"
+        raise UsageError(msg)
+    return remaining.pop(0)
+
+
+def _explicit_document(invocation: Invocation) -> Path | None:
+    """The document ``--config`` named, as an absolute path.
+
+    Args:
+        invocation: What was asked for.
+
+    Returns:
+        The resolved path, or ``None`` when no document was named.
+
+    **Resolved here rather than left relative**, which is what makes the same
+    invocation from two working directories the same invocation. Nothing checks
+    that the file exists: whether an absent document is fatal belongs to the
+    source that reads it, and answering it here would put the decision in two
+    places.
+    """
+    if not invocation.config:
+        return None
+    return Path(invocation.config).resolve()
+
+
+def _invocation(command: str, options: Options, field: str = "") -> Invocation:
+    """Build an invocation from a command word and its parsed options.
+
+    Args:
+        command: The full command, subcommand included.
+        options: What :func:`_options` read.
+        field: The one field ``config explain`` was asked about, if any.
+
+    Returns:
+        The invocation.
+
+    One place where options become an invocation, so that a command added later
+    cannot quietly accept ``--profile`` and drop ``--set``.
+    """
+    return Invocation(
+        command=command,
+        as_json=options.as_json,
+        profile=options.profile,
+        config=options.config,
+        overrides=options.overrides,
+        field=field,
+    )
 
 
 def _no_more(words: Sequence[str], head: str) -> None:
@@ -520,6 +723,63 @@ def render_json(outcome: BootstrapOutcome) -> str:
     return json.dumps(build(outcome), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
+def render_preflight_human(outcome: PreflightOutcome) -> str:
+    """The preflight verdict as a person reads it.
+
+    Args:
+        outcome: What the run concluded, and the suite it was judged under.
+
+    Returns:
+        The check table, then the shelf life, then the verdict.
+
+    **A perishable pass is marked in the table rather than only summarised
+    below.** An operator scanning the column is the reader this whole
+    classification exists for, and a note at the bottom is one they have to
+    remember to correlate.
+    """
+    checks = outcome.report.outcomes
+    if not checks:
+        return "no check ran.\n"
+    decaying = set(outcome.decaying())
+    width = max(len(check.identifier) for check in checks)
+    lines = [
+        f"  {check.status.value.upper():<10} {check.identifier:<{width}}  "
+        f"{'~' if check.identifier in decaying else ' '} {check.summary}"
+        for check in checks
+    ]
+    problems = [check for check in checks if check.status is not CheckStatus.PASS]
+    if problems:
+        lines.append("")
+        lines.extend(f"  {check.identifier}: {check.remediation}" for check in problems)
+    lines.append("")
+    shelf = outcome.shelf_life_millis()
+    if shelf is None:
+        lines.append("Nothing in this verdict decays, so it does not expire.")
+    else:
+        lines.append(
+            f"~ marks {len(decaying)} answer(s) that were true when taken; "
+            f"take them again every {shelf} ms."
+        )
+    lines.append(
+        f"{PROJECT_NAME} may start." if outcome.may_start else f"{PROJECT_NAME} will not start."
+    )
+    return "\n".join(lines) + "\n"
+
+
+def render_preflight_json(outcome: PreflightOutcome) -> str:
+    """The preflight verdict as a machine reads it.
+
+    Args:
+        outcome: What the run concluded, and the suite it was judged under.
+
+    Returns:
+        :meth:`~globin.domain.preflight.PreflightOutcome.as_record`, rendered
+        canonically. The domain builds it so that the stream and any later
+        artefact describe one run rather than two renderings of it.
+    """
+    return json.dumps(outcome.as_record(), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -572,10 +832,20 @@ def main(
             print(f"globin: the secret operation failed: {fault}", file=err)
             return int(ExitCode.SECRETS_UNREADY)
 
+    if invocation.command.startswith(CONFIG):
+        try:
+            return _config(invocation, out=out, err=err, start=start)
+        except (ConfigurationError, tomllib.TOMLDecodeError) as fault:
+            print(f"globin: the configuration did not validate: {fault}", file=err)
+            return int(ExitCode.CONFIGURATION_INVALID)
+        except (GlobinError, OSError) as fault:
+            print(f"globin: the configuration could not be reported: {fault}", file=err)
+            return int(ExitCode.INTERNAL)
+
     if invocation.command.startswith(DIAGNOSTICS):
         try:
             return _diagnostics(invocation, out=out, err=err, start=start)
-        except ConfigurationError as fault:
+        except (ConfigurationError, tomllib.TOMLDecodeError) as fault:
             # Separate from the clause below, and not merely for a nicer sentence.
             # Since Phase 027 a diagnostics command resolves configuration the way a
             # real run does, so it can now fail for a reason that has nothing to do
@@ -592,6 +862,20 @@ def main(
 
     try:
         return _bootstrap(invocation, out=out, err=err, start=start)
+    except tomllib.TOMLDecodeError as fault:
+        # `TOMLDecodeError` is a `ValueError`, so it is neither a `GlobinError`
+        # nor an `OSError` and the clause below does not see it. Before Phase 030
+        # that was unreachable rather than handled: every document the chain read
+        # was a committed one, and a malformed committed document fails the suite.
+        # `--config` made it reachable, and a traceback is not a user interface.
+        #
+        # The exception is still not *wrapped*, which is what
+        # `docs/CONFIGURATION_POLICY.md` asks for -- a caller below the command
+        # line still sees the decoder's own type. What is added is the exit code,
+        # and the message keeps the line and column that made leaving it unwrapped
+        # worth doing.
+        print(f"globin: the configuration did not validate: {fault}", file=err)
+        return int(ExitCode.CONFIGURATION_INVALID)
     except (GlobinError, OSError) as fault:
         print(f"globin: the bootstrap could not be completed: {fault}", file=err)
         return int(ExitCode.INTERNAL)
@@ -639,10 +923,38 @@ def _bootstrap(invocation: Invocation, *, out: TextIO, err: TextIO, start: Path 
         OSError: If evidence could not be written.
     """
     wanted_evidence = invocation.command.endswith(EVIDENCE)
+    try:
+        overrides = parse_overrides(invocation.overrides)
+    except ConfigurationError as fault:
+        # Handled here rather than beside the broad clause in `main`, and the
+        # narrowness is the point. Since Phase 030 the chain is assembled from
+        # command-line arguments, so it can be refused *before any check runs*:
+        # `--set` naming no setting, or a credential-shaped key. Reporting that
+        # as 17 would say "the bootstrap failed in a way it does not account
+        # for" about the one class of failure it accounts for most precisely.
+        #
+        # Catching it around the whole of `_bootstrap` instead would also swallow
+        # `Bootstrap.record`'s refusal to write evidence when there is no project
+        # root -- a different fault, which has answered 17 since Phase 021 and
+        # whose test noticed immediately when this clause was first written wide.
+        print(f"globin: the configuration did not validate: {fault}", file=err)
+        return int(ExitCode.CONFIGURATION_INVALID)
     bootstrap = build_bootstrap(
         Path.cwd() if start is None else start,
         profile=resolve_run_profile(invocation.profile or None),
+        explicit=_explicit_document(invocation),
+        overrides=overrides,
     )
+
+    if invocation.command.endswith(PREFLIGHT):
+        verdict = bootstrap.preflight()
+        if invocation.as_json:
+            print(render_preflight_json(verdict), file=out)
+            print(render_preflight_human(verdict), end="", file=err)
+        else:
+            print(render_preflight_human(verdict), end="", file=out)
+        return int(verdict.exit_code)
+
     outcome = bootstrap.run(stop_at_first_refusal=invocation.command != DOCTOR)
 
     if invocation.as_json:
@@ -711,14 +1023,14 @@ def _parse_diagnostics(rest: Sequence[str]) -> Invocation:
         if subcommand not in DIAGNOSTICS_SUBCOMMANDS:
             msg = f"unrecognised argument: {subcommand!r}"
             raise UsageError(msg)
-    as_json, profile = _options(words, f"{DIAGNOSTICS} {subcommand}")
-    if as_json and subcommand == BUNDLE:
+    options = _options(words, f"{DIAGNOSTICS} {subcommand}")
+    if options.as_json and subcommand == BUNDLE:
         msg = (
             f"{JSON_FLAG} means nothing with {BUNDLE}, which writes an archive; "
             f"use `{DIAGNOSTICS} {SNAPSHOT} {JSON_FLAG}` to read the same document"
         )
         raise UsageError(msg)
-    return Invocation(command=f"{DIAGNOSTICS} {subcommand}", as_json=as_json, profile=profile)
+    return _invocation(f"{DIAGNOSTICS} {subcommand}", options)
 
 
 def render_snapshot_json(snapshot: RuntimeHealthSnapshot) -> str:
@@ -821,7 +1133,10 @@ def _diagnostics(
     state = build_runtime_state()
     profile = resolve_run_profile(invocation.profile or None)
     sources = build_config_sources(
-        find_project_root(Path.cwd() if start is None else start), profile
+        find_project_root(Path.cwd() if start is None else start),
+        profile,
+        explicit=_explicit_document(invocation),
+        overrides=parse_overrides(invocation.overrides),
     )
     settings = resolve_settings(sources)
     config = as_config(settings)
@@ -947,7 +1262,7 @@ def _telemetry(
     rather than about the work, so it is not a failing exit code — making it one
     would let a launcher restart a healthy process because a metric was refused.
 
-    **Exit code 24 stays free.** If a later phase wants a *gate* that fails when
+    **Exit code 26 stays free.** If a later phase wants a *gate* that fails when
     export is unhealthy, that is a different command with different semantics, and
     that is when a new code is earned.
     """
@@ -1047,7 +1362,7 @@ def _endpoint(
     **The exit code is 14 rather than a new one.** An unusable bind address or an
     out-of-range bound is a configuration that did not validate, which is exactly
     what 14 already means and what `bootstrap check` would report for the same
-    document. Code 24 stays free.
+    document. Code 26 stays free.
     """
     surface = config.diagnostics_http
     document: dict[str, object] = {
@@ -1688,3 +2003,374 @@ def _secret_write(
             file=err,
         )
     return int(ExitCode.OK)
+
+
+def _parse_config(rest: Sequence[str]) -> Invocation:
+    """Read what follows ``config``.
+
+    Args:
+        rest: The remaining words.
+
+    Returns:
+        The invocation.
+
+    Raises:
+        UsageError: If the subcommand is unrecognised, if a field is given to a
+            verb that takes none, or if ``--json`` is asked of ``evidence``,
+            whose output is a file rather than a stream.
+
+    ``explain`` is the one verb taking a positional, and it is optional: with a
+    key it explains that key, without one it explains all of them. A second
+    positional is refused rather than ignored, because a caller who typed two key
+    names is asking a question this command cannot answer and should be told so.
+    """
+    words = list(rest)
+    subcommand = VALIDATE
+    if words and not words[0].startswith("-"):
+        subcommand = words.pop(0)
+        if subcommand not in CONFIG_SUBCOMMANDS:
+            msg = f"unrecognised argument: {subcommand!r}"
+            raise UsageError(msg)
+    field = ""
+    if words and not words[0].startswith("-"):
+        if subcommand != EXPLAIN:
+            msg = f"{CONFIG} {subcommand} takes no field name, but {words[0]!r} was given"
+            raise UsageError(msg)
+        field = words.pop(0)
+        if words and not words[0].startswith("-"):
+            msg = f"{CONFIG} {EXPLAIN} explains one field at a time, but {words[0]!r} followed"
+            raise UsageError(msg)
+    options = _options(words, f"{CONFIG} {subcommand}")
+    if options.as_json and subcommand == EVIDENCE:
+        msg = (
+            f"{JSON_FLAG} means nothing with {EVIDENCE}, which writes a file; "
+            f"use `{CONFIG} {EXPLAIN} {JSON_FLAG}` to read the same account on standard output"
+        )
+        raise UsageError(msg)
+    return _invocation(f"{CONFIG} {subcommand}", options, field=field)
+
+
+@dataclass(frozen=True, slots=True)
+class _Resolution:
+    """One resolution of configuration, with everything a report needs.
+
+    Args:
+        profile: The profile that was resolved.
+        provenance: Who set what, and what was overruled.
+        semantic: The value-only fingerprint.
+        problem: Why the model did not bind, or an empty string when it did.
+        config: The bound model, or ``None`` when it did not bind.
+
+    Assembled once per invocation so that every verb describes the same
+    resolution. Two verbs each resolving for themselves would be two resolutions,
+    which is the defect ``ConfigurationResolution.resolved`` was written to
+    prevent one layer down.
+    """
+
+    profile: str
+    provenance: ConfigProvenance
+    semantic: str
+    problem: str
+    config: GlobinConfig | None
+
+
+def _resolve_for_report(invocation: Invocation, start: Path | None) -> _Resolution:
+    """Resolve configuration and account for it, without judging.
+
+    Args:
+        invocation: What was asked for.
+        start: Where to begin the search for the project root.
+
+    Returns:
+        A :class:`_Resolution`.
+
+    Raises:
+        ConfigurationError: If a source could not produce a layer at all — an
+            unreadable document, a document named by ``--config`` that is not
+            there, an unrecognised ``GLOBIN_`` variable, a ``--set`` naming no
+            setting. Those refuse the whole report, because a report about a
+            resolution that did not happen would be worse than none.
+
+    A binding failure is **caught and carried** rather than raised, because three
+    of the five verbs still have something true to say about a configuration that
+    will not bind — which source set the offending value being the most useful of
+    them.
+    """
+    profile = resolve_run_profile(invocation.profile or None)
+    sources = build_config_sources(
+        find_project_root(Path.cwd() if start is None else start),
+        profile,
+        explicit=_explicit_document(invocation),
+        overrides=parse_overrides(invocation.overrides),
+    )
+    layers = (default_layer(), *(source.layer() for source in sources))
+    resolved = resolve_layers(layers)
+    bound: GlobinConfig | None = None
+    problem = ""
+    try:
+        bound = as_config(resolved)
+    except (ConfigurationError, InternalError) as fault:
+        problem = str(fault)
+    return _Resolution(
+        profile=profile,
+        provenance=provenance_of(layers),
+        semantic=config_fingerprint(resolved),
+        problem=problem,
+        config=bound,
+    )
+
+
+def _config(invocation: Invocation, *, out: TextIO, err: TextIO, start: Path | None) -> int:
+    """Report on configuration, five ways.
+
+    Args:
+        invocation: What was asked for.
+        out: Where the answer goes.
+        err: Where human text goes under ``--json``.
+        start: Where to begin the search for the project root.
+
+    Returns:
+        The exit code. :attr:`~globin.domain.bootstrap.ExitCode.CONFIGURATION_INVALID`
+        when the model did not bind and the verb needed it to.
+
+    Raises:
+        ConfigurationError: As :func:`_resolve_for_report`, and from
+            :meth:`~globin.domain.config_evidence.ConfigProvenance.field` when a
+            named key resolved to nothing.
+        OSError: If evidence could not be written.
+
+    **Three of the five verbs work on a configuration that will not bind, and two
+    refuse.** ``explain`` and ``fingerprint`` are diagnostics — an operator whose
+    configuration is broken is exactly the one who needs to know which document
+    set the offending value — while ``dump`` describes the *validated* model and
+    would otherwise have to invent one. ``validate`` refuses because refusing is
+    the whole verb.
+    """
+    resolution = _resolve_for_report(invocation, start)
+    if invocation.command.endswith(EVIDENCE):
+        return _config_evidence(resolution, out=out, start=start)
+
+    needs_model = invocation.command.endswith((DUMP, VALIDATE))
+    if needs_model and resolution.problem:
+        print(f"globin: the configuration did not validate: {resolution.problem}", file=err)
+        return int(ExitCode.CONFIGURATION_INVALID)
+
+    document, human = _config_report(invocation, resolution)
+    if invocation.as_json:
+        print(
+            json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=True),
+            file=out,
+        )
+        print(human, end="", file=err)
+    else:
+        print(human, end="", file=out)
+    return int(ExitCode.OK)
+
+
+def _config_report(
+    invocation: Invocation, resolution: _Resolution
+) -> tuple[dict[str, object], str]:
+    """Build one verb's document and its human rendering.
+
+    Args:
+        invocation: What was asked for.
+        resolution: The one resolution every verb describes.
+
+    Returns:
+        The machine-readable document and the human text, built from the same
+        values so that the two cannot disagree.
+
+    Raises:
+        ConfigurationError: If ``explain`` named a key that resolved to nothing.
+    """
+    if invocation.command.endswith(FINGERPRINT):
+        return _config_fingerprint(resolution)
+    if invocation.command.endswith(DUMP):
+        return _config_dump(resolution)
+    if invocation.command.endswith(EXPLAIN):
+        return _config_explain(invocation, resolution)
+    return _config_validate(resolution)
+
+
+def _config_fingerprint(resolution: _Resolution) -> tuple[dict[str, object], str]:
+    """The two digests, and what each one ignores.
+
+    Args:
+        resolution: The resolution to digest.
+
+    Returns:
+        The document and the human text.
+    """
+    evidence = evidence_fingerprint(resolution.provenance)
+    document: dict[str, object] = {
+        "profile": resolution.profile,
+        "semantic_fingerprint": resolution.semantic,
+        "evidence_fingerprint": evidence,
+    }
+    human = (
+        f"  semantic  {resolution.semantic}\n"
+        f"  evidence  {evidence}\n"
+        f"\nThe semantic digest ignores where a value came from; "
+        f"the evidence digest does not.\n"
+    )
+    return document, human
+
+
+def _config_dump(resolution: _Resolution) -> tuple[dict[str, object], str]:
+    """The effective validated configuration, redacted and in a stable order.
+
+    Args:
+        resolution: The resolution, whose model the caller has established binds.
+
+    Returns:
+        The document and the human text.
+
+    Sorted by key in both renderings, so two runs on one configuration produce
+    the same bytes and a difference between them is a real difference.
+    """
+    safe = redact(effective_values(_bound(resolution)))
+    document: dict[str, object] = {
+        "profile": resolution.profile,
+        "settings": {key: repr(value) for key, value in sorted(safe.items())},
+    }
+    width = max(len(key) for key in safe)
+    lines = [f"  {key:<{width}}  {safe[key]!r}" for key in sorted(safe)]
+    return document, "\n".join(lines) + "\n"
+
+
+def _config_validate(resolution: _Resolution) -> tuple[dict[str, object], str]:
+    """The verdict, once binding has already been established.
+
+    Args:
+        resolution: The resolution.
+
+    Returns:
+        The document and the human text.
+    """
+    document: dict[str, object] = {
+        "profile": resolution.profile,
+        "bound": True,
+        "settings": len(resolution.provenance.keys()),
+        "sources": len(resolution.provenance.layers),
+    }
+    human = (
+        f"  profile   {resolution.profile}\n"
+        f"  sources   {len(resolution.provenance.layers)} consulted\n"
+        f"  settings  {len(resolution.provenance.keys())} resolved\n"
+        f"\nThe configuration is valid.\n"
+    )
+    return document, human
+
+
+def _config_explain(
+    invocation: Invocation, resolution: _Resolution
+) -> tuple[dict[str, object], str]:
+    """Account for one field, or for all of them.
+
+    Args:
+        invocation: What was asked for.
+        resolution: The one resolution every verb describes.
+
+    Returns:
+        The document and the human text.
+
+    Raises:
+        ConfigurationError: If a named key resolved to nothing.
+
+    Ordering is by key throughout, so two runs of this command on one
+    configuration produce the same bytes.
+    """
+    chosen = (
+        (resolution.provenance.field(invocation.field),)
+        if invocation.field
+        else resolution.provenance.fields
+    )
+    document: dict[str, object] = {
+        "profile": resolution.profile,
+        "layers": [layer.as_record() for layer in resolution.provenance.layers],
+        "fields": [field.as_record() for field in chosen],
+    }
+    width = max(len(field.key) for field in chosen)
+    lines = [
+        f"  {field.key:<{width}}  {field.display}"
+        f"  <- {field.origin} (priority {field.priority}, {field.overridden} overruled)"
+        f"{'' if field.known else '  [not a setting]'}"
+        for field in chosen
+    ]
+    return document, "\n".join(lines) + "\n"
+
+
+def _bound(resolution: _Resolution) -> GlobinConfig:
+    """The validated model, which the caller has already established exists.
+
+    Args:
+        resolution: The resolution.
+
+    Returns:
+        The bound model.
+
+    Raises:
+        InternalError: If it is absent. ``dump`` and ``validate`` return before
+            reaching here when binding failed, so this is unreachable from the
+            command line and is a GLOBIN defect if it fires.
+    """
+    if resolution.config is None:
+        msg = "a validated configuration was asked for after binding had already failed"
+        raise InternalError(msg)
+    return resolution.config
+
+
+def _config_evidence(resolution: _Resolution, *, out: TextIO, start: Path | None) -> int:
+    """Write the manifest and record this run as the drift baseline.
+
+    Args:
+        resolution: The one resolution the manifest describes.
+        out: Where the confirmation goes. There is no ``--json`` for this verb,
+            so there is no document competing for standard output.
+        start: Where to begin the search for the project root.
+
+    Returns:
+        The exit code.
+
+    Raises:
+        ConfigurationError: If there is no project root, and therefore nowhere
+            inside the project that evidence may go.
+        OSError: If the manifest could not be written.
+
+    **The comparison happens before the baseline is replaced**, which is the only
+    order that works: recording first would compare this run against itself and
+    report that nothing ever changes.
+
+    **A configuration that will not bind still gets a manifest, and still exits
+    non-zero.** A gate that failed silently and left no artefact is
+    indistinguishable from one that never ran, which is the reasoning
+    ``bootstrap evidence`` gives for the same choice.
+    """
+    root = find_project_root(Path.cwd() if start is None else start)
+    if root is None:
+        msg = "there is no project root, so there is nowhere to write evidence"
+        raise ConfigurationError(msg)
+
+    state = build_runtime_state()
+    state.tree.prepare(state.layout)
+    snapshot = snapshot_of(
+        resolution.provenance, profile=resolution.profile, semantic=resolution.semantic
+    )
+    recorded = read_snapshot(state.store)
+    drift = compare(recorded, snapshot)
+
+    document = build_config_manifest(
+        profile=resolution.profile,
+        provenance=resolution.provenance.as_record(),
+        fingerprints={
+            "semantic": resolution.semantic,
+            "evidence": snapshot.evidence,
+            "schema_version": snapshot.schema_version,
+        },
+        validation={"bound": not resolution.problem, "problem": resolution.problem},
+        drift=drift.as_record(),
+    )
+    written = write_config_manifest(document, root=root, paths=RuntimePaths())
+    publish_snapshot(state.store, snapshot)
+    print(f"evidence: {written.path or 'outside the project'}", file=out)
+    return int(ExitCode.CONFIGURATION_INVALID if resolution.problem else ExitCode.OK)
