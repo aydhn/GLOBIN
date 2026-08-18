@@ -33,6 +33,7 @@ from globin.domain.configuration import (
     default_layer,
     resolve,
 )
+from globin.errors import ConfigurationError
 from globin.runtime.cli import main
 from globin.runtime.composition import build_config_sources
 from tests.support import REPO_ROOT
@@ -245,10 +246,35 @@ def test_a_source_file_changing_is_seen_in_the_drift_report(tmp_path: Path) -> N
 SECRET: str = "sk-live-thisisnotarealkey"  # noqa: S105 -- a fixture, and the point is it never appears
 
 
-def test_a_credential_shaped_document_value_appears_in_no_report(tmp_path: Path) -> None:
-    """Assert over rendered bytes rather than over a structure, which is where it would hide."""
+def test_a_credential_shaped_document_value_is_never_read_at_all(tmp_path: Path) -> None:
+    """Phase 031 made this stronger, and the assertion moved with it.
+
+    Until then a credential-shaped key in a document was *read*, carried into a
+    layer, and blanked by name wherever it was rendered — so the property held
+    only as long as redaction worked at every surface. It is now refused where the
+    document is flattened, which means the value never enters a layer, never
+    reaches a fingerprint, and is never anywhere a later redaction has to be
+    trusted to catch it. Refusing beats redacting, so the test asserts the
+    refusal — and asserts the message carries the rule rather than the value.
+    """
     document = tmp_path / "leaky.toml"
     document.write_text(f'[venue]\napi_key = "{SECRET}"\n', encoding="utf-8")
+    with pytest.raises(ConfigurationError) as caught:
+        _chain(REPO_ROOT, explicit=document)
+    assert SECRET not in str(caught.value)
+    assert "looks like a credential" in str(caught.value)
+
+
+def test_an_ordinary_value_still_reaches_no_report_it_should_not(tmp_path: Path) -> None:
+    """The surface the refusal above does not cover, kept as it was.
+
+    The refusal is by *name*, so a key whose name looks ordinary carries its value
+    into a layer exactly as before, and redaction by name is what stands behind
+    it. Asserted over rendered bytes rather than over a structure, which is where
+    a value would hide.
+    """
+    document = tmp_path / "ordinary.toml"
+    document.write_text('[logging]\nmin_severity = "INFO"\n', encoding="utf-8")
     layers = _chain(REPO_ROOT, explicit=document)
     account = provenance_of(layers)  # type: ignore[arg-type]
     snapshot = _snapshot(layers)
@@ -256,7 +282,6 @@ def test_a_credential_shaped_document_value_appears_in_no_report(tmp_path: Path)
         [account.as_record(), snapshot.as_record(), compare(snapshot, snapshot).as_record()]
     )
     assert SECRET not in rendered
-    assert rendered.count("[redacted]") >= 1
 
 
 def test_a_credential_shaped_document_value_appears_in_no_refusal(tmp_path: Path) -> None:

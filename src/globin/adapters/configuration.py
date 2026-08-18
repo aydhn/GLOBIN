@@ -70,7 +70,24 @@ def flatten(document: Mapping[str, object], origin: str) -> dict[str, object]:
             it through quoting — ``"a.b" = 1`` is one key, not two — but the
             flattened form could not tell that apart from a table, so the two
             spellings would resolve to the same setting. Refusing is the only
-            answer that is not a guess.
+            answer that is not a guess. Or if a leaf key is credential-shaped —
+            see below.
+
+    **A credential-shaped key is refused on its name, and Phase 031 added that
+    here.** The environment reader and the ``--set`` layer had refused one since
+    Phase 027, but a TOML document did not: a key called ``api_secret`` survived
+    to :func:`~globin.domain.configuration.as_config` and failed there as an
+    *unknown setting*, which tells an operator they misspelled something when in
+    fact they did something the baseline forbids. Refusing on the name means the
+    value is never read, never carried into a layer, never fingerprinted and
+    never anywhere a later redaction has to be trusted to catch it — and the
+    message can name the rule and the command that would store it properly.
+
+    The check is on **leaf keys only**. A table named ``secrets`` is a section
+    name rather than a value, and refusing one would forbid a section
+    :class:`~globin.domain.secrets.SecretLocator` may one day legitimately live
+    under -- a reference is ordinary data and ``SECRET_STORE_CONTRACT.md`` §1
+    says so explicitly.
 
     An array of tables flattens to a list value rather than to keys. Nothing in
     GLOBIN's model is a list, so such a value survives to
@@ -89,6 +106,14 @@ def flatten(document: Mapping[str, object], origin: str) -> dict[str, object]:
             for nested_key, nested_value in flatten(value, origin).items():
                 flat[f"{name}{KEY_SEPARATOR}{nested_key}"] = nested_value
             continue
+        if is_sensitive(name):
+            msg = (
+                f"{origin}: {name!r} looks like a credential; no secret reaches GLOBIN "
+                f"through configuration, so no such setting exists and the value was "
+                f"not read. Store it with `globin secrets set` instead "
+                f"(see docs/security/SECURITY_BASELINE.md)"
+            )
+            raise ConfigurationError(msg)
         flat[name] = value
     return flat
 

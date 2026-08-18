@@ -432,3 +432,35 @@ def test_a_model_section_is_frozen() -> None:
     config = LoggingConfig()
     with pytest.raises(FrozenInstanceError):
         config.min_severity = Severity.ERROR  # type: ignore[misc]
+
+
+def test_a_credential_shaped_key_in_a_document_is_refused_on_its_name() -> None:
+    """The value is never read, which is stronger than redacting it later.
+
+    Phase 027 refused one from the environment and from `--set`; a TOML document
+    did not, so `api_secret = "..."` survived to `as_config` and failed there as
+    an *unknown setting* — telling an operator they had misspelled something when
+    in fact they had done what `SECURITY_BASELINE.md` forbids. The message now
+    names the rule and the command that would store it properly.
+    """
+    with pytest.raises(ConfigurationError, match="looks like a credential"):
+        flatten({"venue": {"api_secret": "not-a-real-value"}}, "test")
+
+
+def test_the_refusal_names_the_command_that_would_store_it_properly() -> None:
+    """A refusal an operator cannot act on is a refusal reported twice."""
+    with pytest.raises(ConfigurationError, match="globin secrets set"):
+        flatten({"private_key": "not-a-real-value"}, "test")
+
+
+def test_a_table_named_for_secrets_is_not_refused() -> None:
+    """The check is on leaf keys, because a table name is not a value.
+
+    A reference is ordinary data — `SECRET_STORE_CONTRACT.md` section 1 says it is
+    safe in a configuration file — so refusing the section it would live under
+    would forbid the very thing the split between a reference and a value exists
+    to permit.
+    """
+    assert flatten({"secrets": {"venue_key_ref": "paper/api_key/venue_key"}}, "test") == {
+        "secrets.venue_key_ref": "paper/api_key/venue_key"
+    }
