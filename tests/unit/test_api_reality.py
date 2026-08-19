@@ -768,3 +768,105 @@ class TestBounds:
         )
         with pytest.raises(ValidationError, match="the limit is"):
             ApiRealityDiff(findings=(one,) * (MAX_FINDINGS + 1))
+
+
+class TestQuerySurface:
+    """The read-only queries a later phase will ask, asserted before it asks them.
+
+    These exist for Phases 034-048 rather than for anything shipping now, which is
+    exactly why they are held to their contracts here: unverified code that a later
+    phase trusts is worse than code it has to write itself.
+    """
+
+    def schema(self, family: str, version: int, state: SchemaLifecycleState) -> SchemaVersion:
+        """One lifecycle entry.
+
+        Args:
+            family: Which schema family.
+            version: Its version.
+            state: Where it sits.
+
+        Returns:
+            The record.
+        """
+        extra = {"deprecated": "2026-03-25"} if state is SchemaLifecycleState.DEPRECATED else {}
+        return SchemaVersion(
+            family=SchemaFamilyName(family),
+            environment=LIVE,
+            schema_id=1,
+            version=version,
+            state=state,
+            released="2025-12-18",
+            source="doc",
+            **extra,
+        )
+
+    def test_the_current_schema_is_the_one_marked_latest(self) -> None:
+        """A caller asking which schema to encode with must not get a retired one."""
+        found = snapshot(
+            schemas=(
+                self.schema("spot_sbe", 0, SchemaLifecycleState.DEPRECATED),
+                self.schema("spot_sbe", 1, SchemaLifecycleState.LATEST),
+            )
+        ).current_schema(SchemaFamilyName("spot_sbe"), LIVE)
+        assert found is not None
+        assert found.label == "1:1"
+
+    def test_the_current_schema_does_not_cross_families(self) -> None:
+        """The collision the family exists to prevent.
+
+        Two published lifecycles both number from 1, so `1:1` is ambiguous without
+        the family. A query that ignored it would hand a FIX caller a stream schema.
+        """
+        built = snapshot(
+            schemas=(
+                self.schema("spot_sbe", 1, SchemaLifecycleState.LATEST),
+                self.schema("spot_fix_sbe", 1, SchemaLifecycleState.LATEST),
+            )
+        )
+        first = built.current_schema(SchemaFamilyName("spot_sbe"), LIVE)
+        second = built.current_schema(SchemaFamilyName("spot_fix_sbe"), LIVE)
+        assert first is not None
+        assert second is not None
+        assert first.family != second.family
+        assert first.label == second.label
+
+    def test_a_family_with_no_current_schema_answers_nothing(self) -> None:
+        """`None` means the registry was never told, not that nothing is current."""
+        assert snapshot().current_schema(SchemaFamilyName("spot_sbe"), LIVE) is None
+        deprecated_only = snapshot(
+            schemas=(self.schema("spot_sbe", 0, SchemaLifecycleState.DEPRECATED),)
+        )
+        assert deprecated_only.current_schema(SchemaFamilyName("spot_sbe"), LIVE) is None
+
+    def test_endpoints_can_be_narrowed_to_one_protocol(self) -> None:
+        """A caller wanting REST must not be handed a stream."""
+        built = snapshot(
+            endpoints=(
+                endpoint(),
+                endpoint(
+                    protocol=ProtocolKind.WEBSOCKET_MARKET_STREAMS,
+                    url="wss://stream.binance.com:9443",
+                    transport=TransportKind.WEBSOCKET,
+                    auth=AuthMechanism.NONE,
+                ),
+            )
+        )
+        assert len(built.endpoints_for(SPOT, LIVE)) == 2
+        narrowed = built.endpoints_for(SPOT, LIVE, ProtocolKind.REST)
+        assert [item.protocol for item in narrowed] == [ProtocolKind.REST]
+
+    def test_an_unmapped_combination_answers_empty_rather_than_guessing(self) -> None:
+        """ADR-0006's refusal rule needs a query that can say nothing at all.
+
+        Empty means the registry has none, never that none exist -- the same
+        distinction `None` draws for a single lookup, and the reason the surface
+        never falls back to another environment.
+        """
+        built = snapshot(
+            environments=(environment(), environment(PAPER, capital=False, marker="testnet")),
+            endpoints=(endpoint(),),
+        )
+        assert built.endpoints_for(SPOT, LIVE)
+        assert built.endpoints_for(SPOT, PAPER) == ()
+        assert built.endpoints_for(ProductFamily("options"), LIVE) == ()

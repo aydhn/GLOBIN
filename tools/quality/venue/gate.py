@@ -52,7 +52,6 @@ from tools.quality.venue.plan import (
     REASON_STRUCTURED_UNPARSEABLE,
     REASON_UNPARSEABLE_RECOVERED,
     REASON_UNREADABLE,
-    REASONS,
     STATUSES,
     STRUCTURED,
     SUPPORTED_SCHEMA,
@@ -494,12 +493,3 @@ def describe(outcome: Outcome) -> str:
     ]
     lines += [f"  {item.reason}  {item.subject}  {item.detail}" for item in outcome.findings]
     return "\n".join(lines) + "\n"
-
-
-def known_reasons() -> frozenset[str]:
-    """Every reason this gate can report.
-
-    Returns:
-        The closed set, so a contract test can compare it against the manifest.
-    """
-    return REASONS

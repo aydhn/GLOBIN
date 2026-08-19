@@ -132,9 +132,9 @@ that omitted their common dependency would not have surveyed anything."""
 [[library]]
 name = "binance-sdk-spot"
 phase = 66
-version = "11.1.0"
+version = "11.2.0"
 requires_python = "<3.15,>=3.10"
-wheels = ["binance_sdk_spot-11.1.0-py3-none-any.whl"]
+wheels = ["binance_sdk_spot-11.2.0-py3-none-any.whl"]
 verdict = "available"
 source = "https://pypi.org/pypi/binance-sdk-spot/json"
 reason = """Spot, which Phase 066 adapts. Pure Python, so it is indifferent to \
@@ -143,9 +143,9 @@ the interpreter's ABI and to the platform."""
 [[library]]
 name = "binance-sdk-margin-trading"
 phase = 68
-version = "8.1.1"
+version = "8.2.0"
 requires_python = "<3.15,>=3.10"
-wheels = ["binance_sdk_margin_trading-8.1.1-py3-none-any.whl"]
+wheels = ["binance_sdk_margin_trading-8.2.0-py3-none-any.whl"]
 verdict = "available"
 source = "https://pypi.org/pypi/binance-sdk-margin-trading/json"
 reason = """Cross and isolated margin, which Phases 068-069 adapt. Pure Python."""
@@ -153,9 +153,9 @@ reason = """Cross and isolated margin, which Phases 068-069 adapt. Pure Python."
 [[library]]
 name = "binance-sdk-derivatives-trading-usds-futures"
 phase = 71
-version = "17.1.0"
+version = "17.2.0"
 requires_python = "<3.15,>=3.10"
-wheels = ["binance_sdk_derivatives_trading_usds_futures-17.1.0-py3-none-any.whl"]
+wheels = ["binance_sdk_derivatives_trading_usds_futures-17.2.0-py3-none-any.whl"]
 verdict = "available"
 source = "https://pypi.org/pypi/binance-sdk-derivatives-trading-usds-futures/json"
 reason = """USDS-margined futures, which Phase 071 adapts. Pure Python."""
@@ -163,9 +163,9 @@ reason = """USDS-margined futures, which Phase 071 adapts. Pure Python."""
 [[library]]
 name = "binance-sdk-derivatives-trading-coin-futures"
 phase = 73
-version = "13.0.0"
+version = "13.1.0"
 requires_python = "<3.15,>=3.10"
-wheels = ["binance_sdk_derivatives_trading_coin_futures-13.0.0-py3-none-any.whl"]
+wheels = ["binance_sdk_derivatives_trading_coin_futures-13.1.0-py3-none-any.whl"]
 verdict = "available"
 source = "https://pypi.org/pypi/binance-sdk-derivatives-trading-coin-futures/json"
 reason = """Coin-margined futures, which Phase 073 adapts. Pure Python."""
@@ -173,9 +173,9 @@ reason = """Coin-margined futures, which Phase 073 adapts. Pure Python."""
 [[library]]
 name = "binance-sdk-derivatives-trading-options"
 phase = 75
-version = "8.1.0"
+version = "8.2.0"
 requires_python = "<3.15,>=3.10"
-wheels = ["binance_sdk_derivatives_trading_options-8.1.0-py3-none-any.whl"]
+wheels = ["binance_sdk_derivatives_trading_options-8.2.0-py3-none-any.whl"]
 verdict = "available"
 source = "https://pypi.org/pypi/binance-sdk-derivatives-trading-options/json"
 reason = """Options, which Phase 075 adapts. Pure Python. That a package exists \
@@ -185,9 +185,9 @@ says nothing about whether this account may use the product — that is Phase \
 [[library]]
 name = "binance-sdk-derivatives-trading-portfolio-margin"
 phase = 76
-version = "12.0.1"
+version = "12.1.0"
 requires_python = "<3.15,>=3.10"
-wheels = ["binance_sdk_derivatives_trading_portfolio_margin-12.0.1-py3-none-any.whl"]
+wheels = ["binance_sdk_derivatives_trading_portfolio_margin-12.1.0-py3-none-any.whl"]
 verdict = "available"
 source = "https://pypi.org/pypi/binance-sdk-derivatives-trading-portfolio-margin/json"
 reason = """Portfolio margin, which Phase 076 adapts. Pure Python."""
@@ -195,9 +195,9 @@ reason = """Portfolio margin, which Phase 076 adapts. Pure Python."""
 [[library]]
 name = "binance-sdk-derivatives-trading-portfolio-margin-pro"
 phase = 77
-version = "8.1.0"
+version = "8.2.0"
 requires_python = "<3.15,>=3.10"
-wheels = ["binance_sdk_derivatives_trading_portfolio_margin_pro-8.1.0-py3-none-any.whl"]
+wheels = ["binance_sdk_derivatives_trading_portfolio_margin_pro-8.2.0-py3-none-any.whl"]
 verdict = "available"
 source = "https://pypi.org/pypi/binance-sdk-derivatives-trading-portfolio-margin-pro/json"
 reason = """Portfolio margin pro, which Phase 077 assesses before adapting. \
@@ -207,9 +207,9 @@ published package is not that assessment."""
 [[library]]
 name = "binance-sdk-wallet"
 phase = 65
-version = "13.1.0"
+version = "13.2.0"
 requires_python = "<3.15,>=3.10"
-wheels = ["binance_sdk_wallet-13.1.0-py3-none-any.whl"]
+wheels = ["binance_sdk_wallet-13.2.0-py3-none-any.whl"]
 verdict = "available"
 source = "https://pypi.org/pypi/binance-sdk-wallet/json"
 reason = """Wallet and asset endpoints. No phase names a wallet adapter, so the \
@@ -219,9 +219,9 @@ the configured account actually has, which is what these endpoints answer."""
 [[library]]
 name = "binance-sdk-algo"
 phase = 89
-version = "3.1.0"
+version = "3.2.0"
 requires_python = "<3.15,>=3.10"
-wheels = ["binance_sdk_algo-3.1.0-py3-none-any.whl"]
+wheels = ["binance_sdk_algo-3.2.0-py3-none-any.whl"]
 verdict = "available"
 source = "https://pypi.org/pypi/binance-sdk-algo/json"
 reason = """Algorithmic order types. No phase names an algo adapter, so the \
