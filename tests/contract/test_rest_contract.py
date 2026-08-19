@@ -21,6 +21,7 @@ import pytest
 from globin.adapters.rest import CONTRACT_PATH, parse_contract, read_contract
 from globin.application.rest import self_test
 from globin.domain.api_reality import ProductFamily
+from globin.domain.observability import REDACTED, Severity, is_sensitive, log_event, redact
 from globin.domain.rest import (
     ACCEPT_HEADER,
     AMBIGUOUS_EXCHANGE_CODES,
@@ -39,6 +40,8 @@ from globin.domain.rest import (
     TIME_UNIT_HEADER,
     TIME_UNIT_MICROSECOND,
     USED_WEIGHT_PREFIX,
+    RateLimitReport,
+    RestDiagnosticsRecord,
 )
 from globin.domain.rest_contract import TransportContract
 from globin.runtime.composition import PACKAGE_RELATIVE_PATH
@@ -383,3 +386,87 @@ class TestTheProhibitionsAreReal:
         """
         used = _live_identifiers(ast.parse(source))
         assert bool(used.intersection(TLS_BYPASS_TOKENS)) is caught
+
+
+class TestThePhase031RedactionContractOverTransportRecords:
+    """Phase 031's redaction, applied to what the transport actually publishes.
+
+    ``tests/integration/test_rest_transport_end_to_end.py`` drives credential-shaped
+    parameters through a real exchange and asserts no value survives. This is the
+    other half, and a different claim: that the redaction *mechanism* would catch a
+    sensitive field if one were ever added to the record, and that it currently has
+    nothing to catch.
+
+    Both matter. The first proves today's record is clean; the second proves the
+    net is still under it.
+    """
+
+    def _record(self) -> RestDiagnosticsRecord:
+        """A record carrying every field the transport publishes."""
+        return RestDiagnosticsRecord(
+            correlation_id="c1",
+            operation="spot.order",
+            family="spot",
+            environment="production",
+            role="primary",
+            host="example.invalid",
+            method="POST",
+            intent="signed",
+            side_effect="mutating",
+            encoding="json",
+            time_unit="provider_default",
+            send_state="completed",
+            outcome="unknown",
+            status=503,
+            exchange_code=-1007,
+            response_bytes=42,
+            elapsed_nanoseconds=1_000_000,
+            rate_limits=RateLimitReport(retry_after_seconds=17, used_weight=(("1M", 42),)),
+        )
+
+    def test_redaction_removes_nothing_from_a_transport_record(self) -> None:
+        """The record survives redaction unchanged, because it carries nothing sensitive.
+
+        This is the stronger property. A record that *needed* redacting would be one
+        where a mistake in the sink loses the protection; a record with no sensitive
+        field cannot leak one however it is written.
+        """
+        record = self._record().as_record()
+        assert redact(record) == record
+
+    def test_no_field_name_in_the_record_is_sensitive(self) -> None:
+        """Asserted on the field names rather than on one example.
+
+        Phase 006 matches by case-insensitive **substring**, so a field called
+        ``binance_api_key`` would be caught — and a field called ``token_count``
+        would be over-redacted. Neither exists here, and this is what fails if one
+        is added.
+        """
+        offenders = [name for name in self._record().as_record() if is_sensitive(name)]
+        assert not offenders, f"a transport record field would be redacted: {offenders}"
+
+    def test_the_redactor_would_catch_a_sensitive_field_if_one_were_added(self) -> None:
+        """Guard the guard. A redactor that silently stopped matching reads as clean.
+
+        The field names used are exactly the ones a signed Binance request carries,
+        which is what makes this the realistic case rather than a synthetic one.
+        """
+        widened = {**self._record().as_record(), "api_key": "AAAABBBB", "signature": "deadbeef"}
+        redacted = redact(widened)
+        assert redacted["api_key"] == REDACTED
+        assert redacted["signature"] == REDACTED
+        assert "AAAABBBB" not in str(redacted)
+        assert "deadbeef" not in str(redacted)
+
+    def test_the_record_survives_a_log_event_unchanged(self) -> None:
+        """Through the real constructor, which redacts as it builds.
+
+        ``domain/observability.LogEvent`` redacts in ``__post_init__``, so this is
+        the path a transport record would actually take to a sink — and every field
+        it carries comes out the other side.
+        """
+        event = log_event(Severity.INFO, "rest.exchange", "c1", self._record().as_record())
+        emitted = dict(event.fields)
+        assert emitted["outcome"] == "unknown"
+        assert emitted["exchange_code"] == -1007
+        assert REDACTED not in str(emitted)
