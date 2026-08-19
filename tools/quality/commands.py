@@ -450,6 +450,15 @@ _BENCHMARK = Step("benchmark", ("numpy",), ("-m", "tools.quality.benchmark"))
 # No modules are declared. It reads files and imports nothing outside `tools`.
 _ENDPOINT = Step("endpoint", (), ("-m", "tools.quality.endpoint"))
 
+# The Binance API reality registry, recomputed from the committed declaration by a
+# reader that shares no code with the one that ships. Outside `full` for two
+# reasons rather than one: it writes an artefact, and its `refresh` verb reaches
+# the network -- `full` runs before every commit and must work on an aeroplane.
+# The offline half is the default, so this Step never opens a socket.
+#
+# No modules are declared. It reads files and imports nothing outside `tools`.
+_API_REALITY = Step("venue", (), ("-m", "tools.quality.venue"))
+
 # Writing commands. Kept separate from every verification command above so that
 # no gate can modify the tree as a side effect of being run. `ruff check --fix`
 # applies safe fixes only; `--unsafe-fixes` is never passed by this tool,
@@ -558,6 +567,11 @@ COMMANDS: Final[tuple[Command, ...]] = (
         "endpoint",
         "The diagnostics endpoint's declared contract against the source that implements it.",
         (_ENDPOINT,),
+    ),
+    Command(
+        "venue",
+        "What Binance is recorded as documenting, recomputed from its declaration.",
+        (_API_REALITY,),
     ),
     Command("fix", "Apply Ruff's SAFE fixes. Modifies the tree.", (_FIX,)),
     Command("reformat", "Apply Ruff formatting. Modifies the tree.", (_REFORMAT,)),

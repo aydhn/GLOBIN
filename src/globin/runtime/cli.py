@@ -37,6 +37,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final, TextIO
 
+from globin.adapters.api_reality import REGISTRY_PATH, read_registry
+from globin.adapters.api_reality import summarise as summarise_registry
 from globin.adapters.bootstrap import (
     RUNTIME_CONTRACT_PATH,
     SystemEnvironmentProbe,
@@ -66,6 +68,8 @@ from globin.application.secrets import (
     rotate_from_entry,
     set_from_entry,
 )
+from globin.domain.api_reality import ApiRealitySnapshot, SurfaceStatus
+from globin.domain.api_reality import diff as compare_registries
 from globin.domain.bootstrap import BootstrapOutcome, CheckStatus, ExitCode, RuntimePaths
 from globin.domain.config_evidence import (
     ConfigProvenance,
@@ -134,6 +138,7 @@ from globin.runtime.composition import (
     WATCHDOG_FILE,
     Bootstrap,
     RuntimeState,
+    build_api_reality_source,
     build_bootstrap,
     build_bundle_builder,
     build_config_sources,
@@ -183,6 +188,22 @@ contract and reports eighteen checks. This reports the capability half in full â
 the process and native architectures, the emulation state, every declared tool,
 and the compatibility fingerprint â€” which ``doctor`` reduces to one line.
 """
+
+API_REALITY: Final[str] = "api-reality"
+"""Report what Binance is recorded as documenting. Reads only, and reaches nothing.
+
+The registry is a committed document. Refreshing it from the venue is
+the api-reality gate under `tools/quality/`, which lives outside the package so
+that no module here opens an outbound connection -- a property
+`tests/architecture/test_library_discipline.py` proves rather than asserts.
+"""
+
+SHOW: Final[str] = "show"
+PRODUCTS: Final[str] = "products"
+SURFACES: Final[str] = "surfaces"
+ENVIRONMENTS: Final[str] = "environments"
+CAPABILITY: Final[str] = "capability"
+DIFF: Final[str] = "diff"
 
 SECRETS: Final[str] = "secrets"
 """Manage the local credential store. Six verbs and no seventh.
@@ -297,6 +318,22 @@ whether *a* backend can be reached, and this answers which of several this host
 has. It emits no value and reads no operator secret.
 """
 
+API_REALITY_SUBCOMMANDS: Final[tuple[str, ...]] = (
+    SHOW,
+    PRODUCTS,
+    SURFACES,
+    ENVIRONMENTS,
+    CAPABILITY,
+    VERIFY,
+    DIFF,
+)
+"""Every verb the registry answers, and no eighth.
+
+All seven read. None writes, none refreshes and none reaches a network, which is
+why there is no `refresh` here: that verb belongs to the gate that maintains the
+committed document.
+"""
+
 SECRETS_SUBCOMMANDS: Final[tuple[str, ...]] = (
     SET,
     VERIFY,
@@ -409,7 +446,9 @@ invites somebody to add it to a script that runs every minute; a verb reads like
 the deliberate act it is.
 """
 
-USAGE: Final[str] = """usage: globin [--version] [doctor|bootstrap|config|diagnostics|secrets]
+USAGE: Final[
+    str
+] = """usage: globin [--version] [doctor|bootstrap|config|diagnostics|secrets|api-reality]
                      [subcommand] [--json] [--profile NAME]
                      [--config PATH] [--set KEY=VALUE]
 
@@ -433,6 +472,16 @@ Commands:
   bootstrap preflight Run every check, refuse unless all of them pass, and
                       report which answers were true only when taken. This is
                       the gate a launcher runs before a long-running process.
+  api-reality show      Summarise what Binance is recorded as documenting.
+  api-reality products  Every documented product family, and its scope.
+  api-reality surfaces  Every product-and-protocol pair, and its status.
+  api-reality environments
+                        Every product-and-environment pair, with endpoint counts.
+  api-reality capability [STATUS]
+                        Every record carrying one status word, or the counts.
+  api-reality verify    Re-read the registry and report its digest.
+  api-reality diff PATH Compare the registry against another snapshot. Exits 1
+                        when a finding is more than informational.
   diagnostics snapshot  Measure this runtime once and report its health.
   diagnostics bundle    Write a redacted support archive and print its digest.
   diagnostics memory    Snapshot with the allocator tracer on, then off again.
@@ -624,6 +673,8 @@ def parse(argv: Sequence[str]) -> Invocation:
         return _parse_config(words[1:])
     if head == SECRETS:
         return _parse_secrets(words[1:])
+    if head == API_REALITY:
+        return _parse_api_reality(words[1:])
     msg = f"unrecognised argument: {head!r}"
     raise UsageError(msg)
 
@@ -1008,6 +1059,12 @@ def main(
             print(f"globin: the secret operation failed: {fault}", file=err)
             return int(ExitCode.SECRETS_UNREADY)
 
+    if invocation.command.startswith(API_REALITY):
+        try:
+            return _api_reality(invocation, out=out, err=err, start=start)
+        except (GlobinError, OSError) as fault:
+            print(f"globin: the api reality registry could not be read: {fault}", file=err)
+            return int(ExitCode.GATE_FAILED)
     if invocation.command.startswith(CONFIG):
         try:
             return _config(invocation, out=out, err=err, start=start)
@@ -2911,3 +2968,303 @@ def _config_evidence(resolution: _Resolution, *, out: TextIO, start: Path | None
     publish_snapshot(state.store, snapshot)
     print(f"evidence: {written.path or 'outside the project'}", file=out)
     return int(ExitCode.CONFIGURATION_INVALID if resolution.problem else ExitCode.OK)
+
+
+def _parse_api_reality(rest: Sequence[str]) -> Invocation:
+    """Read what follows ``api-reality``.
+
+    Args:
+        rest: The remaining words.
+
+    Returns:
+        The invocation.
+
+    Raises:
+        UsageError: If the subcommand is unrecognised, if a positional is given to
+            a verb that takes none, if ``diff`` is given none, or if a second
+            positional follows.
+
+    Two verbs take a positional and the rest take none. ``diff`` requires one --
+    a diff against nothing is not a diff, and defaulting to the committed registry
+    would compare a document with itself and always report agreement.
+    """
+    words = list(rest)
+    subcommand = SHOW
+    if words and not words[0].startswith("-"):
+        subcommand = words.pop(0)
+        if subcommand not in API_REALITY_SUBCOMMANDS:
+            msg = f"unrecognised argument: {subcommand!r}"
+            raise UsageError(msg)
+    field = ""
+    if words and not words[0].startswith("-"):
+        if subcommand not in {CAPABILITY, DIFF}:
+            msg = f"{API_REALITY} {subcommand} takes no argument, but {words[0]!r} was given"
+            raise UsageError(msg)
+        field = words.pop(0)
+        if words and not words[0].startswith("-"):
+            msg = f"{API_REALITY} {subcommand} takes one argument, but {words[0]!r} followed"
+            raise UsageError(msg)
+    if subcommand == DIFF and not field:
+        msg = f"{API_REALITY} {DIFF} needs a snapshot to compare against"
+        raise UsageError(msg)
+    if subcommand == CAPABILITY and field and field not in {item.value for item in SurfaceStatus}:
+        permitted = ", ".join(sorted(item.value for item in SurfaceStatus))
+        msg = f"{field!r} is not a status; expected one of {permitted}"
+        raise UsageError(msg)
+    return _invocation(f"{API_REALITY} {subcommand}", _options(words, subcommand), field=field)
+
+
+def _api_reality_registry(start: Path | None) -> tuple[ApiRealitySnapshot | None, Path]:
+    """The committed registry and where it was looked for.
+
+    Args:
+        start: Where to begin looking for the repository root.
+
+    Returns:
+        The snapshot -- ``None`` when there is no readable declaration -- and the
+        path.
+
+    Raises:
+        RegistryError: If the declaration is present and contradicts itself.
+    """
+    base = (start or Path.cwd()).resolve()
+    root = find_project_root(base) or base
+    return build_api_reality_source(root).snapshot(), root / REGISTRY_PATH
+
+
+def _api_reality(invocation: Invocation, *, out: TextIO, err: TextIO, start: Path | None) -> int:
+    """Report what the venue is recorded as documenting.
+
+    Args:
+        invocation: What was asked for.
+        out: Where the report goes.
+        err: Where human text goes under ``--json``.
+        start: Where to begin looking for the repository root.
+
+    Returns:
+        ``0`` when the question was answered, ``3`` when there is no registry to
+        answer it from, and ``1`` when the registry is present and wrong or a
+        ``diff`` found something that demands attention.
+
+    **Reaches no network.** The registry is a committed document, and refreshing
+    it from the venue is the api-reality gate under `tools/quality/`, which lives
+    outside this package precisely so that nothing here opens an outbound socket.
+    """
+    try:
+        snapshot, path = _api_reality_registry(start)
+    except ValidationError as problem:
+        print(f"globin: the api reality registry did not validate: {problem}", file=err)
+        return int(ExitCode.GATE_FAILED)
+    if snapshot is None:
+        stream = err if invocation.as_json else out
+        print(f"api-reality  unmeasured (no registry at {REGISTRY_PATH})", file=stream)
+        return int(ExitCode.UNMEASURED)
+    if invocation.command.endswith(DIFF):
+        return _api_reality_diff(invocation, snapshot, out=out, err=err)
+    document, human = _api_reality_report(invocation, snapshot, path=path)
+    if invocation.as_json:
+        print(render_json_document(document), file=out)
+        print(human, end="", file=err)
+    else:
+        print(human, end="", file=out)
+    return int(ExitCode.OK)
+
+
+def _api_reality_report(
+    invocation: Invocation, snapshot: ApiRealitySnapshot, *, path: Path
+) -> tuple[dict[str, object], str]:
+    """One read-only answer, as a document and as text.
+
+    Args:
+        invocation: What was asked for.
+        snapshot: The registry.
+        path: Where it was read from, for the unmeasured case's message.
+
+    Returns:
+        The document and the human rendering.
+    """
+    del path
+    command = invocation.command
+    if command.endswith(PRODUCTS):
+        return _api_reality_products(snapshot)
+    if command.endswith(SURFACES):
+        return _api_reality_surfaces(snapshot)
+    if command.endswith(ENVIRONMENTS):
+        return _api_reality_environments(snapshot)
+    if command.endswith(CAPABILITY):
+        return _api_reality_capability(snapshot, invocation.field)
+    if command.endswith(VERIFY):
+        return _api_reality_verify(snapshot)
+    return _api_reality_show(snapshot)
+
+
+def _api_reality_show(snapshot: ApiRealitySnapshot) -> tuple[dict[str, object], str]:
+    """The whole registry, summarised.
+
+    Args:
+        snapshot: The registry.
+
+    Returns:
+        The summary document and its rendering.
+    """
+    document = summarise_registry(snapshot)
+    counts = snapshot.status_counts()
+    lines = [
+        f"api-reality  {len(snapshot.products)} products, {len(snapshot.surfaces)} surfaces, "
+        f"{len(snapshot.endpoints)} endpoints\n",
+        f"  sources      {len(snapshot.sources)} "
+        f"({len(snapshot.unrefreshable_sources())} not refreshable)\n",
+        f"  schemas      {len(snapshot.schemas)} versions\n",
+    ]
+    lines.extend(f"  {name:<12} {counts[name]}\n" for name in sorted(counts))
+    return document, "".join(lines)
+
+
+def _api_reality_products(snapshot: ApiRealitySnapshot) -> tuple[dict[str, object], str]:
+    """Every product family and what it is to GLOBIN.
+
+    Args:
+        snapshot: The registry.
+
+    Returns:
+        The document and its rendering.
+    """
+    document: dict[str, object] = {"products": [item.as_record() for item in snapshot.products]}
+    lines = [
+        f"  {item.family.slug:<22} {item.scope.value:<21} "
+        f"{item.capability.status.value:<12} {item.title}\n"
+        for item in snapshot.products
+    ]
+    return document, f"api-reality products  {len(snapshot.products)}\n" + "".join(lines)
+
+
+def _api_reality_surfaces(snapshot: ApiRealitySnapshot) -> tuple[dict[str, object], str]:
+    """Every product-and-protocol surface.
+
+    Args:
+        snapshot: The registry.
+
+    Returns:
+        The document and its rendering.
+    """
+    document: dict[str, object] = {"surfaces": [item.as_record() for item in snapshot.surfaces]}
+    lines = [
+        f"  {item.family.slug:<22} {item.protocol.value:<26} {item.capability.status.value}\n"
+        for item in snapshot.surfaces
+    ]
+    return document, f"api-reality surfaces  {len(snapshot.surfaces)}\n" + "".join(lines)
+
+
+def _api_reality_environments(snapshot: ApiRealitySnapshot) -> tuple[dict[str, object], str]:
+    """Every product-and-environment pair, and how many endpoints each has.
+
+    Args:
+        snapshot: The registry.
+
+    Returns:
+        The document and its rendering.
+    """
+    document: dict[str, object] = {
+        "environments": [item.as_record() for item in snapshot.environments]
+    }
+    lines = []
+    for item in snapshot.environments:
+        found = len(snapshot.endpoints_for(item.family, item.environment))
+        capital = "real capital" if item.carries_real_capital else f"marked {item.host_marker!r}"
+        lines.append(
+            f"  {item.family.slug:<22} {item.environment.slug:<12} "
+            f"{item.capability.status.value:<12} {found:>3} endpoints  {capital}\n"
+        )
+    return document, f"api-reality environments  {len(snapshot.environments)}\n" + "".join(lines)
+
+
+def _api_reality_capability(
+    snapshot: ApiRealitySnapshot, status_word: str
+) -> tuple[dict[str, object], str]:
+    """Every record carrying one status, or the counts when none is named.
+
+    Args:
+        snapshot: The registry.
+        status_word: The status asked about, or an empty string.
+
+    Returns:
+        The document and its rendering.
+
+    The word is validated in the parser rather than here, so an argument fault
+    becomes exit 2 rather than being caught by the group's error handler and
+    reported as a failure to read the registry.
+    """
+    if not status_word:
+        counts = snapshot.status_counts()
+        lines = [f"  {name:<12} {counts[name]}\n" for name in sorted(counts)]
+        return {"status_counts": counts}, "api-reality capability\n" + "".join(lines)
+    status = SurfaceStatus(status_word)
+    named = snapshot.capabilities_with_status(status)
+    document: dict[str, object] = {"status": status.value, "records": list(named)}
+    lines = [f"  {item}\n" for item in named]
+    return document, f"api-reality capability {status.value}  {len(named)}\n" + "".join(lines)
+
+
+def _api_reality_verify(snapshot: ApiRealitySnapshot) -> tuple[dict[str, object], str]:
+    """That the registry parsed, validated, and what it rests on.
+
+    Args:
+        snapshot: The registry.
+
+    Returns:
+        The document and its rendering.
+
+    Reaching this point *is* the verification: the snapshot's own constructor
+    refuses a document that contradicts itself, so a registry that could be read
+    has already been checked.
+    """
+    document = summarise_registry(snapshot)
+    unrefreshable = snapshot.unrefreshable_sources()
+    lines = [
+        "api-reality  the registry parsed and validated\n",
+        f"  digest       {document['registry_digest']}\n",
+        f"  sources      {len(snapshot.sources)}\n",
+    ]
+    lines.extend(f"  unrefreshable {item}\n" for item in unrefreshable)
+    return document, "".join(lines)
+
+
+def _api_reality_diff(
+    invocation: Invocation, snapshot: ApiRealitySnapshot, *, out: TextIO, err: TextIO
+) -> int:
+    """Compare the committed registry against another snapshot.
+
+    Args:
+        invocation: What was asked for, carrying the other document's path.
+        snapshot: The committed registry.
+        out: Where the report goes.
+        err: Where human text goes under ``--json``.
+
+    Returns:
+        ``0`` when the two agree or differ only informationally, ``1`` when
+        anything demands attention, and ``3`` when the other document cannot be
+        read.
+    """
+    other = Path(invocation.field)
+    try:
+        against = read_registry(other)
+    except ValidationError as problem:
+        print(f"globin: {other} did not validate: {problem}", file=err)
+        return int(ExitCode.GATE_FAILED)
+    if against is None:
+        print(f"api-reality  unmeasured (no snapshot at {other})", file=err)
+        return int(ExitCode.UNMEASURED)
+    found = compare_registries(against, snapshot)
+    document = found.as_record()
+    lines = [f"api-reality diff  {len(found.findings)} findings\n"]
+    lines.extend(
+        f"  {item.risk.value:<18} {item.drift.value:<24} {item.summary}\n"
+        for item in found.findings
+    )
+    human = "".join(lines)
+    if invocation.as_json:
+        print(render_json_document(document), file=out)
+        print(human, end="", file=err)
+    else:
+        print(human, end="", file=out)
+    return int(ExitCode.GATE_FAILED if found.demands_attention else ExitCode.OK)

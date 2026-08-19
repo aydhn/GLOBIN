@@ -1,0 +1,2012 @@
+# ---------------------------------------------------------------------------
+# GLOBIN Binance API reality registry.
+#
+# The single place a Binance fact is written down. Parsed by
+# `globin.adapters.api_reality`, recomputed by `python -m tools.quality.api_reality`,
+# and refreshed -- deliberately from outside the package -- by that gate's
+# `refresh` verb.
+#
+# WHAT THIS IS. A dated record of what Binance's official documentation said, with
+# provenance on every row. It is NOT runtime truth about the venue, and it is not a
+# copy of the documentation: it points at documents and records what they were
+# observed to say.
+#
+# THE STATUS WORDS. `supported`, `unsupported`, `unknown`, `deprecated`,
+# `announced`, `restricted`. The one that matters most is `unknown`, which means
+# the documents do not say -- NEVER that a capability is absent. Most non-Spot rows
+# are `unknown` because Binance publishes a machine-readable specification for Spot
+# and for no other product family; see `docs/research/phase_033_sources.md`, S-11.
+#
+# EVIDENCE KINDS. `documented`, `inferred`, `observed`. **Nothing here may be
+# `observed`**: GLOBIN has never contacted Binance, and a contract test fails if a
+# row claims otherwise.
+#
+# ADDING A ROW IS A DECISION, NOT AN EDIT. Every capability row names a source, and
+# a source that is not declared below is refused. Read
+# `docs/engineering/BINANCE_API_REALITY.md` before changing anything here.
+#
+# WHAT FAILS. A repeated identity, a cited source that is not declared, a second
+# `latest` schema for one family and environment, an endpoint for a surface
+# recorded `unsupported`, an endpoint whose host contradicts its environment, a
+# `restricted` row naming no condition, and a FIX endpoint that does not require
+# TLS and SNI.
+#
+# NOTHING GENERATES THIS FILE. It was transcribed once by a script that has served
+# its purpose and is not part of the repository.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+[target]
+venue = "binance-global"
+observed_on = "2026-08-19"
+phase = 33
+
+
+# --- Sources ---------------------------------------------------------------
+
+[[source]]
+id = "spot-rest"
+title = "Binance Spot REST API"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/rest-api.md"
+authority = "primary"
+regime = "digest"
+digest = "sha256:49ea6809243fc7fb426e07f2fe662097736c7bb405bd2da5eef637d715427999"
+notes = "Base endpoints, key types and the four endpoint security types."
+accessed = "2026-08-19"
+
+[[source]]
+id = "spot-ws-api"
+title = "Binance Spot WebSocket API"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/web-socket-api.md"
+authority = "primary"
+regime = "digest"
+digest = "sha256:c09a1f5c7ebfd111fed79f07e98c3cf0d862d0f3c8d6636b57bd2dac83d09a8d"
+notes = "The request-response WebSocket base endpoint."
+accessed = "2026-08-19"
+
+[[source]]
+id = "spot-ws-streams"
+title = "Binance Spot WebSocket Streams"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/web-socket-streams.md"
+authority = "primary"
+regime = "digest"
+digest = "sha256:32bf73a0bed3b75e3ca981fdbaf48c53544bbdfb5944ef8ed1c4d7af9aceba0a"
+notes = "Market stream base endpoints and the market-data-only host."
+accessed = "2026-08-19"
+
+[[source]]
+id = "spot-user-stream"
+title = "Binance Spot User Data Stream"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/user-data-stream.md"
+authority = "primary"
+regime = "digest"
+digest = "sha256:e03f277ba7a28a4d7d0df981c4d584056c3336a37d6ce483622599723ed4b957"
+notes = "How an account stream is subscribed to."
+accessed = "2026-08-19"
+
+[[source]]
+id = "spot-fix"
+title = "Binance Spot FIX API"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/fix-api.md"
+authority = "primary"
+regime = "digest"
+digest = "sha256:21c02540a73f749a9ff8dae4900ed9f3123bf221ec6fcf6235e0d71b89ffa863"
+notes = "Session types, ports, encodings, the Ed25519 restriction and the SNI requirement."
+accessed = "2026-08-19"
+
+[[source]]
+id = "spot-sbe-streams"
+title = "Binance Spot SBE Market Data Streams"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/sbe-market-data-streams.md"
+authority = "primary"
+regime = "digest"
+digest = "sha256:3e945f522c279e0dcb894b25b4933cbb5165ab488a7014356dbe496eb5b54a41"
+notes = "Which schema decodes the SBE streams."
+accessed = "2026-08-19"
+
+[[source]]
+id = "spot-testnet"
+title = "Binance Spot Testnet general information"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/testnet/general-info.md"
+authority = "primary"
+regime = "digest"
+digest = "sha256:f6ff938f0d8bb8bb6b0496ce3010aaf847c385060da49d271d34b9b8ebb60be1"
+notes = "Every testnet host, and that only the api prefix is served there."
+accessed = "2026-08-19"
+
+[[source]]
+id = "spot-demo"
+title = "Binance Spot Demo Mode general information"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/demo-mode/general-info.md"
+authority = "primary"
+regime = "digest"
+digest = "sha256:6b07adb3cc2ca92828cb74a27c7a2e3a3f7c75de9ba362843ecd1e636409073d"
+notes = "Every demo host, and the tabulated difference from testnet."
+accessed = "2026-08-19"
+
+[[source]]
+id = "spot-changelog"
+title = "Binance Spot API changelog"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/CHANGELOG.md"
+authority = "primary"
+regime = "digest"
+digest = "sha256:e6da6a7bb729ec5b1aa6d3c97684bb2a1e4d3a64231b007edea42c6cceef7681"
+notes = "Dated entries, and the record that the lifecycle file is updated."
+accessed = "2026-08-19"
+
+[[source]]
+id = "sbe-lifecycle-prod"
+title = "Binance SBE schema lifecycle, production"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/sbe/schemas/sbe_schema_lifecycle_prod.json"
+authority = "primary"
+regime = "structured"
+notes = "The only lifecycle file that currently parses as JSON."
+accessed = "2026-08-19"
+
+[[source]]
+id = "sbe-lifecycle-testnet"
+title = "Binance SBE schema lifecycle, testnet"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/sbe/schemas/sbe_schema_lifecycle_testnet.json"
+authority = "primary"
+regime = "structured"
+known_unparseable = true
+notes = "Does not parse: a comma is missing between two retired entries."
+accessed = "2026-08-19"
+
+[[source]]
+id = "sbe-fix-lifecycle-prod"
+title = "Binance FIX SBE schema lifecycle, production"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/sbe/schemas/sbe_fix_schema_lifecycle_prod.json"
+authority = "primary"
+regime = "structured"
+known_unparseable = true
+notes = "Does not parse: a trailing comma closes the deprecated array."
+accessed = "2026-08-19"
+
+[[source]]
+id = "sbe-fix-lifecycle-testnet"
+title = "Binance FIX SBE schema lifecycle, testnet"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/sbe/schemas/sbe_fix_schema_lifecycle_testnet.json"
+authority = "primary"
+regime = "structured"
+known_unparseable = true
+notes = "Does not parse: a trailing comma closes the deprecated array."
+accessed = "2026-08-19"
+
+[[source]]
+id = "spot-enums"
+title = "Binance Spot enumerations"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/enums.md"
+authority = "primary"
+regime = "digest"
+notes = "Account and symbol permissions, which are not key permissions."
+accessed = "2026-08-19"
+
+[[source]]
+id = "developer-catalogue"
+title = "Binance Developer Documentation product catalogue"
+location = "https://developers.binance.com/docs"
+authority = "primary"
+regime = "manual"
+notes = "Names the product families. Client-rendered, so it cannot be fetched or digested."
+accessed = "2026-08-19"
+
+# --- Product families ------------------------------------------------------
+
+[[product]]
+family = "spot"
+scope = "trading"
+title = "Spot"
+status = "supported"
+evidence = "documented"
+source = "spot-rest"
+
+[[product]]
+family = "cross_margin"
+scope = "trading"
+title = "Cross Margin"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[product]]
+family = "isolated_margin"
+scope = "trading"
+title = "Isolated Margin"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[product]]
+family = "usds_m_futures"
+scope = "trading"
+title = "USDS-M Futures"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[product]]
+family = "coin_m_futures"
+scope = "trading"
+title = "COIN-M Futures"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[product]]
+family = "options"
+scope = "trading"
+title = "Options"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[product]]
+family = "portfolio_margin"
+scope = "trading"
+title = "Portfolio Margin"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[product]]
+family = "portfolio_margin_pro"
+scope = "trading"
+title = "Portfolio Margin Pro"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[product]]
+family = "wallet"
+scope = "supporting"
+title = "Wallet"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[product]]
+family = "sub_account"
+scope = "supporting"
+title = "Sub-Account"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[product]]
+family = "convert"
+scope = "out_of_current_scope"
+title = "Convert"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[product]]
+family = "algo"
+scope = "out_of_current_scope"
+title = "Algo Trading"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[product]]
+family = "copy_trading"
+scope = "out_of_current_scope"
+title = "Copy Trading"
+status = "supported"
+evidence = "documented"
+source = "developer-catalogue"
+
+# --- Surfaces --------------------------------------------------------------
+
+[[surface]]
+family = "spot"
+protocol = "rest"
+status = "supported"
+evidence = "documented"
+source = "spot-rest"
+
+[[surface]]
+family = "spot"
+protocol = "websocket_api"
+status = "supported"
+evidence = "documented"
+source = "spot-ws-api"
+
+[[surface]]
+family = "spot"
+protocol = "websocket_market_streams"
+status = "supported"
+evidence = "documented"
+source = "spot-ws-streams"
+
+[[surface]]
+family = "spot"
+protocol = "websocket_user_streams"
+status = "supported"
+evidence = "documented"
+source = "spot-user-stream"
+
+[[surface]]
+family = "spot"
+protocol = "fix_order_entry"
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API permission"
+
+[[surface]]
+family = "spot"
+protocol = "fix_drop_copy"
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[surface]]
+family = "spot"
+protocol = "fix_market_data"
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[surface]]
+family = "cross_margin"
+protocol = "rest"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "cross_margin"
+protocol = "websocket_api"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "cross_margin"
+protocol = "websocket_market_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "cross_margin"
+protocol = "websocket_user_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "cross_margin"
+protocol = "fix_order_entry"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "isolated_margin"
+protocol = "rest"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "isolated_margin"
+protocol = "websocket_api"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "isolated_margin"
+protocol = "websocket_market_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "isolated_margin"
+protocol = "websocket_user_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "isolated_margin"
+protocol = "fix_order_entry"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "usds_m_futures"
+protocol = "rest"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "usds_m_futures"
+protocol = "websocket_api"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "usds_m_futures"
+protocol = "websocket_market_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "usds_m_futures"
+protocol = "websocket_user_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "usds_m_futures"
+protocol = "fix_order_entry"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "coin_m_futures"
+protocol = "rest"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "coin_m_futures"
+protocol = "websocket_api"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "coin_m_futures"
+protocol = "websocket_market_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "coin_m_futures"
+protocol = "websocket_user_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "coin_m_futures"
+protocol = "fix_order_entry"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "options"
+protocol = "rest"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "options"
+protocol = "websocket_api"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "options"
+protocol = "websocket_market_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "options"
+protocol = "websocket_user_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "options"
+protocol = "fix_order_entry"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "portfolio_margin"
+protocol = "rest"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "portfolio_margin"
+protocol = "websocket_api"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "portfolio_margin"
+protocol = "websocket_market_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "portfolio_margin"
+protocol = "websocket_user_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "portfolio_margin"
+protocol = "fix_order_entry"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "portfolio_margin_pro"
+protocol = "rest"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "portfolio_margin_pro"
+protocol = "websocket_api"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "portfolio_margin_pro"
+protocol = "websocket_market_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "portfolio_margin_pro"
+protocol = "websocket_user_streams"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[surface]]
+family = "portfolio_margin_pro"
+protocol = "fix_order_entry"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+# --- Environments ----------------------------------------------------------
+
+[[environment]]
+family = "spot"
+environment = "production"
+semantics = "The live exchange. Real balances, real order books, and the only environment where an order moves capital."
+carries_real_capital = true
+status = "supported"
+evidence = "documented"
+source = "spot-rest"
+
+[[environment]]
+family = "spot"
+environment = "demo"
+semantics = "Virtual balances on demo-prefixed hosts. Prices and order books are documented as similar to the live exchange, features as always the same, and limits and filters as exactly the same. Balances reset on request."
+carries_real_capital = false
+host_marker = "demo"
+status = "supported"
+evidence = "documented"
+source = "spot-demo"
+
+[[environment]]
+family = "spot"
+environment = "testnet"
+semantics = "Separate infrastructure with its own keys. Order books are documented as independent of the live exchange, limits as generally the same, and new features may appear here first. Balances reset monthly; only the api prefix is served."
+carries_real_capital = false
+host_marker = "testnet"
+status = "supported"
+evidence = "documented"
+source = "spot-testnet"
+
+[[environment]]
+family = "cross_margin"
+environment = "production"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = true
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "cross_margin"
+environment = "demo"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "demo"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "cross_margin"
+environment = "testnet"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "testnet"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "isolated_margin"
+environment = "production"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = true
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "isolated_margin"
+environment = "demo"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "demo"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "isolated_margin"
+environment = "testnet"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "testnet"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "usds_m_futures"
+environment = "production"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = true
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "usds_m_futures"
+environment = "demo"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "demo"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "usds_m_futures"
+environment = "testnet"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "testnet"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "coin_m_futures"
+environment = "production"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = true
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "coin_m_futures"
+environment = "demo"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "demo"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "coin_m_futures"
+environment = "testnet"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "testnet"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "options"
+environment = "production"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = true
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "options"
+environment = "demo"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "demo"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "options"
+environment = "testnet"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "testnet"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "portfolio_margin"
+environment = "production"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = true
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "portfolio_margin"
+environment = "demo"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "demo"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "portfolio_margin"
+environment = "testnet"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "testnet"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "portfolio_margin_pro"
+environment = "production"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = true
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "portfolio_margin_pro"
+environment = "demo"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "demo"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+[[environment]]
+family = "portfolio_margin_pro"
+environment = "testnet"
+semantics = "No admissible source. The product catalogue is client-rendered, so no environment guarantee for this family could be read."
+carries_real_capital = false
+host_marker = "testnet"
+status = "unknown"
+evidence = "documented"
+source = "developer-catalogue"
+
+# --- Endpoints -------------------------------------------------------------
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "rest"
+url = "https://api.binance.com/api"
+transport = "https"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/api"
+status = "supported"
+evidence = "documented"
+source = "spot-rest"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "rest"
+url = "https://api-gcp.binance.com/api"
+transport = "https"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/api"
+status = "supported"
+evidence = "documented"
+source = "spot-rest"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "rest"
+url = "https://api1.binance.com/api"
+transport = "https"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/api"
+status = "supported"
+evidence = "documented"
+source = "spot-rest"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "rest"
+url = "https://api2.binance.com/api"
+transport = "https"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/api"
+status = "supported"
+evidence = "documented"
+source = "spot-rest"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "rest"
+url = "https://api3.binance.com/api"
+transport = "https"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/api"
+status = "supported"
+evidence = "documented"
+source = "spot-rest"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "rest"
+url = "https://api4.binance.com/api"
+transport = "https"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/api"
+status = "supported"
+evidence = "documented"
+source = "spot-rest"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "rest"
+url = "https://data-api.binance.vision/api"
+transport = "https"
+request_encoding = "json"
+response_encoding = "json"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data"]
+path_prefix = "/api"
+status = "supported"
+evidence = "documented"
+source = "spot-rest"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "websocket_api"
+url = "wss://ws-api.binance.com:443/ws-api/v3"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/ws-api/v3"
+status = "supported"
+evidence = "documented"
+source = "spot-ws-api"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "websocket_market_streams"
+url = "wss://stream.binance.com:9443"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-ws-streams"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "websocket_market_streams"
+url = "wss://stream.binance.com:443"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-ws-streams"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "websocket_market_streams"
+url = "wss://data-stream.binance.vision"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data"]
+status = "supported"
+evidence = "documented"
+source = "spot-ws-streams"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "websocket_market_streams"
+url = "wss://stream-sbe.binance.com/ws"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "sbe"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-testnet"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "websocket_market_streams"
+url = "wss://stream-sbe.binance.com/stream"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "sbe"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-testnet"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "fix_order_entry"
+url = "tcp+tls://fix-oe.binance.com:9000"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_text"
+auth = "signed"
+port = 9000
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API"]
+capabilities = ["trading", "account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API permission"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "fix_order_entry"
+url = "tcp+tls://fix-oe.binance.com:9001"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9001
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API"]
+capabilities = ["trading", "account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API permission"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "fix_order_entry"
+url = "tcp+tls://fix-oe.binance.com:9002"
+transport = "tcp_tls"
+request_encoding = "fix_sbe"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9002
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API"]
+capabilities = ["trading", "account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API permission"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "fix_drop_copy"
+url = "tcp+tls://fix-dc.binance.com:9000"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_text"
+auth = "signed"
+port = 9000
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "fix_drop_copy"
+url = "tcp+tls://fix-dc.binance.com:9001"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9001
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "fix_drop_copy"
+url = "tcp+tls://fix-dc.binance.com:9002"
+transport = "tcp_tls"
+request_encoding = "fix_sbe"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9002
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "fix_market_data"
+url = "tcp+tls://fix-md.binance.com:9000"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_text"
+auth = "signed"
+port = 9000
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["market_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "fix_market_data"
+url = "tcp+tls://fix-md.binance.com:9001"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9001
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["market_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "production"
+protocol = "fix_market_data"
+url = "tcp+tls://fix-md.binance.com:9002"
+transport = "tcp_tls"
+request_encoding = "fix_sbe"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9002
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["market_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-fix"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "rest"
+url = "https://demo-api.binance.com/api"
+transport = "https"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/api"
+status = "supported"
+evidence = "documented"
+source = "spot-demo"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "websocket_api"
+url = "wss://demo-ws-api.binance.com/ws-api/v3"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/ws-api/v3"
+status = "supported"
+evidence = "documented"
+source = "spot-demo"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "websocket_market_streams"
+url = "wss://demo-stream.binance.com/ws"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-demo"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "websocket_market_streams"
+url = "wss://demo-stream-sbe.binance.com/ws"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "sbe"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-demo"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "websocket_market_streams"
+url = "wss://demo-stream.binance.com:9443/ws"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-demo"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "websocket_market_streams"
+url = "wss://demo-stream-sbe.binance.com:9443/ws"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "sbe"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-demo"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "websocket_market_streams"
+url = "wss://demo-stream.binance.com/stream"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-demo"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "websocket_market_streams"
+url = "wss://demo-stream-sbe.binance.com/stream"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "sbe"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-demo"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "websocket_market_streams"
+url = "wss://demo-stream.binance.com:9443/stream"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-demo"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "websocket_market_streams"
+url = "wss://demo-stream-sbe.binance.com:9443/stream"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "sbe"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-demo"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "fix_order_entry"
+url = "tcp+tls://demo-fix-oe.binance.com:9000"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_text"
+auth = "signed"
+port = 9000
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API"]
+capabilities = ["trading", "account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-demo"
+condition = "an Ed25519 key carrying the FIX_API permission"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "fix_order_entry"
+url = "tcp+tls://demo-fix-oe.binance.com:9001"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9001
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API"]
+capabilities = ["trading", "account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-demo"
+condition = "an Ed25519 key carrying the FIX_API permission"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "fix_order_entry"
+url = "tcp+tls://demo-fix-oe.binance.com:9002"
+transport = "tcp_tls"
+request_encoding = "fix_sbe"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9002
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API"]
+capabilities = ["trading", "account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-demo"
+condition = "an Ed25519 key carrying the FIX_API permission"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "fix_drop_copy"
+url = "tcp+tls://demo-fix-dc.binance.com:9000"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_text"
+auth = "signed"
+port = 9000
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-demo"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "fix_drop_copy"
+url = "tcp+tls://demo-fix-dc.binance.com:9001"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9001
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-demo"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "fix_drop_copy"
+url = "tcp+tls://demo-fix-dc.binance.com:9002"
+transport = "tcp_tls"
+request_encoding = "fix_sbe"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9002
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-demo"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "fix_market_data"
+url = "tcp+tls://demo-fix-md.binance.com:9000"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_text"
+auth = "signed"
+port = 9000
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["market_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-demo"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "fix_market_data"
+url = "tcp+tls://demo-fix-md.binance.com:9001"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9001
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["market_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-demo"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "demo"
+protocol = "fix_market_data"
+url = "tcp+tls://demo-fix-md.binance.com:9002"
+transport = "tcp_tls"
+request_encoding = "fix_sbe"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9002
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["market_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-demo"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "rest"
+url = "https://testnet.binance.vision/api"
+transport = "https"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/api"
+status = "supported"
+evidence = "documented"
+source = "spot-testnet"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "rest"
+url = "https://api1.testnet.binance.vision/api"
+transport = "https"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/api"
+status = "supported"
+evidence = "documented"
+source = "spot-testnet"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "websocket_api"
+url = "wss://ws-api.testnet.binance.vision/ws-api/v3"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/ws-api/v3"
+status = "supported"
+evidence = "documented"
+source = "spot-testnet"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "websocket_api"
+url = "wss://ws-api.testnet.binance.vision:9443/ws-api/v3"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "signed"
+tls_required = true
+sni_required = false
+key_types = ["hmac", "rsa", "ed25519"]
+capabilities = ["market_data", "trading", "account_data", "user_stream"]
+path_prefix = "/ws-api/v3"
+status = "supported"
+evidence = "documented"
+source = "spot-testnet"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "websocket_market_streams"
+url = "wss://stream.testnet.binance.vision/stream"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-testnet"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "websocket_market_streams"
+url = "wss://stream.testnet.binance.vision:9443/stream"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "json"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-testnet"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "websocket_market_streams"
+url = "wss://stream-sbe.testnet.binance.vision/ws"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "sbe"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-testnet"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "websocket_market_streams"
+url = "wss://stream-sbe.testnet.binance.vision:9443/ws"
+transport = "websocket"
+request_encoding = "json"
+response_encoding = "sbe"
+auth = "none"
+tls_required = true
+sni_required = false
+capabilities = ["market_data", "user_stream"]
+status = "supported"
+evidence = "documented"
+source = "spot-testnet"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "fix_order_entry"
+url = "tcp+tls://fix-oe.testnet.binance.vision:9000"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_text"
+auth = "signed"
+port = 9000
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API"]
+capabilities = ["trading", "account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-testnet"
+condition = "an Ed25519 key carrying the FIX_API permission"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "fix_order_entry"
+url = "tcp+tls://fix-oe.testnet.binance.vision:9001"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9001
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API"]
+capabilities = ["trading", "account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-testnet"
+condition = "an Ed25519 key carrying the FIX_API permission"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "fix_order_entry"
+url = "tcp+tls://fix-oe.testnet.binance.vision:9002"
+transport = "tcp_tls"
+request_encoding = "fix_sbe"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9002
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API"]
+capabilities = ["trading", "account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-testnet"
+condition = "an Ed25519 key carrying the FIX_API permission"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "fix_drop_copy"
+url = "tcp+tls://fix-dc.testnet.binance.vision:9000"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_text"
+auth = "signed"
+port = 9000
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-testnet"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "fix_drop_copy"
+url = "tcp+tls://fix-dc.testnet.binance.vision:9001"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9001
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-testnet"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "fix_drop_copy"
+url = "tcp+tls://fix-dc.testnet.binance.vision:9002"
+transport = "tcp_tls"
+request_encoding = "fix_sbe"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9002
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["account_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-testnet"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "fix_market_data"
+url = "tcp+tls://fix-md.testnet.binance.vision:9000"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_text"
+auth = "signed"
+port = 9000
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["market_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-testnet"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "fix_market_data"
+url = "tcp+tls://fix-md.testnet.binance.vision:9001"
+transport = "tcp_tls"
+request_encoding = "fix_text"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9001
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["market_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-testnet"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+[[endpoint]]
+family = "spot"
+environment = "testnet"
+protocol = "fix_market_data"
+url = "tcp+tls://fix-md.testnet.binance.vision:9002"
+transport = "tcp_tls"
+request_encoding = "fix_sbe"
+response_encoding = "fix_sbe"
+auth = "signed"
+port = 9002
+tls_required = true
+sni_required = true
+key_types = ["ed25519"]
+key_permissions = ["FIX_API", "FIX_API_READ_ONLY"]
+capabilities = ["market_data"]
+status = "restricted"
+evidence = "documented"
+source = "spot-testnet"
+condition = "an Ed25519 key carrying the FIX_API or FIX_API_READ_ONLY permission"
+
+# --- Schema lifecycle ------------------------------------------------------
+
+[[schema_version]]
+family = "spot_sbe"
+environment = "production"
+schema_id = 3
+version = 5
+state = "latest"
+released = "2026-07-07"
+source = "sbe-lifecycle-prod"
+
+[[schema_version]]
+family = "spot_sbe"
+environment = "production"
+schema_id = 3
+version = 4
+state = "deprecated"
+released = "2026-05-08"
+deprecated = "2026-07-07"
+source = "sbe-lifecycle-prod"
+
+[[schema_version]]
+family = "spot_sbe"
+environment = "production"
+schema_id = 3
+version = 3
+state = "deprecated"
+released = "2026-03-25"
+deprecated = "2026-05-08"
+source = "sbe-lifecycle-prod"
+
+[[schema_version]]
+family = "spot_sbe"
+environment = "production"
+schema_id = 3
+version = 2
+state = "deprecated"
+released = "2025-12-18"
+deprecated = "2026-03-25"
+source = "sbe-lifecycle-prod"
+
+[[schema_version]]
+family = "spot_sbe"
+environment = "production"
+schema_id = 3
+version = 1
+state = "retired"
+released = "2025-08-19"
+deprecated = "2025-12-18"
+retired = "2026-06-29"
+source = "sbe-lifecycle-prod"
+
+[[schema_version]]
+family = "spot_sbe"
+environment = "production"
+schema_id = 3
+version = 0
+state = "retired"
+released = "2025-04-24"
+deprecated = "2025-08-19"
+retired = "2026-02-19"
+source = "sbe-lifecycle-prod"
+
+[[schema_version]]
+family = "spot_sbe"
+environment = "production"
+schema_id = 2
+version = 1
+state = "retired"
+released = "2024-12-12"
+deprecated = "2025-04-24"
+retired = "2025-10-24"
+source = "sbe-lifecycle-prod"
+
+[[schema_version]]
+family = "spot_sbe"
+environment = "production"
+schema_id = 2
+version = 0
+state = "retired"
+released = "2024-04-25"
+deprecated = "2024-12-12"
+retired = "2025-06-12"
+source = "sbe-lifecycle-prod"
+
+[[schema_version]]
+family = "spot_sbe"
+environment = "production"
+schema_id = 1
+version = 0
+state = "retired"
+released = "2024-03-05"
+deprecated = "2024-04-25"
+retired = "2024-10-25"
+source = "sbe-lifecycle-prod"
+
+[[schema_version]]
+family = "spot_fix_sbe"
+environment = "production"
+schema_id = 1
+version = 1
+state = "latest"
+released = "2026-03-25"
+source = "sbe-fix-lifecycle-prod"
+
+[[schema_version]]
+family = "spot_fix_sbe"
+environment = "production"
+schema_id = 1
+version = 0
+state = "deprecated"
+released = "2025-12-18"
+deprecated = "2026-03-25"
+source = "sbe-fix-lifecycle-prod"

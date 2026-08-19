@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-032 are complete. Phase 033 is next and has not started.**
-> Nothing beyond Phase 032 is implemented. The environment band is closed and
+> **Phases 001-033 are complete. Phase 034 is next and has not started.**
+> Nothing beyond Phase 033 is implemented. The environment band is closed and
 > frozen as `v0.2.0`; what that certifies, and the one criterion it could not,
 > are in
 > [`docs/release/ENVIRONMENT_ACCEPTANCE.md`](docs/release/ENVIRONMENT_ACCEPTANCE.md). GLOBIN does not trade, does not
@@ -178,10 +178,10 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Sixteen have been made. Each cost an ADR, and each is
+> **Scope amendments.** Seventeen have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
-> unchanged by all fifteen.
+> unchanged by all seventeen.
 >
 > This count said *seven* while listing eight from Phase 024 until Phase 025
 > repaired it. Nothing tested it, which is why it drifted and why it was worth
@@ -497,6 +497,43 @@ the contract:
 > Phase 048 inherits both findings and this amendment as evidence.
 
 
+> **Seventeenth.** Phase 033 still delivers the Binance product family inventory
+> its title names -- every officially documented product family, classified by
+> whether GLOBIN trades it, and the REST, WebSocket, FIX and encoding surfaces
+> each one exposes. Alongside it, the API reality registry: production, demo and
+> testnet as distinct kinds rather than a boolean, the capability matrix over
+> them, every base URL and endpoint family in one document, the SBE and FIX schema
+> lifecycle, six status words that keep *not documented* apart from *documented
+> absent*, and a refresh that classifies drift.
+>
+> **It scores two of four, and it fails *no phase owns the work* against four
+> titles at once.** Rows 034, 035, 036 and 037 name the ingestion process, the
+> environment model, the capability matrix and the endpoint registry by title.
+> The sixteenth's one saving statement was that no phase owned its work by title;
+> this one cannot say it, and fails the condition more comprehensively than any
+> record before it. It is also the largest displacement inside a band the
+> programme has made -- the four consecutive rows immediately following, twice the
+> reach of the fourth, which displaced 018 and 019 and is the only comparable case.
+> *Nothing deferred*: both halves ship together. *The two halves need each other*:
+> an inventory with no environment axis is the row labels of a matrix, and the
+> provenance and status machinery has nothing to prove itself against if the only
+> thing recorded is eight uncontested product names.
+>
+> **A third artefact named the division, and it is an accepted record rather than
+> a plan.** [ADR-0006](docs/adr/0006-product-and-environment-capability-matrix.md)
+> closes with *"Phase 036 exists specifically to build this matrix, and Phases
+> 033-035 exist to gather what it needs."* That sentence is contradicted here, the
+> record is immutable, and
+> [ADR-0086](docs/adr/0086-phase-033-widens-to-deliver-the-binance-api-reality-registry.md)
+> states the contradiction rather than out-voting it. The same ADR supplies the
+> requirement the refresh answers -- that the matrix is re-verified when Binance
+> documentation changes rather than assumed once -- which no row had owned.
+>
+> **No roadmap row is rewritten.** The eight amendments before this one recorded
+> displacement and left the future row's text intact, and the granularity review
+> reserves rewriting for Phase 048.
+
+
 ---
 
 ## Phases 001-016 — Repository Foundation and Engineering Contract
@@ -559,7 +596,7 @@ the transport, authentication and rate-limit machinery on top of that reality.
 
 | Phase | Title | Purpose | Status |
 |:-----:|-------|---------|:------:|
-| 033 | Binance Product Family Inventory | Enumerate the officially documented product families and the surfaces each one exposes. | Planned |
+| 033 | Binance Product Family Inventory | Enumerate the officially documented product families and the surfaces each one exposes; and, as the seventeenth scope amendment, deliver the Binance API reality registry -- production, demo and testnet as distinct kinds, the capability matrix over them, every base URL and endpoint family in one declared document, the SBE and FIX schema lifecycle, six status words that keep *not documented* apart from *documented absent*, and a refresh that classifies drift from official machine-readable sources only. | Complete |
 | 034 | Official Documentation Ingestion and Change Tracking | Establish a repeatable process for consuming official Binance documentation and detecting changes to it. | Planned |
 | 035 | Environment Classification Model | Model production, testnet, demo and internal simulation as distinct classes with distinct guarantees. | Planned |
 | 036 | Product and Environment Capability Matrix | Build the authoritative matrix of which products support which environments, driven by documented evidence. | Planned |

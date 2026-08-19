@@ -19,6 +19,62 @@ can be opened and read.
 
 ## [Unreleased]
 
+### The first phase whose subject is a venue
+
+- **A registry of what Binance documents, with provenance on every row.**
+  Thirteen product families, 42 product-and-protocol surfaces, 24
+  product-and-environment pairs, 58 endpoints and 11 schema versions, drawn from
+  15 sources. A record without a canonical location, an authority and an access
+  date **cannot be constructed** — provenance is enforced by the constructor
+  rather than by review, because a claim about a venue with no source is not a
+  weaker claim, it is not a claim.
+- **Six status words, and the one that matters is `unknown`.** *Not documented*
+  and *documented absent* are different facts. 56 rows carry `unknown` against 51
+  `supported`, and `unsupported` appears **zero** times: that word claims a
+  document states an absence, and none of the documents read states one.
+- **`EvidenceKind.OBSERVED` exists and nothing may write it.** GLOBIN has never
+  contacted the venue. A contract test enforces by assertion what
+  `VerificationState` enforces by having no member at all.
+- **Demo and testnet are separate kinds**, with the semantics Binance itself
+  tabulates — order books independent of the live exchange against similar to it,
+  monthly resets against on-request. Every non-production environment declares the
+  substring its hosts are spelled with, so an endpoint filed under `testnet` whose
+  host is a live one is refused structurally rather than by review.
+- **Two readers, sharing no code.** The gate under `tools/` parses the same
+  document as the package and imports none of it, so a registry the package would
+  mis-read is caught by a reader that shares none of its assumptions. A contract
+  test compares what the two see.
+- **The refresh reaches the network and lives outside the package.** `src/globin`
+  still opens no outbound connection — a property an architecture test proves
+  rather than asserts — and Phase 045 is where the application earns one. The
+  fetcher is injected, the host allowlist is checked on the parsed hostname,
+  redirects are refused rather than followed, and a failed refresh leaves the
+  committed registry byte-identical.
+- **No new exit code and no new bootstrap check.** 26 stays free, and nothing in a
+  start-up consumes the registry yet.
+
+### Found rather than built
+
+- **Three of Binance's four machine-readable lifecycle files are not valid JSON.**
+  Two close an array with a trailing comma and one omits a comma between entries.
+  Measured by fetching the bytes and parsing them, not remembered. Each is marked
+  `known_unparseable`: an owned defect is recorded and an unowned one fails, and a
+  source declared unparseable that starts parsing **also** fails, so the exemption
+  cannot outlive its reason.
+- **The derivatives documentation has no admissible route.** The former GitHub
+  Pages site redirects to a client-rendered application. `SOURCE_POLICY.md` forbids
+  scraping it and forbids a generated summary in its place — a prohibition that
+  earned itself here, when a summarizer asked for the COIN-M testnet host returned
+  the **Spot** demo host with no indication of doubt.
+- **The identifier discipline refused the first design.** Product families were
+  written as an enumeration, and a Phase 011 tripwire that names Phase 036 as the
+  moment it would bite refused them. It was right: which products a venue offers
+  changes without GLOBIN being redeployed. They are data now.
+- **An allowlist hole, found by its own test.**
+  `"raw.githubusercontent.com".endswith("github.com")` is **False**, so the
+  organisation check had never applied to the raw host and any repository on the
+  service would have passed.
+
 ## [0.2.0] - 2026-08-19
 
 The environment baseline. Closes Phases 017-032: a Windows machine can be turned

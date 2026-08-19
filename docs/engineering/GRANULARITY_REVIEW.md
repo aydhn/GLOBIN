@@ -32,9 +32,9 @@ to say **nothing displaced, nothing deferred, no phase owns the work, and the tw
 halves need each other**. That restatement is what the programme actually
 applied, so it is what is scored here.
 
-Sixteen amendments have been made. Three predate the test — the first two came
+Seventeen amendments have been made. Three predate the test — the first two came
 before ADR-0021, and the third *is* ADR-0021, which created the test in the act
-of being the amendment that needed one. Thirteen are scored.
+of being the amendment that needed one. Fourteen are scored.
 
 ---
 
@@ -55,8 +55,9 @@ of being the amendment that needed one. Thirteen are scored.
 | 14 | 030 | [ADR-0079](../adr/0079-phase-030-widens-to-deliver-the-configuration-evidence-surface.md) | 4/4 |
 | 15 | 031 | [ADR-0082](../adr/0082-phase-031-widens-to-deliver-the-user-scoped-secret-vault.md) | 1/4 |
 | 16 | 032 | [ADR-0084](../adr/0084-phase-032-widens-to-deliver-the-bootstrap-provisioning-surface.md) | 2/4 |
+| 17 | 033 | [ADR-0086](../adr/0086-phase-033-widens-to-deliver-the-binance-api-reality-registry.md) | 2/4 |
 
-Mean 1.69 of four.
+Mean 1.71 of four.
 
 ---
 
@@ -66,13 +67,13 @@ This is the review's central result, and it is arithmetic rather than argument.
 
 | Condition | Met |
 |---|:---:|
-| `nothing_displaced` | 1/13 |
-| `nothing_deferred` | 13/13 |
-| `no_phase_owns_it` | 1/13 |
-| `halves_need_each_other` | 7/13 |
+| `nothing_displaced` | 1/14 |
+| `nothing_deferred` | 14/14 |
+| `no_phase_owns_it` | 1/14 |
+| `halves_need_each_other` | 8/14 |
 
 **One condition has never once failed.** Every amendment delivered its titled
-scope in full. Nothing was ever traded away to make room, in thirteen
+scope in full. Nothing was ever traded away to make room, in fourteen
 consecutive applications of a test whose job is to discriminate.
 
 **Two conditions have failed all but once**, and the once is the same phase for
@@ -97,10 +98,10 @@ band's evidence is the same error as the one being diagnosed, and it is Phase
 
 ## Finding 2 — the band is not drawn wrong; a subject is missing
 
-The tempting conclusion from thirteen amendments is that the rows are too coarse
+The tempting conclusion from fourteen amendments is that the rows are too coarse
 or too fine. Neither holds.
 
-**The band range and subject are intact.** *Nothing deferred* was met 13/13:
+**The band range and subject are intact.** *Nothing deferred* was met 14/14:
 every phase delivered what its title promised. A band whose rows were too large
 would show deferrals, and there are none.
 
@@ -126,16 +127,21 @@ defensible, and the pattern is only visible from where this review stands.
 
 ---
 
-## Finding 3 — three collisions are with a phase *title*, not a purpose
+## Finding 3 — seven collisions are with a phase *title*, not a purpose
 
-Most displacement lands on a phase's purpose text. Three landed on its title,
-which is a stronger claim of ownership and is recorded separately.
+Most displacement lands on a phase's purpose text. Seven landed on its title,
+which is a stronger claim of ownership and is recorded separately. Four of the
+seven arrived at once, in the seventeenth.
 
 | Phase | Title | Collided by | Record |
 |:-----:|-------|:-----------:|--------|
 | 263 | Supervisor and Watchdog | 025 | ADR-0064 |
 | 280 | Operational Metrics Collection | 026 | ADR-0067 |
 | 292 | Credential Collection and Persistence Flow | 031 | ADR-0082 |
+| 034 | Official Documentation Ingestion and Change Tracking | 033 | ADR-0086 |
+| 035 | Environment Classification Model | 033 | ADR-0086 |
+| 036 | Product and Environment Capability Matrix | 033 | ADR-0086 |
+| 037 | Base URL and Endpoint Registry | 033 | ADR-0086 |
 
 In each case the collision was refused rather than rebuilt, and the refusal is in
 the record: Phase 025 delivered a watchdog with no driver, no recovery and no

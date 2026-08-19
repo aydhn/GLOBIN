@@ -195,10 +195,10 @@ absence of a rule.
 |---|---|
 | The value types a price, quantity or market is carried in | 008, delivered — [`VALUE_TYPES_POLICY.md`](VALUE_TYPES_POLICY.md) |
 | Serialization and schema evolution for persisted identifiers | 012, delivered — [`SERIALIZATION_POLICY.md`](SERIALIZATION_POLICY.md) |
-| Which product families Binance offers, and what each is called there | 033 |
+| Which product families Binance offers, and what each is called there | 033, delivered — [`engineering/binance-api-reality.toml`](engineering/binance-api-reality.toml) |
 | What an environment is, and what each class guarantees | 035 |
 | Which product and environment pairs are usable | 036 |
-| The venue spelling of a market, such as the concatenated form | 033-048 |
+| The venue spelling of a market, such as the concatenated form | 049 |
 | Which instruments exist, and their metadata | 049-050 |
 | How an order identifier is generated and reconciled with the venue | 081-096 |
 | A model's version, its training data and its lineage | 097 and beyond |

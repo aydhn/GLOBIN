@@ -76,6 +76,7 @@ that certifies — and the one criterion it could not — is in
 | Were Phases 017-032 drawn at the right granularity? | [`docs/engineering/GRANULARITY_REVIEW.md`](docs/engineering/GRANULARITY_REVIEW.md), [`docs/engineering/scope-amendments.toml`](docs/engineering/scope-amendments.toml) |
 | How does an operator get from a clean clone to a host that starts? | [`docs/engineering/PROVISIONING.md`](docs/engineering/PROVISIONING.md), [ADR-0085](docs/adr/0085-a-plan-is-derived-from-a-report-and-one-module-may-start-a-process.md) |
 | Is the foundation band complete, and on what evidence? | [`docs/release/FOUNDATION_ACCEPTANCE.md`](docs/release/FOUNDATION_ACCEPTANCE.md), [`docs/engineering/foundation-acceptance.toml`](docs/engineering/foundation-acceptance.toml) |
+| What does Binance actually document, and how sure are we? | [`docs/engineering/BINANCE_API_REALITY.md`](docs/engineering/BINANCE_API_REALITY.md), [ADR-0087](docs/adr/0087-the-api-reality-registry-is-declared-with-provenance-and-drift-is-measured-in-two-regimes.md) |
 | What does this term mean? | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
 
 ---
@@ -868,6 +869,51 @@ amendments *nothing deferred* is met 13/13 and *no phase owns the work* 1/13, so
 of the four conditions carry almost no information. And the band is not drawn wrong
 -- **a subject is missing**: sixteen rows describe provisioning steps while eleven
 phases delivered the runtime substrate, for which the band has no rows at all.
+
+Phase 033 opened the venue band, and gave GLOBIN somewhere to write down what
+Binance documents.
+
+```bash
+.venv\Scripts\globin.exe api-reality show
+```
+
+```bash
+python -m tools.quality venue
+```
+
+The registry is **one declared document**,
+[`docs/engineering/binance-api-reality.toml`](docs/engineering/binance-api-reality.toml),
+and **no venue host is spelled anywhere in the package** --
+`tests/architecture/test_api_reality_discipline.py` fails if one appears. That rule
+can be that strong because product families, environments, key permissions and
+schema families are **data rather than enumerations**: the identifier discipline
+refused the first draft, and it was right, because which products a venue offers
+changes without GLOBIN being redeployed.
+
+**Six status words, and the one that matters is `unknown`.** *Not documented* and
+*documented absent* are different facts; 56 rows carry `unknown` against 51
+`supported`, and **`unsupported` appears zero times** because that word claims a
+document states an absence and none does. `EvidenceKind.OBSERVED` exists and
+**nothing may write it** -- GLOBIN has never contacted the venue, and a contract
+test enforces by assertion what `VerificationState` enforces by omission.
+
+**Demo and testnet are separate kinds**, with the semantics Binance tabulates, and
+each non-production environment declares the substring its hosts are spelled with --
+so a live host filed as paper is refused structurally rather than by review.
+
+**The gate is a second reader.** Nothing under `tools/` imports `globin`, so the two
+parse the same document with no shared code, and a contract test compares what they
+see. `refresh` reaches the network and lives outside the package deliberately:
+`src/globin` still opens **no outbound connection**, and Phase 045 is where it earns
+one. **No new exit code** -- 26 stays free.
+
+**Three of Binance's four machine-readable lifecycle files are not valid JSON**,
+measured rather than remembered. Each is marked `known_unparseable`, and a source
+declared unparseable that *starts* parsing also fails, so the exemption cannot
+outlive its reason. The derivatives documentation has **no admissible route at
+all** -- it is client-rendered, and `SOURCE_POLICY.md` forbids both scraping it and
+accepting a generated summary in its place. Every non-Spot endpoint is therefore
+`unknown`, which is the honest answer rather than a gap.
 
 ---
 

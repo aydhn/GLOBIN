@@ -289,6 +289,22 @@ displaces = [291]
 title_collisions = []
 overlaps_complete = []
 
+[[amendment]]
+ordinal = 17
+ordinal_word = "Seventeenth"
+phase = 33
+scored = true
+record = "docs/adr/0086-phase-033-widens-to-deliver-the-binance-api-reality-registry.md"
+summary = "Phase 033 delivered the Binance API reality registry alongside the product family inventory its title names. The largest in-band displacement, and the only amendment to collide with four titles at once."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "MET"
+score = 2
+displaces = [34, 35, 36, 37]
+title_collisions = [34, 35, 36, 37]
+overlaps_complete = []
+
 # ---------------------------------------------------------------------------
 # What a later phase will find partly built.
 #
@@ -301,6 +317,34 @@ overlaps_complete = []
 # `test_granularity_contract.py` asserts every `phase` here is still `Planned`,
 # so a row survives only until its phase ships.
 # ---------------------------------------------------------------------------
+
+[[inheritance]]
+phase = 34
+title = "Official Documentation Ingestion and Change Tracking"
+already_built = "an allowlisted refresh over official machine-readable sources, source digests, and a deterministic classified diff"
+absent_by_design = "no cadence, no accumulated change log across runs, no review workflow for a breaking drift"
+from_phases = [33]
+
+[[inheritance]]
+phase = 35
+title = "Environment Classification Model"
+already_built = "production, demo and testnet as distinct kinds, each with documented semantics, hosts and per-product coverage"
+absent_by_design = "no guarantees attached to a class, and no internal simulation -- Binance documents none, so the registry cannot express it"
+from_phases = [33]
+
+[[inheritance]]
+phase = 36
+title = "Product and Environment Capability Matrix"
+already_built = "the matrix itself, six status words, evidence kinds, and a query that separates an absent entry from a recorded UNKNOWN"
+absent_by_design = "nothing refuses an operation, because no operation exists to refuse"
+from_phases = [33]
+
+[[inheritance]]
+phase = 37
+title = "Base URL and Endpoint Registry"
+already_built = "base URLs and endpoint families per product, environment and protocol, in one document no other module may spell"
+absent_by_design = "no per-operation paths, methods, security types or weights"
+from_phases = [33]
 
 [[inheritance]]
 phase = 257

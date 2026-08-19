@@ -169,7 +169,7 @@ absence of a rule.
 
 | Question | Phase |
 |---|---|
-| The venue spelling of a market, and its real tick and step values | 049-050, reached through 033-048 |
+| The venue spelling of a market, and its real tick and step values | 049-050 |
 | Whether an order satisfies a venue's filters | 082 |
 | Fee schedules, tiers, and how a fee is charged | 148 |
 | A signed money type — profit and loss, spread, drawdown | 155-156 |

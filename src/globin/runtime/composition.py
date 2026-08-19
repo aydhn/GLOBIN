@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import IO, Any, Final, TextIO
 
 import globin
+from globin.adapters.api_reality import REGISTRY_PATH, TomlApiRealitySource
 from globin.adapters.architecture import AstModuleImportSource, TomlArchitectureContractSource
 from globin.adapters.bootstrap import PROJECT_FILE as PROJECT_MANIFEST
 from globin.adapters.bootstrap import (
@@ -188,6 +189,7 @@ from globin.domain.secrets import (
 from globin.domain.support import ArtifactKind, safe_member_name
 from globin.domain.watchdog import WatchdogEpisode
 from globin.errors import ConfigurationError, InternalError
+from globin.ports.api_reality import ApiRealitySource
 from globin.ports.clock import Clock, MonotonicClock
 from globin.ports.configuration import ConfigurationSource
 from globin.ports.entitlements import GrantRegister
@@ -927,6 +929,25 @@ def environment_provider_policy() -> dict[str, tuple[str, ...]]:
     from silently disabling it.
     """
     return {SecretProviderKind.ENVIRONMENT.value: ENVIRONMENT_PROVIDER_PROFILES}
+
+
+def build_api_reality_source(repo_root: Path) -> ApiRealitySource:
+    """The Binance API reality registry for this run.
+
+    Args:
+        repo_root: Where the declaration lives, relative to which the registry is
+            found.
+
+    Returns:
+        Something satisfying the port. The concrete reader is a detail of this
+        function, which is what the composition root is for -- and the annotation
+        is what gives the protocol a runtime importer rather than a type-only one.
+
+    Nothing here reaches a network. The registry is a committed document, and
+    refreshing it from the venue is a repository-maintenance act performed from
+    outside this package.
+    """
+    return TomlApiRealitySource(path=repo_root / REGISTRY_PATH)
 
 
 def build_degradation_probe(repo_root: Path) -> ContractDegradationProbe:

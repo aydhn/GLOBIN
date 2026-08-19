@@ -194,7 +194,7 @@ absence of a rule.
 | Canonical identifiers, and the form each kind of name takes | 011, delivered — [`IDENTIFIER_POLICY.md`](IDENTIFIER_POLICY.md) |
 | The register of assets that exist | 049-050 |
 | Serialization and schema evolution for persisted values | 012, delivered — [`SERIALIZATION_POLICY.md`](SERIALIZATION_POLICY.md) |
-| The venue spelling of a market, such as the concatenated form | 033-048 |
+| The venue spelling of a market, such as the concatenated form | 049 |
 | Absolute risk ceilings on position and order size | 242 |
 
 The last two are worth spelling out.

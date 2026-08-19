@@ -150,6 +150,8 @@ a future reader can judge whether the reason still holds.
 | [0083](0083-a-second-secret-mechanism-is-admitted-by-arithmetic-and-carries-its-own-integrity-check.md) | A second secret mechanism is admitted by arithmetic and carries its own integrity check | Accepted |
 | [0084](0084-phase-032-widens-to-deliver-the-bootstrap-provisioning-surface.md) | Phase 032 widens to deliver the bootstrap provisioning surface | Accepted |
 | [0085](0085-a-plan-is-derived-from-a-report-and-one-module-may-start-a-process.md) | A plan is derived from a report, and one module may start a process | Accepted |
+| [0086](0086-phase-033-widens-to-deliver-the-binance-api-reality-registry.md) | Phase 033 widens to deliver the Binance API reality registry | Accepted |
+| [0087](0087-the-api-reality-registry-is-declared-with-provenance-and-drift-is-measured-in-two-regimes.md) | The API reality registry is declared with provenance, and drift is measured in two regimes | Accepted |
 
 ## Relationship to other documents
 

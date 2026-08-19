@@ -185,6 +185,8 @@ REQUIRED_DOCS: tuple[str, ...] = (
     # recurring a fourth time.
     "docs/research/phase_031_sources.md",
     "docs/research/phase_032_sources.md",
+    "docs/research/phase_033_sources.md",
+    "docs/engineering/BINANCE_API_REALITY.md",
     "docs/release/ENVIRONMENT_ACCEPTANCE.md",
     "docs/engineering/GRANULARITY_REVIEW.md",
     "docs/engineering/PROVISIONING.md",

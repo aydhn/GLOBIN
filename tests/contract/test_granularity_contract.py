@@ -103,6 +103,7 @@ ORDINALS: tuple[str, ...] = (
     "Fourteenth",
     "Fifteenth",
     "Sixteenth",
+    "Seventeenth",
 )
 
 
