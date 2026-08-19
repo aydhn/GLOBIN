@@ -592,6 +592,39 @@ ignore_missing_imports = true
 module = ["prometheus_client"]
 ignore_missing_imports = true
 
+# `cryptography` is the eighth, and it is the third time this file has recorded the
+# same failure -- the second time after a comment above PREDICTED it. Phase 035
+# adopted the library, ran mypy locally where it is installed, watched the note
+# `unused section(s)` scroll past on every run, and pushed. Both CI interpreters
+# failed on `import-not-found` while the local gate was green.
+#
+# THE PATTERN ENDS IN `.*`, AND THAT IS NOT COSMETIC. Every override above names a
+# bare module because every one of them is imported as `from psutil import ...` or
+# `from opentelemetry import metrics` -- the module being imported is the top-level
+# one. `globin.adapters.signing` imports SUBMODULES:
+# `from cryptography.hazmat.primitives import hashes`. mypy matches the module
+# actually being imported, so a bare `cryptography` would match nothing here and
+# `warn_unused_configs` would have reported an unused override while CI kept
+# failing. Only the `.*` spelling is listed: the bare name was there in the first
+# draft and mypy reported it unused, because nothing imports `cryptography` itself
+# -- every import in this repository names a submodule.
+#
+# Its reason is `prometheus_client`'s rather than psutil's: absent in CI, and
+# genuinely typed when present -- `cryptography` ships `py.typed`, so on a machine
+# with the library mypy checks `_CryptographyPrimitives` for real. This is purely a
+# CI-absence exemption and should be REMOVED the day the `quality` job installs the
+# runtime lock.
+#
+# HOW TO CHECK THIS WITHOUT PUSHING, which is the mechanism the notes above lacked:
+# mypy resolves imports from the interpreter it is pointed at, so
+#   py -3.12 -m venv <scratch> && <scratch>/Scripts/pip install <the CI pins>
+#   .venv/Scripts/python -m mypy --python-executable <scratch>/Scripts/python.exe ...
+# reproduces the CI typecheck exactly. Blocking the import at runtime does not:
+# mypy never executes anything.
+[[tool.mypy.overrides]]
+module = ["cryptography.*"]
+ignore_missing_imports = true
+
 # ---------------------------------------------------------------------------
 # coverage
 # ---------------------------------------------------------------------------
