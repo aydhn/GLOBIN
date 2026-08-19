@@ -52,6 +52,11 @@ can be opened and read.
   committed registry byte-identical.
 - **No new exit code and no new bootstrap check.** 26 stays free, and nothing in a
   start-up consumes the registry yet.
+- **The evidence names what was read, not only how much.** The manifest carries the
+  document's own digest, the families observed, every source's identity and regime,
+  the counts per status word and the current schema per family — and is rendered
+  twice and scanned for secrets before it is written, both producing a finding
+  rather than an exception so that a failing run still leaves an artefact.
 
 ### Found rather than built
 

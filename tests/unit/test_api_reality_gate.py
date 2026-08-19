@@ -7,10 +7,12 @@ assertion, and the test would be proving that the guard works instead of that th
 gate does.
 """
 
+import re
 from pathlib import Path
 
 import pytest
 
+from tools.quality.venue import gate, plan
 from tools.quality.venue.cli import USAGE, UsageError, main, parse
 from tools.quality.venue.gate import (
     EXIT_GATE_FAILED,
@@ -27,7 +29,10 @@ from tools.quality.venue.plan import (
     REASON_DUPLICATE_IDENTITY,
     REASON_ENDPOINT_ENVIRONMENT,
     REASON_FIX_UNPROTECTED,
+    REASON_MANIFEST_LEAKAGE,
+    REASON_MANIFEST_NONDETERMINISTIC,
     REASON_OBSERVED_CLAIMED,
+    REASON_SCHEMA,
     REASON_SOURCE_CHANGED,
     REASON_SOURCE_OFF_ALLOWLIST,
     REASON_SOURCE_UNDECLARED,
@@ -456,3 +461,117 @@ class TestEntryPoint:
         """The offline default over the real tree, which is what CI runs."""
         assert main([]) == EXIT_OK
         assert "api-reality" in capsys.readouterr().out
+
+
+class TestPublishing:
+    """The manifest is checked before it is written, and both checks report.
+
+    Neither raises. A gate that raised would leave no artefact and be
+    indistinguishable from one that never ran, which is the reason every sibling
+    turns these two into findings.
+    """
+
+    def registry(self, tmp_path: Path, text: str) -> Path:
+        """Write one registry into a temporary tree.
+
+        Args:
+            tmp_path: The tree.
+            text: The declaration.
+
+        Returns:
+            The root.
+        """
+        target = tmp_path / "docs" / "engineering"
+        target.mkdir(parents=True)
+        (target / "binance-api-reality.toml").write_text(text, encoding="utf-8")
+        return tmp_path
+
+    def test_an_unrecognised_schema_is_its_own_reason(self, tmp_path: Path) -> None:
+        """A version skew and a syntax defect are different problems.
+
+        Reporting both as unreadable would send a reader looking for a broken
+        document when what changed is which version this gate reads.
+        """
+        outcome = run_api_reality(root=self.registry(tmp_path, "schema = 99\n"))
+        assert outcome.code == EXIT_UNMEASURED
+        assert {item.reason for item in outcome.findings} == {REASON_SCHEMA}
+
+    def test_a_manifest_that_renders_differently_twice_is_reported(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Determinism is checked rather than intended, and a failure still writes."""
+        answers = iter(["first\n", "second\n", "third\n", "fourth\n"])
+
+        def unstable(document: object) -> str:  # noqa: ARG001
+            return next(answers)
+
+        monkeypatch.setattr(gate, "render_manifest", unstable)
+        outcome = run_api_reality(root=self.registry(tmp_path, MINIMAL))
+        assert outcome.code == EXIT_GATE_FAILED
+        assert REASON_MANIFEST_NONDETERMINISTIC in {item.reason for item in outcome.findings}
+        assert (tmp_path / ".globin" / "venue" / "api-reality-manifest.json").is_file()
+
+    def test_secret_shaped_content_in_the_manifest_is_reported(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The published artefact is scanned before it reaches the disk.
+
+        The scanner is substituted rather than fed a real credential shape: a
+        secret-shaped fixture becomes published evidence itself, which is the trap
+        the evidence gate exists to catch.
+        """
+
+        def leaking(source: str, text: str) -> tuple[str, ...]:  # noqa: ARG001
+            return ("a finding",)
+
+        def described(leaks: object) -> str:  # noqa: ARG001
+            return "something leaked"
+
+        monkeypatch.setattr(gate, "scan_for_secrets", leaking)
+        monkeypatch.setattr(gate, "describe_findings", described)
+        outcome = run_api_reality(root=self.registry(tmp_path, MINIMAL))
+        assert outcome.code == EXIT_GATE_FAILED
+        assert REASON_MANIFEST_LEAKAGE in {item.reason for item in outcome.findings}
+
+
+def test_every_declared_reason_has_a_producer() -> None:
+    """A reason nothing can report is a vocabulary entry pretending to be a check.
+
+    Three of these had no producer when the gate was first written -- the schema
+    refusal raised instead of reporting, and neither manifest check existed. The
+    rule is asserted here rather than remembered, because the failure is invisible:
+    an unproducible reason makes the closed set look more thorough than it is.
+
+    The comparison is on the constant *names* rather than their values, because a
+    ``Finding`` is always constructed from the constant and never from the literal.
+    """
+    sources = Path(plan.__file__).read_text(encoding="utf-8")
+    body = sources + Path(gate.__file__).read_text(encoding="utf-8")
+    pattern = r'^(REASON_[A-Z_]+): Final\[str\] = "([A-Z_]+)"'
+    declared = dict(re.findall(pattern, sources, re.MULTILINE))
+    assert set(declared.values()) == REASONS, "the closed set and the constants disagree"
+    orphans = sorted(
+        name for name in declared if not re.search(r"Finding\(\s*" + name + r"\b", body)
+    )
+    assert not orphans, f"declared reasons nothing can report: {orphans}"
+
+
+def test_the_manifest_records_what_the_phase_promised() -> None:
+    """The evidence covers the inventory a later phase would ask this gate for.
+
+    Counts alone would say the registry was read; these say *what* was read, which
+    is what makes two runs comparable when a source or a family moves.
+    """
+    outcome = run_api_reality()
+    assert outcome.code == EXIT_OK
+    written = Path(".globin") / "venue" / "api-reality-manifest.json"
+    document = load(written.read_text(encoding="utf-8"))
+    run = document["run"]
+    findings = document["findings"]
+    assert isinstance(run, dict)
+    assert isinstance(findings, dict)
+    for key in ("registry_schema", "registry_digest", "products", "environments", "sources"):
+        assert key in run, f"the manifest omits run.{key}"
+    for key in ("status_counts", "current_schemas"):
+        assert key in findings, f"the manifest omits findings.{key}"
+    assert document["phase"] == 33

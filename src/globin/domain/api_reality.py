@@ -47,7 +47,7 @@ single ``encoding`` per endpoint cannot describe it
 
 **Nothing here performs I/O, and nothing here reaches the venue.** The registry is
 parsed by :mod:`globin.adapters.api_reality` because ``tomllib`` is I/O-capable,
-and it is refreshed by ``tools/quality/api_reality`` because no module in this
+and it is refreshed by ``tools/quality/venue`` because no module in this
 package may open an outbound connection.
 """
 

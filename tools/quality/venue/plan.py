@@ -149,6 +149,17 @@ class RegistryError(Exception):
     """
 
 
+class SchemaError(RegistryError):
+    """The registry is readable and announces a shape this gate does not read.
+
+    Its own class so that :data:`REASON_SCHEMA` has a producer. A document nobody
+    can parse and a document parsed fine but written to another version are
+    different problems with different repairs -- one is a syntax defect and the
+    other is a version skew between this gate and the declaration -- and reporting
+    both as unreadable would send a reader looking for the wrong thing.
+    """
+
+
 @dataclass(frozen=True, slots=True, order=True)
 class Finding:
     """One thing wrong with the registry.
@@ -254,7 +265,7 @@ def parse_declaration(text: str) -> Declaration:
     announced = document.get("schema")
     if announced != SUPPORTED_SCHEMA:
         msg = f"the registry announces schema {announced!r} and this gate reads {SUPPORTED_SCHEMA}"
-        raise RegistryError(msg)
+        raise SchemaError(msg)
     return Declaration(
         sources=tuple(
             Source(

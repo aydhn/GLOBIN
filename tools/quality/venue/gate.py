@@ -29,6 +29,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from tools.quality.evidence.redaction import describe as describe_findings
+from tools.quality.evidence.redaction import scan as scan_for_secrets
 from tools.quality.venue.manifest import (
     DIRECTORY,
     MANIFEST_NAME,
@@ -40,17 +42,24 @@ from tools.quality.venue.manifest import (
     render as render_manifest,
 )
 from tools.quality.venue.plan import (
+    LATEST,
     MANUAL,
+    REASON_MANIFEST_LEAKAGE,
+    REASON_MANIFEST_NONDETERMINISTIC,
+    REASON_SCHEMA,
     REASON_SOURCE_CHANGED,
     REASON_SOURCE_UNREACHABLE,
     REASON_STRUCTURED_UNPARSEABLE,
     REASON_UNPARSEABLE_RECOVERED,
     REASON_UNREADABLE,
     REASONS,
+    STATUSES,
     STRUCTURED,
+    SUPPORTED_SCHEMA,
     Declaration,
     Finding,
     RegistryError,
+    SchemaError,
     Source,
     findings_for,
     host_permitted,
@@ -254,6 +263,80 @@ def _parse_findings(source: Source, subject: str, body: bytes) -> list[Finding]:
     return []
 
 
+def _inventory(declaration: Declaration, *, digest: str, schema: object) -> dict[str, object]:
+    """What the registry contains, as counts and identities rather than as a copy.
+
+    Args:
+        declaration: The registry.
+        digest: The declaration file's own content digest.
+        schema: The shape number the document announces.
+
+    Returns:
+        A mapping every value of which is a string, integer or sorted list.
+
+    A manifest embedding the registry would change whenever the registry did and
+    establish nothing about either. What is recorded instead is what somebody
+    comparing two runs would actually ask: which families were seen, which sources
+    were rested on, and what each one hashed to.
+    """
+    return {
+        "registry_schema": schema,
+        "registry_digest": digest,
+        "products": sorted({str(row.get("family")) for row in declaration.products}),
+        "environments": sorted({str(row.get("environment")) for row in declaration.environments}),
+        "protocols": sorted({str(row.get("protocol")) for row in declaration.surfaces}),
+        "sources": [
+            {
+                "id": item.identifier,
+                "regime": item.regime,
+                "digest": item.digest,
+                "known_unparseable": item.known_unparseable,
+            }
+            for item in sorted(declaration.sources, key=lambda item: item.identifier)
+        ],
+    }
+
+
+def _status_counts(declaration: Declaration) -> dict[str, int]:
+    """How many rows carry each status word.
+
+    Args:
+        declaration: The registry.
+
+    Returns:
+        Every word in :data:`STATUSES` mapped to its count, zeroes included -- an
+        absent key would read as an absent question rather than an empty answer.
+
+    Recomputed here rather than read from the package, which this gate does not
+    import. If the two ever disagree, one of them is miscounting a document they
+    both claim to understand.
+    """
+    counts = dict.fromkeys(sorted(STATUSES), 0)
+    for _subject, row in declaration.capability_rows:
+        word = str(row.get("status", ""))
+        if word in counts:
+            counts[word] += 1
+    return counts
+
+
+def _current_schemas(declaration: Declaration) -> dict[str, str]:
+    """Which schema version is current, per family and environment.
+
+    Args:
+        declaration: The registry.
+
+    Returns:
+        A mapping of ``family/environment`` to the ``id:version`` label.
+    """
+    found: dict[str, str] = {}
+    for row in declaration.schemas:
+        if str(row.get("state")) != LATEST:
+            continue
+        key = f"{row.get('family')}/{row.get('environment')}"
+        found[key] = f"{row.get('schema_id')}:{row.get('version')}"
+    return found
+
+
 def run_api_reality(
     *,
     root: Path | None = None,
@@ -277,40 +360,55 @@ def run_api_reality(
     path = base / REGISTRY_PATH
     directory = base / ARTEFACT_ROOT / DIRECTORY
     try:
-        declaration = parse_declaration(path.read_text(encoding="utf-8"))
-    except (OSError, RegistryError) as fault:
+        raw = path.read_bytes()
+        declaration = parse_declaration(raw.decode("utf-8"))
+    except SchemaError as fault:
+        return _publish(
+            directory,
+            findings=(Finding(REASON_SCHEMA, REGISTRY_PATH, str(fault)),),
+            code=EXIT_UNMEASURED,
+            run={"registry": REGISTRY_PATH, "reached_network": False, "sources_checked": 0},
+            findings_extra={},
+        )
+    except (OSError, UnicodeDecodeError, RegistryError) as fault:
         return _publish(
             directory,
             findings=(Finding(REASON_UNREADABLE, REGISTRY_PATH, str(fault)),),
             code=EXIT_UNMEASURED,
-            reached_network=False,
-            checked=0,
-            counts={},
+            run={"registry": REGISTRY_PATH, "reached_network": False, "sources_checked": 0},
+            findings_extra={},
         )
     found = list(findings_for(declaration))
     checked = 0
     if refresh:
         extra, checked = _refresh_findings(declaration, fetcher=fetcher or fetch, timeout=timeout)
         found += extra
-    counts = {
-        "sources": len(declaration.sources),
-        "products": len(declaration.products),
-        "surfaces": len(declaration.surfaces),
-        "environments": len(declaration.environments),
-        "endpoints": len(declaration.endpoints),
-        "schema_versions": len(declaration.schemas),
+    digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+    run = {
+        "registry": REGISTRY_PATH,
+        "reached_network": refresh,
+        "sources_checked": checked,
+        "counts": {
+            "sources": len(declaration.sources),
+            "products": len(declaration.products),
+            "surfaces": len(declaration.surfaces),
+            "environments": len(declaration.environments),
+            "endpoints": len(declaration.endpoints),
+            "schema_versions": len(declaration.schemas),
+        },
+        **_inventory(declaration, digest=digest, schema=SUPPORTED_SCHEMA),
     }
-    code = EXIT_GATE_FAILED if found else EXIT_OK
     return _publish(
         directory,
         findings=tuple(sorted(found)),
-        code=code,
+        code=EXIT_GATE_FAILED if found else EXIT_OK,
+        run=run,
+        findings_extra={
+            "status_counts": _status_counts(declaration),
+            "current_schemas": _current_schemas(declaration),
+        },
         reached_network=refresh,
         checked=checked,
-        counts=counts,
-        owned=tuple(
-            sorted(item.identifier for item in declaration.sources if item.known_unparseable)
-        ),
     )
 
 
@@ -319,10 +417,10 @@ def _publish(
     *,
     findings: tuple[Finding, ...],
     code: int,
-    reached_network: bool,
-    checked: int,
-    counts: dict[str, int],
-    owned: tuple[str, ...] = (),
+    run: dict[str, object],
+    findings_extra: dict[str, object],
+    reached_network: bool = False,
+    checked: int = 0,
 ) -> Outcome:
     """Write the manifest and return the outcome.
 
@@ -330,37 +428,51 @@ def _publish(
         directory: Where the manifest goes.
         findings: What was concluded.
         code: The exit code.
+        run: What was read, and whether the network was reached.
+        findings_extra: The recomputed inventory published beside the findings.
         reached_network: Whether anything was fetched.
         checked: How many sources were re-checked.
-        counts: How many rows of each kind the registry carries.
-        owned: Sources whose unparseability is declared rather than discovered.
 
     Returns:
         The outcome.
 
-    The manifest is rendered twice and compared before anything is written, which
-    is what makes the determinism claim a check rather than an intention. The
-    fetched-source count is deliberately outside that comparison's scope by being
-    absent from ``findings``: it moves between an offline and a networked run.
+    The manifest is rendered twice and compared before anything is written, and
+    then scanned for secret-shaped content. Both produce a **finding** rather than
+    an exception, because a gate that raised would leave no artefact and be
+    indistinguishable from one that never ran.
     """
-    document = build_manifest(
-        run={
-            "registry": REGISTRY_PATH,
-            "reached_network": reached_network,
-            "sources_checked": checked,
-            "known_unparseable": list(owned),
-            "counts": counts,
-        },
-        findings={"count": len(findings), "items": [item.as_record() for item in findings]},
-        verdict={
-            "code": code,
-            "reasons": sorted({item.reason for item in findings}),
-        },
-    )
-    rendered = render_manifest(document)
-    if rendered != render_manifest(document):
-        message = "two renderings of the same api reality manifest disagreed"
-        raise RegistryError(message)
+
+    def assemble(items: tuple[Finding, ...], verdict_code: int) -> dict[str, object]:
+        return build_manifest(
+            run=run,
+            findings={
+                "count": len(items),
+                "items": [item.as_record() for item in items],
+                **findings_extra,
+            },
+            verdict={"code": verdict_code, "reasons": sorted({item.reason for item in items})},
+        )
+
+    rendered = render_manifest(assemble(findings, code))
+    if rendered != render_manifest(assemble(findings, code)):
+        findings = (
+            *findings,
+            Finding(
+                REASON_MANIFEST_NONDETERMINISTIC,
+                MANIFEST_NAME,
+                "two renderings of the same run disagreed",
+            ),
+        )
+        code = EXIT_GATE_FAILED
+        rendered = render_manifest(assemble(findings, code))
+    leaks = scan_for_secrets(MANIFEST_NAME, rendered)
+    if leaks:
+        findings = (
+            *findings,
+            Finding(REASON_MANIFEST_LEAKAGE, MANIFEST_NAME, describe_findings(leaks)),
+        )
+        code = EXIT_GATE_FAILED
+        rendered = render_manifest(assemble(findings, code))
     directory.mkdir(parents=True, exist_ok=True)
     (directory / MANIFEST_NAME).write_text(rendered, encoding="utf-8", newline="\n")
     return Outcome(code=code, findings=findings, reached_network=reached_network, checked=checked)

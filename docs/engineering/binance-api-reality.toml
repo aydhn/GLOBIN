@@ -2,7 +2,7 @@
 # GLOBIN Binance API reality registry.
 #
 # The single place a Binance fact is written down. Parsed by
-# `globin.adapters.api_reality`, recomputed by `python -m tools.quality.api_reality`,
+# `globin.adapters.api_reality`, recomputed by `python -m tools.quality venue`,
 # and refreshed -- deliberately from outside the package -- by that gate's
 # `refresh` verb.
 #

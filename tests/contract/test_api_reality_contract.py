@@ -18,6 +18,7 @@ from globin.domain.api_reality import (
     EvidenceKind,
     ProductFamily,
     ProtocolKind,
+    SourceRegime,
     SurfaceStatus,
 )
 from tools.quality.venue.gate import REGISTRY_PATH as GATE_REGISTRY_PATH
@@ -230,3 +231,80 @@ def test_the_registry_announces_the_schema_the_package_reads(repo_root: Path) ->
     document = tomllib.loads((repo_root / REGISTRY_PATH).read_text(encoding="utf-8"))
     assert document["schema"] == 1
     assert document["target"]["phase"] == 33
+
+
+DOCUMENT: Final[str] = "docs/engineering/BINANCE_API_REALITY.md"
+
+
+@pytest.fixture(scope="module")
+def guide(repo_root: Path) -> str:
+    """The living document that describes the registry.
+
+    Args:
+        repo_root: The repository root.
+
+    Returns:
+        Its text.
+    """
+    return (repo_root / DOCUMENT).read_text(encoding="utf-8")
+
+
+def test_the_guide_states_the_counts_the_registry_carries(
+    guide: str, registry: ApiRealitySnapshot
+) -> None:
+    """Every number in the document's summary table is recomputed from the registry.
+
+    The document hedges the table as a dated snapshot and points a reader at the
+    command, which is honest but not sufficient: a restatement nothing compares is a
+    copy waiting to drift, and this repository binds those rather than dating them.
+    """
+    rows = {
+        "Product families": len(registry.products),
+        "Product-and-protocol surfaces": len(registry.surfaces),
+        "Product-and-environment pairs": len(registry.environments),
+        "Schema versions": len(registry.schemas),
+    }
+    for label, count in rows.items():
+        assert f"| {label} | {count} |" in guide, f"{DOCUMENT} misstates {label}"
+    assert f"| Endpoints | {len(registry.endpoints)}, all Spot |" in guide
+    assert f"| Sources | {len(registry.sources)}," in guide
+
+
+def test_the_guide_states_how_many_sources_cannot_be_rechecked(
+    guide: str, registry: ApiRealitySnapshot
+) -> None:
+    """The limit of drift detection is published, so it is stated rather than found."""
+    found = len(registry.unrefreshable_sources())
+    assert f"of which {found} cannot be re-checked at all" in guide
+
+
+def test_the_guide_lists_every_verb_the_group_answers(guide: str) -> None:
+    """A verb missing from the document is one nobody finds.
+
+    Compared against the closed tuple in the CLI rather than a hand-written list, so
+    an eighth verb cannot arrive undocumented.
+    """
+    from globin.runtime.cli import API_REALITY_SUBCOMMANDS
+
+    for verb in API_REALITY_SUBCOMMANDS:
+        assert f"`{verb}" in guide, f"{DOCUMENT} does not mention the {verb!r} verb"
+    spelled = {3: "Three", 4: "Four", 5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
+    assert f"{spelled[len(API_REALITY_SUBCOMMANDS)]} read-only verbs" in guide
+
+
+def test_the_guide_states_how_many_lifecycle_files_do_not_parse(
+    guide: str, registry: ApiRealitySnapshot
+) -> None:
+    """A measured defect in the venue's own files, restated and therefore compared.
+
+    If Binance repairs one, the gate fails on the recovered source and this fails on
+    the count, so the document cannot go on describing a world that has moved.
+    """
+    structured = [item for item in registry.sources if item.regime is SourceRegime.STRUCTURED]
+    broken = [item for item in structured if item.known_unparseable]
+    spelled = {1: "one", 2: "two", 3: "three", 4: "four"}
+    claim = (
+        f"{spelled[len(broken)].capitalize()} of Binance's "
+        f"{spelled[len(structured)]} lifecycle files are not valid JSON"
+    )
+    assert claim in guide, f"{DOCUMENT} does not state {claim!r}"

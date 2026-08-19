@@ -26,7 +26,7 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 | Fact | Value |
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
-| Completed phases | **001-032** |
+| Completed phases | **001-033** |
 | Released versions | **`v0.1.0`** (foundation, Phases 001-016) and **`v0.2.0`** (environment, Phases 017-032). Both published and **immutable**; a published release is never repaired, so a defect in one is rolled forward to the next `PATCH`. |
 | Phase 001 | **Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
 | Phase 002 | **Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Commit `9c46313`, pushed. |

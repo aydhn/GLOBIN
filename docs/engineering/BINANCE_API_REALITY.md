@@ -186,6 +186,27 @@ condition, two current schemas for one family, an endpoint scheme that is not
 encrypted, a FIX endpoint that does not require TLS **and** SNI, and an endpoint
 whose host contradicts its environment.
 
+### What the manifest records
+
+Counts alone would say the registry was read. The manifest says *what* was read, so
+that two runs are comparable when a source or a family moves:
+
+| Where | What |
+|---|---|
+| `run.registry_schema`, `run.registry_digest` | Which shape was read, and the document's own SHA-256 |
+| `run.products`, `run.environments`, `run.protocols` | The families actually observed, sorted |
+| `run.sources` | Every source's identity, regime, digest and owned-unparseability |
+| `run.reached_network`, `run.sources_checked` | Whether the venue was asked, and how many answered |
+| `findings.status_counts` | How many rows carry each of the six words, zeroes included |
+| `findings.current_schemas` | Which schema version is current, per family and environment |
+| `findings.items`, `verdict` | What was wrong, and the single answer |
+
+It carries **no clock and no absolute path**, so it can be compared with itself.
+Before it is written it is rendered twice and compared, then scanned for
+secret-shaped content — and both checks produce a **finding** rather than an
+exception, because a gate that raised would leave no artefact and be
+indistinguishable from one that never ran.
+
 ---
 
 ## Refreshing it

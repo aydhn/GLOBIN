@@ -195,6 +195,20 @@ def test_the_package_docstring_states_the_delivered_frontier() -> None:
     assert expected in globin.__doc__, f"globin.__doc__ does not state {expected!r}"
 
 
+def test_the_memory_document_states_the_delivered_frontier(repo_root: Path) -> None:
+    """The fourth place the frontier is written down, and the last to be bound.
+
+    `README.md`, `globin.__doc__` and `ROADMAP.md`'s banner have been checked since
+    Phase 003. `MEMORY.md` said the same thing and nothing compared it, so at Phase
+    033 it drifted: the row still read `001-032` after the phase shipped. It is the
+    document an agent reads first, which makes a stale frontier there worse than a
+    stale one anywhere else.
+    """
+    memory = (repo_root / "MEMORY.md").read_text(encoding="utf-8")
+    expected = f"| Completed phases | **001-{LAST_COMPLETED_PHASE:03d}** |"
+    assert expected in memory, f"MEMORY.md does not state {expected!r}"
+
+
 def test_the_roadmap_banner_states_the_delivered_frontier(roadmap_text: str) -> None:
     """The banner is what stops a reader inferring maturity from the table."""
     for claim in (
