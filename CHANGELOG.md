@@ -91,6 +91,25 @@ can be opened and read.
   counts too — nothing is lost, since every failing check already has its own row
   and its own remediation directly above it.
 
+- **The signing adapter is now tested where the library is absent, which is CI.**
+  `test_signing.py` opens with a module-level `importorskip`, so every test in it
+  was skipped wherever `cryptography` is missing — every CI `quality` run. Most of
+  what it covers needs the library; the refusals do not. `_refuse_key_format` and
+  `_describe_shape` decide from an armour line alone that material is encrypted, is
+  PKCS#1 rather than PKCS#8, is a public key, or is not PEM at all, and they are the
+  half that stops a mis-filed key reaching a parser and guarantees no fragment of
+  key material reaches a message. **`UnavailableAsymmetricSigner.sign` was in the
+  same position** — the no-fallback guarantee reduced to one call, asserted nowhere
+  the arm actually runs.
+
+  The two real signers are exercised on **injected doubles**. They take their
+  primitives as a constructor argument so that neither class names an import, and
+  that same injection makes their own decisions testable with no library and no key:
+  the RSA key-size bounds, the declared-type check, the parser cause deliberately
+  not chained, and the ordering that puts the text refusal before the loader.
+  `adapters/signing.py` goes from 71% to 96% where `cryptography` is absent, and the
+  six lines left are the import arm and what only exists behind it.
+
 ### The first phase that connects to the venue
 
 - **A REST transport whose endpoint comes from the registry and nowhere else.**

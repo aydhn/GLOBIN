@@ -264,6 +264,59 @@ def test_a_signature_beyond_the_bound_is_refused() -> None:
         GeneratedSignature("a" * (MAX_SIGNATURE_LENGTH + 1), SignatureAlgorithm.HMAC_SHA256)
 
 
+def test_an_empty_signature_is_refused() -> None:
+    """A signer that produced nothing is a failure, not a signature of length zero.
+
+    Without this the empty string would validate as both hex and base64 -- neither
+    decoder objects to no input -- and travel to the venue as `signature=`.
+    """
+    with pytest.raises(ValidationError, match="empty"):
+        GeneratedSignature("", SignatureAlgorithm.HMAC_SHA256)
+
+
+def test_a_signature_declared_hex_that_is_not_hex_is_refused() -> None:
+    """The encoding a signature claims is checked against what it is.
+
+    HMAC renders hex. A value that is not hex means the signer and this type
+    disagree about what was produced, which must fail here rather than at the venue
+    as an opaque `-1022`.
+    """
+    with pytest.raises(ValidationError, match="declared hex"):
+        GeneratedSignature("zzzz", SignatureAlgorithm.HMAC_SHA256)
+
+
+@pytest.mark.parametrize(
+    "algorithm",
+    [
+        pytest.param(SignatureAlgorithm.ED25519, id="ed25519"),
+        pytest.param(SignatureAlgorithm.RSA_PKCS1V15_SHA256, id="rsa"),
+    ],
+)
+def test_a_signature_declared_base64_that_is_not_base64_is_refused(
+    algorithm: SignatureAlgorithm,
+) -> None:
+    """Both asymmetric algorithms render base64, and both are validated.
+
+    `validate=True` is what makes this bite: without it `b64decode` discards
+    characters outside the alphabet and returns a shorter result rather than
+    objecting, so a corrupted signature would pass.
+    """
+    with pytest.raises(ValidationError, match="declared base64"):
+        GeneratedSignature("not base64!!", algorithm)
+
+
+def test_a_signature_is_never_equal_to_something_that_is_not_one() -> None:
+    """Comparison against a foreign type defers rather than claiming inequality.
+
+    Returning `NotImplemented` lets Python try the reflected operation, which is
+    what keeps `signature == "abc"` answering False instead of raising.
+    """
+    signature = GeneratedSignature("ab" * 32, SignatureAlgorithm.HMAC_SHA256)
+    assert signature != "ab" * 32
+    assert signature != object()
+    assert signature == GeneratedSignature("ab" * 32, SignatureAlgorithm.HMAC_SHA256)
+
+
 # ---------------------------------------------------------------------------
 # The signing payload
 # ---------------------------------------------------------------------------

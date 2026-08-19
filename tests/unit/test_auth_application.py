@@ -24,6 +24,8 @@ from globin.application.auth import (
     AuthPolicy,
     AuthResolution,
     SigningOutcome,
+    _mapping_finding,
+    _recv_window_finding,
     credential_summary,
     resolve_auth,
     self_test,
@@ -679,3 +681,98 @@ def test_an_unconfigured_credential_summarises_as_absent() -> None:
 def test_a_summary_with_no_resolved_key_omits_the_fingerprint() -> None:
     """`None` rather than an empty string, which would look like a fingerprint of nothing."""
     assert credential_summary(_binding())["fingerprint"] is None
+
+
+# ---------------------------------------------------------------------------
+# Guarding the guard
+# ---------------------------------------------------------------------------
+#
+# `self_test` recomputes the phase's invariants and reports findings. Every
+# assertion above checks that it *passes* -- which it would also do if its failure
+# arms were unreachable or silently swallowed a problem. These break one invariant
+# at a time and check the corresponding finding actually notices, which is the same
+# shape as `test_the_section_name_check_would_catch_the_defect_it_was_written_for`
+# in `tests/contract/test_bootstrap_contract.py`.
+
+
+def test_the_mapping_check_notices_a_key_type_that_maps_nowhere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If `algorithm_for` stopped being total, the self-test must say so."""
+
+    def refuse(key_type: ApiKeyType) -> SignatureAlgorithm:
+        msg = f"no algorithm for {key_type.value}"
+        raise ValidationError(msg)
+
+    monkeypatch.setattr("globin.application.auth.algorithm_for", refuse)
+    finding = _mapping_finding()
+    assert not finding.passed
+    assert "hmac" in finding.detail
+
+
+def test_the_mapping_check_notices_an_algorithm_that_does_not_map_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The round trip is the property; a one-way mapping is the defect it guards."""
+
+    def always_ed25519(algorithm: SignatureAlgorithm) -> ApiKeyType:
+        del algorithm
+        return ApiKeyType.ED25519
+
+    monkeypatch.setattr("globin.application.auth.key_type_for", always_ed25519)
+    finding = _mapping_finding()
+    assert not finding.passed
+    assert "does not map back" in finding.detail
+
+
+def test_the_recv_window_check_notices_a_changed_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """5000 ms is documented; a silent change to it must not pass unnoticed."""
+    monkeypatch.setattr(
+        "globin.application.auth.default_recv_window", lambda: RecvWindow(Decimal(4000))
+    )
+    finding = _recv_window_finding()
+    assert not finding.passed
+    assert "documented as 5000" in finding.detail
+
+
+def test_the_recv_window_check_notices_a_ceiling_that_stopped_being_enforced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A window type that accepted anything would pass every other assertion here.
+
+    The check works by handing `RecvWindow` values the venue documents as invalid
+    and requiring each to be refused. This replaces it with one that accepts them,
+    which is precisely the regression the check exists to catch.
+    """
+
+    class _Permissive:
+        def __init__(self, millis: Decimal) -> None:
+            self.millis = millis
+
+    monkeypatch.setattr("globin.application.auth.RecvWindow", _Permissive)
+    finding = _recv_window_finding()
+    assert not finding.passed
+    assert "60000.001 was accepted" in finding.detail
+    assert "5000.1234 was accepted" in finding.detail
+
+
+def test_the_recv_window_check_notices_the_documented_example_being_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`6000.346` is the venue's own published example, so refusing it is a defect.
+
+    The three-decimal allowance is easy to lose to a rounding or a validation
+    tightened without reading the source, and nothing else here would notice.
+    """
+
+    class _RefusesEverything:
+        def __init__(self, millis: Decimal) -> None:
+            msg = f"refused {millis}"
+            raise ValidationError(msg)
+
+    monkeypatch.setattr("globin.application.auth.RecvWindow", _RefusesEverything)
+    finding = _recv_window_finding()
+    assert not finding.passed
+    assert "6000.346 was refused" in finding.detail
