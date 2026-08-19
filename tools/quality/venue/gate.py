@@ -31,6 +31,20 @@ from typing import Final
 
 from tools.quality.evidence.redaction import describe as describe_findings
 from tools.quality.evidence.redaction import scan as scan_for_secrets
+from tools.quality.venue.ingestion import (
+    ACKNOWLEDGEMENTS_PATH,
+    REASON_ACKNOWLEDGEMENT_STALE,
+    REASON_DRIFT_UNACKNOWLEDGED,
+    REASON_SOURCE_STALE,
+    ages,
+    append_journal,
+    read_acknowledgements,
+    read_journal,
+    read_policy,
+    superseded,
+    today,
+    unacknowledged,
+)
 from tools.quality.venue.manifest import (
     DIRECTORY,
     MANIFEST_NAME,
@@ -168,6 +182,12 @@ class Outcome:
     findings: tuple[Finding, ...]
     reached_network: bool
     checked: int
+    notes: tuple[Finding, ...] = ()
+    """What was observed and does not fail the gate.
+
+    A stale source lives here. It refuses a REST resolution inside GLOBIN and does
+    not redden this gate -- see :func:`_ingestion` for why the two differ.
+    """
 
 
 def _refresh_findings(
@@ -336,6 +356,81 @@ def _current_schemas(declaration: Declaration) -> dict[str, str]:
     return found
 
 
+def _ingestion(
+    declaration: Declaration, base: Path, *, refresh: bool, found: list[Finding]
+) -> tuple[list[Finding], list[Finding], dict[str, object]]:
+    """Age every source, check the acknowledgement ledger, and record the run.
+
+    Args:
+        declaration: The parsed registry.
+        base: The repository root.
+        refresh: Whether the venue was actually asked.
+        found: The findings so far, which the ledger is checked against.
+
+    Returns:
+        Findings that fail, notes that do not, and what to publish about ageing.
+
+    Raises:
+        PolicyError: If the cadence or the ledger is present and malformed.
+
+    **Ageing produces notes and never findings**, which is the one judgement in
+    this function. A source past its cadence refuses a REST resolution inside
+    GLOBIN -- that is what fails closed -- but it does not turn this gate red,
+    because a gate that reddens on a calendar, on a machine that may have no
+    network to clear it with, is a gate people re-run instead of read.
+
+    **The ledger is only consulted after a refresh.** A ``check`` run reaches
+    nothing, so it produces no source-changed findings; asking whether each was
+    acknowledged would report every acknowledgement as superseded on every offline
+    run.
+    """
+    policy = read_policy(base)
+    if policy is None:
+        return [], [], {"cadence": "unmeasured"}
+    as_of = today()
+    aged = ages(declaration.sources, policy, as_of=as_of)
+    notes = [
+        Finding(
+            REASON_SOURCE_STALE,
+            item.identifier,
+            f"read {item.age_days} days ago and its {item.regime} cadence allows "
+            f"{item.allowed_days}; anything resting on it will not resolve",
+        )
+        for item in aged
+        if item.stale
+    ]
+    published: dict[str, object] = {
+        "as_of": as_of,
+        "stale": [item.identifier for item in aged if item.stale],
+        "ages": [item.as_record() for item in aged],
+    }
+    if not refresh:
+        return [], notes, published
+    ledger = read_acknowledgements(base)
+    pairs = [(item.reason, item.subject) for item in found]
+    failing = [
+        Finding(
+            REASON_DRIFT_UNACKNOWLEDGED,
+            subject,
+            f"{reason} needs a written decision in {ACKNOWLEDGEMENTS_PATH} before this "
+            "gate passes; re-read the document, or record what you concluded",
+        )
+        for reason, subject in unacknowledged(pairs, policy, ledger)
+    ]
+    failing += [
+        Finding(
+            REASON_ACKNOWLEDGEMENT_STALE,
+            item.subject,
+            f"{ACKNOWLEDGEMENTS_PATH} acknowledges {item.finding} for this subject and the "
+            "finding no longer occurs; remove the row rather than leaving a standing "
+            "permission nobody re-examined",
+        )
+        for item in superseded(pairs, ledger)
+    ]
+    published["acknowledgements"] = len(ledger)
+    return failing, notes, published
+
+
 def run_api_reality(
     *,
     root: Path | None = None,
@@ -382,6 +477,8 @@ def run_api_reality(
     if refresh:
         extra, checked = _refresh_findings(declaration, fetcher=fetcher or fetch, timeout=timeout)
         found += extra
+    failing, notes, ingestion = _ingestion(declaration, base, refresh=refresh, found=found)
+    found += failing
     digest = "sha256:" + hashlib.sha256(raw).hexdigest()
     run = {
         "registry": REGISTRY_PATH,
@@ -395,8 +492,19 @@ def run_api_reality(
             "endpoints": len(declaration.endpoints),
             "schema_versions": len(declaration.schemas),
         },
+        "ingestion": ingestion,
         **_inventory(declaration, digest=digest, schema=SUPPORTED_SCHEMA),
     }
+    if refresh and found:
+        append_journal(
+            directory,
+            {
+                "recorded_at": ingestion.get("as_of", ""),
+                "registry_digest": digest,
+                "sources_checked": checked,
+                "findings": [item.as_record() for item in sorted(found)],
+            },
+        )
     return _publish(
         directory,
         findings=tuple(sorted(found)),
@@ -405,9 +513,11 @@ def run_api_reality(
         findings_extra={
             "status_counts": _status_counts(declaration),
             "current_schemas": _current_schemas(declaration),
+            "notes": [item.as_record() for item in sorted(notes)],
         },
         reached_network=refresh,
         checked=checked,
+        notes=tuple(sorted(notes)),
     )
 
 
@@ -420,6 +530,7 @@ def _publish(
     findings_extra: dict[str, object],
     reached_network: bool = False,
     checked: int = 0,
+    notes: tuple[Finding, ...] = (),
 ) -> Outcome:
     """Write the manifest and return the outcome.
 
@@ -431,6 +542,7 @@ def _publish(
         findings_extra: The recomputed inventory published beside the findings.
         reached_network: Whether anything was fetched.
         checked: How many sources were re-checked.
+        notes: What was observed and does not fail the gate.
 
     Returns:
         The outcome.
@@ -474,7 +586,13 @@ def _publish(
         rendered = render_manifest(assemble(findings, code))
     directory.mkdir(parents=True, exist_ok=True)
     (directory / MANIFEST_NAME).write_text(rendered, encoding="utf-8", newline="\n")
-    return Outcome(code=code, findings=findings, reached_network=reached_network, checked=checked)
+    return Outcome(
+        code=code,
+        findings=findings,
+        reached_network=reached_network,
+        checked=checked,
+        notes=notes,
+    )
 
 
 def describe(outcome: Outcome) -> str:
@@ -492,4 +610,40 @@ def describe(outcome: Outcome) -> str:
         f"network {'reached' if outcome.reached_network else 'not reached'}"
     ]
     lines += [f"  {item.reason}  {item.subject}  {item.detail}" for item in outcome.findings]
+    return "\n".join(lines) + "\n"
+
+
+def describe_journal(root: Path | None = None) -> str:
+    """The accumulated change log as text.
+
+    Args:
+        root: The repository root. Defaults to the current directory.
+
+    Returns:
+        A block per recorded run, oldest first, under a summary line.
+
+    An empty journal is reported as empty rather than as an error. Nothing has
+    moved, or nothing has looked — and the two are told apart by whether a refresh
+    has ever run, which the manifest records and this deliberately does not guess.
+    """
+    base = (root or Path.cwd()).resolve()
+    records = read_journal(base / ARTEFACT_ROOT / DIRECTORY)
+    if not records:
+        return (
+            "api-reality journal  empty\n"
+            "  Either no refresh has run on this machine, or none has found a change.\n"
+        )
+    lines = [f"api-reality journal  {len(records)} recorded runs"]
+    for record in records:
+        found = record.get("findings", [])
+        lines.append(
+            f"  {record.get('recorded_at', '?')}  {record.get('sources_checked', 0)} sources "
+            f"checked, {len(found) if isinstance(found, list) else 0} findings"
+        )
+        if isinstance(found, list):
+            lines += [
+                f"      {item.get('reason', '?')}  {item.get('subject', '?')}"
+                for item in found
+                if isinstance(item, dict)
+            ]
     return "\n".join(lines) + "\n"

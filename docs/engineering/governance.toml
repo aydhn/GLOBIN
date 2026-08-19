@@ -196,6 +196,11 @@ category = "security-policy"
 reason = "The only module that protects or unprotects material at rest, and the only permitted loader of crypt32."
 
 [[sensitive_path]]
+path = "src/globin/adapters/rest_transport.py"
+category = "security-policy"
+reason = "The only module that reaches outward, and the only place TLS verification is configured. Added in Phase 034; see ADR-0089."
+
+[[sensitive_path]]
 path = "AGENTS.md"
 category = "governance"
 reason = "Binding instructions for automated contributors, including the hard prohibitions."

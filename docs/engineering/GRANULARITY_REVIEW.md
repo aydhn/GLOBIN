@@ -40,6 +40,14 @@ of being the amendment that needed one. Fourteen are scored.
 
 ## The scores
 
+**The table runs past the band this review was written for**, and deliberately.
+The tally below is recomputed from every *scored* amendment in the ledger rather
+than from the ones inside Phases 017-032, so a later amendment that did not appear
+here would make the counts wrong. Phase 033 added the first row past the band and
+Phase 034 the second; the findings are still about the environment band, and each
+new row is one more application of the same test rather than a claim about a
+different band.
+
 | # | Phase | Record | Score |
 |:-:|:-----:|--------|:-----:|
 | 4 | 017 | [ADR-0051](../adr/0051-phase-017-absorbs-interpreter-pinning-and-the-environment-lifecycle.md) | 2/4 |
@@ -56,8 +64,9 @@ of being the amendment that needed one. Fourteen are scored.
 | 15 | 031 | [ADR-0082](../adr/0082-phase-031-widens-to-deliver-the-user-scoped-secret-vault.md) | 1/4 |
 | 16 | 032 | [ADR-0084](../adr/0084-phase-032-widens-to-deliver-the-bootstrap-provisioning-surface.md) | 2/4 |
 | 17 | 033 | [ADR-0086](../adr/0086-phase-033-widens-to-deliver-the-binance-api-reality-registry.md) | 2/4 |
+| 18 | 034 | [ADR-0088](../adr/0088-phase-034-widens-to-deliver-the-rest-transport-substrate.md) | 2/4 |
 
-Mean 1.71 of four.
+Mean 1.73 of four.
 
 ---
 
@@ -67,19 +76,19 @@ This is the review's central result, and it is arithmetic rather than argument.
 
 | Condition | Met |
 |---|:---:|
-| `nothing_displaced` | 1/14 |
-| `nothing_deferred` | 14/14 |
-| `no_phase_owns_it` | 1/14 |
-| `halves_need_each_other` | 8/14 |
+| `nothing_displaced` | 1/15 |
+| `nothing_deferred` | 15/15 |
+| `no_phase_owns_it` | 1/15 |
+| `halves_need_each_other` | 9/15 |
 
 **One condition has never once failed.** Every amendment delivered its titled
-scope in full. Nothing was ever traded away to make room, in fourteen
+scope in full. Nothing was ever traded away to make room, in fifteen
 consecutive applications of a test whose job is to discriminate.
 
 **Two conditions have failed all but once**, and the once is the same phase for
 both — Phase 030, the only amendment to score four.
 
-So across thirteen amendments the test has one condition that always passes, two
+So across fifteen amendments the test has one condition that always passes, two
 that almost always fail, and one that genuinely varies. Its effective resolution
 is close to a single bit. That is why a four and a one arrived in consecutive
 phases (030 and 031) without anything having changed about how carefully the work
@@ -98,10 +107,10 @@ band's evidence is the same error as the one being diagnosed, and it is Phase
 
 ## Finding 2 — the band is not drawn wrong; a subject is missing
 
-The tempting conclusion from fourteen amendments is that the rows are too coarse
+The tempting conclusion from fifteen amendments is that the rows are too coarse
 or too fine. Neither holds.
 
-**The band range and subject are intact.** *Nothing deferred* was met 14/14:
+**The band range and subject are intact.** *Nothing deferred* was met 15/15:
 every phase delivered what its title promised. A band whose rows were too large
 would show deferrals, and there are none.
 

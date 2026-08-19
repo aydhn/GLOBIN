@@ -129,7 +129,7 @@ Roughly, as recorded on 2026-08-19:
 | Product-and-environment pairs | 24 |
 | Endpoints | 58, all Spot |
 | Schema versions | 11 |
-| Sources | 15, of which 1 cannot be re-checked at all |
+| Sources | 16, of which 1 cannot be re-checked at all |
 
 Ask the registry itself rather than trusting this table:
 
@@ -245,7 +245,7 @@ outbound client.
 | Regime | Sources | How a change is detected |
 |---|---|---|
 | `structured` | The 4 SBE schema lifecycle files | Parsed. Compared field by field. |
-| `digest` | The 10 raw Markdown documents | SHA-256 compared. A change is `review_required`. |
+| `digest` | The 11 raw Markdown documents | SHA-256 compared. A change is `review_required`. |
 | `manual` | The developer-docs catalogue | **Cannot be re-checked at all.** |
 
 The registry never re-derives a capability row from prose. It detects *that a

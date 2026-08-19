@@ -152,6 +152,8 @@ a future reader can judge whether the reason still holds.
 | [0085](0085-a-plan-is-derived-from-a-report-and-one-module-may-start-a-process.md) | A plan is derived from a report, and one module may start a process | Accepted |
 | [0086](0086-phase-033-widens-to-deliver-the-binance-api-reality-registry.md) | Phase 033 widens to deliver the Binance API reality registry | Accepted |
 | [0087](0087-the-api-reality-registry-is-declared-with-provenance-and-drift-is-measured-in-two-regimes.md) | The API reality registry is declared with provenance, and drift is measured in two regimes | Accepted |
+| [0088](0088-phase-034-widens-to-deliver-the-rest-transport-substrate.md) | Phase 034 widens to deliver the REST transport substrate | Accepted |
+| [0089](0089-an-unknown-outcome-is-preserved-and-a-second-module-may-reach-a-socket.md) | An unknown outcome is preserved, and a second module may reach a socket | Accepted |
 
 ## Relationship to other documents
 

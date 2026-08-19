@@ -104,6 +104,7 @@ ORDINALS: tuple[str, ...] = (
     "Fifteenth",
     "Sixteenth",
     "Seventeenth",
+    "Eighteenth",
 )
 
 
@@ -330,15 +331,25 @@ def test_every_title_collision_still_has_the_title_it_collided_with(
     """
     inheritance = tomllib.loads((repo_root / LEDGER).read_text(encoding="utf-8"))["inheritance"]
     titles = {entry["phase"]: entry["title"] for entry in inheritance}
-    rows = {
-        row.phase: row.title
-        for row in parse_roadmap((repo_root / "ROADMAP.md").read_text(encoding="utf-8"))
-    }
+    parsed = list(parse_roadmap((repo_root / "ROADMAP.md").read_text(encoding="utf-8")))
+    rows = {row.phase: row.title for row in parsed}
+    complete = {row.phase for row in parsed if row.status == "Complete"}
     for entry in amendments:
         for phase in _ints(entry, "title_collisions"):
+            if phase in complete:
+                # The collided phase has since shipped, so it has no inheritance row
+                # -- `test_every_inherited_phase_is_still_planned` requires those to
+                # be Planned. The claim is still true and no longer needs re-checking
+                # against a table it has left: a completed phase's title is settled.
+                #
+                # Phase 034 is the first case. The seventeenth amendment collided
+                # with its title, Phase 034 then shipped, and without this branch a
+                # completed collision would have had to be deleted from an accepted
+                # record to keep the suite green.
+                continue
             assert phase in titles, (
                 f"amendment {entry['ordinal']} collides with phase {phase:03d}'s title, "
-                f"which is not recorded in the inheritance table"
+                f"which is neither recorded in the inheritance table nor complete"
             )
             assert rows[phase] == titles[phase], (
                 f"phase {phase:03d} is now titled {rows[phase]!r}, and the ledger records "

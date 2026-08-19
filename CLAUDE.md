@@ -17,7 +17,9 @@ Global, built over a fixed 320-phase programme. It runs on one Windows machine,
 uses only free components and only officially documented interfaces.
 
 **It does not trade yet.** Check [`ROADMAP.md`](ROADMAP.md) for the current
-phase before assuming any capability exists.
+phase before assuming any capability exists. Since Phase 034 it *does* reach
+Binance -- three public, unauthenticated, read-only requests, from one named
+module. It signs nothing and places no order.
 
 Phase 016 closed the first band and cut `v0.1.0`, the foundation baseline. What
 that certifies — and the one criterion it could not — is in
@@ -77,6 +79,8 @@ that certifies — and the one criterion it could not — is in
 | How does an operator get from a clean clone to a host that starts? | [`docs/engineering/PROVISIONING.md`](docs/engineering/PROVISIONING.md), [ADR-0085](docs/adr/0085-a-plan-is-derived-from-a-report-and-one-module-may-start-a-process.md) |
 | Is the foundation band complete, and on what evidence? | [`docs/release/FOUNDATION_ACCEPTANCE.md`](docs/release/FOUNDATION_ACCEPTANCE.md), [`docs/engineering/foundation-acceptance.toml`](docs/engineering/foundation-acceptance.toml) |
 | What does Binance actually document, and how sure are we? | [`docs/engineering/BINANCE_API_REALITY.md`](docs/engineering/BINANCE_API_REALITY.md), [ADR-0087](docs/adr/0087-the-api-reality-registry-is-declared-with-provenance-and-drift-is-measured-in-two-regimes.md) |
+| How does GLOBIN send a REST request, and what does it do when it cannot tell whether one took effect? | [`docs/engineering/REST_TRANSPORT.md`](docs/engineering/REST_TRANSPORT.md), [ADR-0089](docs/adr/0089-an-unknown-outcome-is-preserved-and-a-second-module-may-reach-a-socket.md) |
+| How often must the official documentation be re-read, and what happens when it moves? | [`docs/engineering/DOCUMENTATION_INGESTION.md`](docs/engineering/DOCUMENTATION_INGESTION.md), [ADR-0088](docs/adr/0088-phase-034-widens-to-deliver-the-rest-transport-substrate.md) |
 | What does this term mean? | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
 
 ---
@@ -914,6 +918,85 @@ outlive its reason. The derivatives documentation has **no admissible route at
 all** -- it is client-rendered, and `SOURCE_POLICY.md` forbids both scraping it and
 accepting a generated summary in its place. Every non-Spot endpoint is therefore
 `unknown`, which is the honest answer rather than a gap.
+
+Phase 034 gave GLOBIN a **REST transport**, and the ingestion cadence that gates
+it. This is the first phase whose code reaches Binance.
+
+```bash
+.venv\Scripts\globin.exe rest resolve --family spot --environment testnet
+```
+
+```bash
+.venv\Scripts\globin.exe rest ping --family spot --environment testnet
+```
+
+**Endpoint resolution reads Phase 033's registry and nothing else.** There is no
+table of base URLs in the package and `tests/architecture/test_api_reality_discipline.py`
+still fails if a venue host is spelled in a module. Ten gates, each refusing before
+the next. **Spot resolves in three environments and the other seven recorded
+families refuse** -- their REST surface is `unknown`, and a transport that resolved
+one anyway would be inventing an endpoint. `globin rest resolve --family
+usds_m_futures --environment production` exits **14** and names the recorded status.
+
+**Testnet cannot become production, and demo cannot become testnet** -- not by rule
+but by construction: the candidate set is filtered on environment *before* anything
+is chosen, so no branch reaches a production URL from a testnet request. A refusal
+**carries no endpoint at all**, because the type refuses that combination.
+
+**The outcome has five members and `UNKNOWN` is the deliverable.** Binance's own
+words about a 5XX: *"It is important to NOT treat this as a failure operation; the
+execution status is UNKNOWN."* The same 503 is a confirmed failure for a read and
+`UNKNOWN` for a write, and a read-only request can never return `UNKNOWN`. **The
+outcome is returned, never raised** -- an exception reads as *this did not happen*,
+and raising `UNKNOWN` would hand every caller a mechanism for destroying it.
+**403, 418 and 429 are confirmed even for a write**: marking a rate-limit rejection
+ambiguous would make the one always-retryable failure permanently unretryable at
+Phase 043. **Nothing retries**, and there is no parameter that would make it.
+
+**Exactly two modules may touch a socket, one direction each** -- the loopback
+listener and `globin.adapters.rest_transport`. The rule did not relax; it got
+stronger. `http.client`, `urllib.request` and `ssl` had **never been guarded**, and
+the matcher meant to guard `http.server` had never matched a dotted name since
+Phase 026. Do not add a third; do not let either grow the other's role.
+
+**TLS verification has no off switch.** `secure_context()` takes no arguments, and
+no `CERT_NONE` appears as *code* anywhere in the package -- checked against the AST,
+after the first draft flagged the transport's own docstring explaining the rule.
+
+**SBE is negotiated, gated and never decoded.** `Accept: application/sbe` is offered
+**alone**, because the venue documents that offering it beside JSON *"will fall back
+to JSON"* on an unsupported schema -- a silent downgrade GLOBIN would have recorded
+as SBE. Negotiability comes from the registry's schema lifecycle, so SBE resolves in
+production and fails closed in testnet. **`X-MBX-TIME-UNIT: MICROSECOND` is sent and
+`MILLISECOND` is not**, because only the first is documented and inventing the second
+is the parameter value `SOURCE_POLICY.md` forbids.
+
+The other half is the cadence:
+
+```bash
+python -m tools.quality.venue journal
+```
+
+**A source past its declared re-check interval makes every endpoint resting on it
+unresolvable.** That is the join: the brief's fail-closed rule names `stale`, and
+nothing here could answer whether a source *was* stale -- Phase 033 recorded the
+access date and nothing consumed it. **Ageing does not redden the gate**, because a
+gate that fails on a calendar is one people re-run rather than read. A changed source
+must be acknowledged in `docs/engineering/venue-acknowledgements.toml` before
+`venue refresh` passes, and the ledger **fails in both directions**: an
+unacknowledged change fails, and an acknowledgement whose finding stopped occurring
+fails too.
+
+**Two readers, one document.** The package reads `[default]` and `[cadence]`; the
+gate reads `[review]` as well. They share no code, and
+`tests/contract/test_ingestion_contract.py` compares their arithmetic across four
+dates -- the boundary is *strictly greater than*, and a disagreement would mean the
+gate calling a source fresh while the transport refused to use it.
+
+**Network tests are `external`-marked** and excluded by every quality selection.
+Nothing in `full` reaches a network. Details:
+[`docs/engineering/REST_TRANSPORT.md`](docs/engineering/REST_TRANSPORT.md) and
+[`docs/engineering/DOCUMENTATION_INGESTION.md`](docs/engineering/DOCUMENTATION_INGESTION.md).
 
 ---
 

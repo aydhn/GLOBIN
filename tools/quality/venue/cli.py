@@ -18,18 +18,38 @@ CHECK: Final[str] = "check"
 REFRESH: Final[str] = "refresh"
 """Everything check does, and then ask the venue. Reaches the network."""
 
-SUBCOMMANDS: Final[tuple[str, ...]] = (CHECK, REFRESH)
-"""Every word, and no third."""
+JOURNAL: Final[str] = "journal"
+"""Read back what previous runs recorded. Reaches nothing, and writes nothing.
 
-USAGE: Final[str] = """usage: python -m tools.quality.venue [check|refresh]
+Added in Phase 034 with the change journal itself. Separate from ``check``
+because it answers a question about *history* rather than about the tree as it
+stands, and folding it in would make every gate run print a log.
+"""
+
+SUBCOMMANDS: Final[tuple[str, ...]] = (CHECK, REFRESH, JOURNAL)
+"""Every word, and no fourth."""
+
+USAGE: Final[str] = """usage: python -m tools.quality.venue [check|refresh|journal]
 
   check    Read docs/engineering/binance-api-reality.toml, recompute every claim
-           it makes, and write the manifest. Reaches nothing. The default.
+           it makes, age every source against docs/engineering/ingestion-policy.toml,
+           and write the manifest. Reaches nothing. The default.
   refresh  Everything check does, and then asks the official machine-readable
            sources whether the record is still true. Reaches the network, which
-           is why it is a separate word and why neither is in `full`.
+           is why it is a separate word and why neither is in `full`. A source
+           whose digest moved must be acknowledged in
+           docs/engineering/venue-acknowledgements.toml before this passes.
+  journal  Print what previous refreshes recorded, oldest first. Reaches nothing
+           and writes nothing. A run that found nothing appends nothing, so every
+           line is a moment something moved.
 
-Writes .globin/api_reality/api-reality-manifest.json either way.
+Writes .globin/venue/api-reality-manifest.json for check and refresh.
+A refresh that found something also appends .globin/venue/venue-journal.jsonl.
+
+A source past its declared re-check interval is reported as a NOTE and does not
+fail this gate. It does refuse a REST endpoint resolution inside GLOBIN, which is
+where failing closed belongs -- a gate that reddened on a calendar, on a machine
+that may have no network to clear it with, is one people re-run instead of read.
 
 Exit codes:
   0  the registry recomputes, and nothing is wrong.
@@ -43,14 +63,14 @@ class UsageError(Exception):
     """The command line was not understood."""
 
 
-def parse(argv: Sequence[str]) -> bool:
+def parse(argv: Sequence[str]) -> str:
     """Read the command line.
 
     Args:
         argv: The arguments after the module name.
 
     Returns:
-        Whether the venue should be asked as well as the document.
+        The subcommand, defaulting to the offline one.
 
     Raises:
         UsageError: If a word is unrecognised or a second one follows.
@@ -60,7 +80,7 @@ def parse(argv: Sequence[str]) -> bool:
     """
     words = list(argv)
     if not words:
-        return False
+        return CHECK
     head = words.pop(0)
     if head not in SUBCOMMANDS:
         msg = f"unrecognised argument: {head!r}"
@@ -68,7 +88,7 @@ def parse(argv: Sequence[str]) -> bool:
     if words:
         msg = f"unexpected argument: {words[0]!r}"
         raise UsageError(msg)
-    return head == REFRESH
+    return head
 
 
 def main(argv: Sequence[str]) -> int:
@@ -84,15 +104,18 @@ def main(argv: Sequence[str]) -> int:
     reachable from a test: a module body guarded by ``if __name__`` can only be
     exercised by starting a process.
     """
-    from tools.quality.venue.gate import describe, run_api_reality
+    from tools.quality.venue.gate import describe, describe_journal, run_api_reality
 
     try:
-        refresh = parse(argv)
+        subcommand = parse(argv)
     except UsageError as fault:
         print(str(fault), file=sys.stderr)
         print(file=sys.stderr)
         print(USAGE, file=sys.stderr)
         return 2
-    outcome = run_api_reality(refresh=refresh)
+    if subcommand == JOURNAL:
+        print(describe_journal(), end="")
+        return 0
+    outcome = run_api_reality(refresh=subcommand == REFRESH)
     print(describe(outcome), end="")
     return outcome.code

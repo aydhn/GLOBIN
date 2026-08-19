@@ -1,0 +1,104 @@
+# ---------------------------------------------------------------------------
+# GLOBIN documentation ingestion policy.
+#
+# How often each kind of official source must be re-read before GLOBIN stops
+# trusting what it recorded from it. The declared half of
+# `docs/engineering/DOCUMENTATION_INGESTION.md`.
+#
+# WHAT THIS IS NOT. It is not a source ledger — that is
+# `docs/engineering/binance-api-reality.toml`, and there is exactly one. This
+# file declares *cadence*, which is GLOBIN's own policy rather than a venue fact,
+# which is why no row here carries provenance and every row carries a reason.
+#
+# WHY CADENCE IS PER REGIME AND NOT PER SOURCE. A source's regime already says
+# how it can be re-checked, and that is what determines how cheap and how
+# reliable a re-check is. Fifteen per-source rows would be fifteen numbers
+# nobody could justify individually, and the first one anybody edited would
+# become the one nobody noticed.
+#
+# WHAT AGEING PAST THE INTERVAL DOES. It makes the source `stale`, and a REST
+# endpoint resting on a stale source **cannot be resolved** —
+# `globin.domain.rest_endpoint.resolve` refuses with `source_stale` before any
+# socket opens. It does NOT fail `python -m tools.quality venue`: a gate that
+# turned red on a calendar, on a machine that may have no network to fix it
+# with, is a signal people learn to ignore. The transport fails closed; the
+# repository gate reports.
+#
+# NOTHING WRITES THIS FILE.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+[target]
+phase = 34
+
+# Applied to any regime this file does not name, so a regime added to the
+# registry later is bounded rather than unbounded. Deliberately the shortest
+# interval here: an unknown kind of source is the one GLOBIN understands least.
+[default]
+recheck_days = 7
+reason = """A regime nobody has written a rule for is a regime nobody has \
+reasoned about, so it gets the tightest cadence rather than the loosest."""
+
+[[cadence]]
+regime = "structured"
+recheck_days = 14
+reason = """Machine-readable, compared field by field, and re-checked by one \
+HTTP request. The cheapest and most reliable kind of re-check there is, so the \
+interval is short. Three of the four documents in this regime do not currently \
+parse, which is recorded per source rather than relaxed here — an unparseable \
+source is a known defect, not a reason to check it less often."""
+
+[[cadence]]
+regime = "digest"
+recheck_days = 30
+reason = """A SHA-256 over the fetched document. A change is detected exactly \
+and reliably, but what a change *means* needs a person, so re-checking more \
+often than somebody will read the result buys nothing. Thirty days is the \
+interval at which a Spot REST document that moved is still recent enough that \
+the person reading it remembers the context."""
+
+[[cadence]]
+regime = "manual"
+recheck_days = 90
+reason = """A client-rendered application with no fetchable text form. \
+`SOURCE_POLICY.md` forbids both scraping it and accepting a generated summary, \
+so the only re-check is a person opening it and reading. Ninety days reflects \
+what a person will actually do, not what would be ideal — an interval nobody \
+honours is a policy that lies. **No REST endpoint rests on a manual source \
+today**, so this row gates nothing at present; it exists so that the day one \
+does, the ageing is already declared."""
+
+# ---------------------------------------------------------------------------
+# Breaking-drift review.
+#
+# READ BY THE GATE ONLY. `src/globin` reads `[default]` and `[cadence]`, because
+# staleness is what the transport fails closed on; it has no use for this table
+# and does not parse it. Two readers of one document, each taking what it needs,
+# compared by `tests/contract/test_ingestion_contract.py`.
+#
+# `venue refresh` fetches every refreshable source and compares its digest
+# against what `binance-api-reality.toml` records. A finding whose reason is
+# named below must be acknowledged in
+# `docs/engineering/venue-acknowledgements.toml` before the gate will pass --
+# the same bargain `wheel-survey.toml` strikes for a missing wheel: an owned gap
+# is reported, an unowned one fails.
+#
+# NAMED BY FINDING REASON, NOT BY A SEVERITY WORD. A severity would be a second
+# vocabulary to keep in step with the one the gate already emits, and the first
+# time the two disagreed the rule would fire on the wrong thing. The reasons
+# here are compared against the gate's own constants by a contract test, so a
+# reason that no longer exists fails rather than silently matching nothing.
+#
+# THE KEY IS REQUIRED AND MAY BE EMPTY. An empty list is a policy saying no
+# finding needs a written decision -- legitimate, and visible. A *missing* key is
+# refused, because defaulting it to empty would turn a typo into permission.
+# ---------------------------------------------------------------------------
+
+[review]
+acknowledged_reasons = ["API_REALITY_SOURCE_CHANGED"]
+reason = """A source whose digest moved is a document GLOBIN's record was \
+derived from that no longer says what it said. The gate cannot tell whether the \
+change matters -- an extractor that decided for itself would produce a confident \
+wrong registry, which `BINANCE_API_REALITY.md` refuses -- so a person reads it \
+and writes down what they concluded. Until they do, the gate fails."""

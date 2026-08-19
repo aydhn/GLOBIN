@@ -1,0 +1,55 @@
+# ---------------------------------------------------------------------------
+# GLOBIN venue drift acknowledgement ledger.
+#
+# What a person concluded when an official document GLOBIN depends on changed.
+#
+# HOW A ROW GETS HERE. `python -m tools.quality.venue refresh` fetches every
+# refreshable source and compares its SHA-256 against the digest recorded in
+# `docs/engineering/binance-api-reality.toml`. A document whose digest moved
+# produces an `API_REALITY_SOURCE_CHANGED` finding, and the gate FAILS until
+# either the registry is re-read and its digest updated, or a row here says who
+# looked and what they concluded.
+#
+# WHY A PERSON AND NOT AN EXTRACTOR. `BINANCE_API_REALITY.md` states the rule:
+# the registry never re-derives a capability from prose, because an extractor
+# that mis-parses a changed table produces a *confident wrong registry*, which is
+# worse than a prompt to re-read. This ledger is where that prompt is answered.
+#
+# THE LEDGER FAILS IN BOTH DIRECTIONS. A finding with no row fails
+# (`API_REALITY_DRIFT_UNACKNOWLEDGED`); a row whose finding no longer occurs also
+# fails (`API_REALITY_ACKNOWLEDGEMENT_STALE`), because a standing permission
+# nobody re-examined is how an exemption outlives its reason. That is the same
+# bargain `wheel-survey.toml` strikes for an owned gap.
+#
+# ROWS ARE NOT PERMANENT. The right resolution to a changed document is almost
+# always to re-read it, update the registry, and DELETE the row here. A row is a
+# record that somebody decided the change did not affect GLOBIN's record — not a
+# way to stop being told about it.
+#
+# FIELDS
+#   finding      The gate's reason constant, verbatim.
+#   subject      What the finding was about, verbatim.
+#   phase        The phase whose work the decision belongs to.
+#   decided_on   ISO date. When a person actually looked.
+#   note         What they concluded, and why the registry did not need editing.
+#
+# NOTHING WRITES THIS FILE.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+[target]
+phase = 34
+
+# ---------------------------------------------------------------------------
+# EMPTY, AND THAT IS THE MEASURED STATE RATHER THAN AN UNFINISHED ONE.
+#
+# Every source digest in the registry was verified during Phase 034 and every one
+# still matched what Phase 033 recorded -- `rest-api.md` hashes to
+# `sha256:49ea6809...`, character for character what the registry carries. There
+# has been no drift to acknowledge, so there is nothing to write down.
+#
+# An empty ledger is not permissive. With no rows, ANY `API_REALITY_SOURCE_CHANGED`
+# finding fails the gate, which is the correct posture for a repository that has
+# never yet seen one.
+# ---------------------------------------------------------------------------

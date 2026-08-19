@@ -1,4 +1,4 @@
-"""Whether either provider library has spread beyond its one adapter, and who may bind.
+"""Whether either provider library has spread beyond its one adapter, and who may use a socket.
 
 `test_probe_discipline.py` states this rule for `psutil` and this states it for the
 two libraries Phase 026 adopted. The rule is the same and the reason is the same:
@@ -13,6 +13,15 @@ always meant: exactly one module may reach a socket, it is named, and the addres
 binds comes from a type that has already refused everything but loopback. Every
 library route is forbidden, including the one that used to be permitted. ADR-0072
 records the exchange.
+
+**Phase 034 made the socket half a two-role rule, and it did not relax.** Until
+then GLOBIN opened no outbound connection and one module could bind. It now has a
+REST transport, so exactly two modules may touch a socket and each keeps the one
+direction it was named for: the listener may not become a client, and the client
+may not become a server. The rule is *stronger* than what it replaced — the routes
+outward (`http.client`, `urllib.request`, `ssl`) were unguarded entirely, so any
+module could have reached the internet, and the matcher that was supposed to guard
+`http.server` had never matched a dotted name at all. ADR-0089 records the exchange.
 
 **Why these are not in `stack-contract.toml`.** That contract's libraries feed
 `test_stack_discipline.py`'s forbidden-import set, so listing an *adopted* library
@@ -61,21 +70,64 @@ needed rather than merely no longer used.
 """
 
 LISTENER_MODULE: Final[str] = "globin.adapters.diagnostics_http"
-"""The one module in GLOBIN that may open a listening socket."""
+"""The one module in GLOBIN that may open a *listening* socket."""
 
-LISTENER_IMPORTS: Final[tuple[str, ...]] = ("socketserver", "http.server", "socket")
-"""Standard-library routes to a socket, permitted only in :data:`LISTENER_MODULE`.
+OUTBOUND_MODULE: Final[str] = "globin.adapters.rest_transport"
+"""The one module in GLOBIN that may *reach outward*.
 
-Phase 026 forbade the first two outright, when GLOBIN had no server of its own and
-the only sanctioned listener came from a library. Phase 027 has one, so the rule
-changed shape rather than relaxing: the count of modules that can open a socket is
-still exactly one, and it is now named here instead of being implied by which
-library function was exempt.
-
-`socket` joins them because it is the route the other two are built on: a module
-that could not import `socketserver` but could import `socket` would be one
-`bind()` away from the thing this rule exists to prevent.
+Added in Phase 034, which gave GLOBIN a REST transport. Until then the package
+opened no outbound connection at all and this constant had no reason to exist.
 """
+
+SOCKET_CAPABLE: Final[dict[str, str]] = {
+    LISTENER_MODULE: "listen",
+    OUTBOUND_MODULE: "reach outward",
+}
+"""Every module that may touch a socket, and what each one is for.
+
+Two, and the count is exact in both directions: a third module naming any route
+below fails, and either of these two losing its route fails as well.
+"""
+
+LISTENER_IMPORTS: Final[tuple[str, ...]] = ("socketserver", "http.server")
+"""Standard-library routes to a *listening* socket.
+
+Permitted only in :data:`LISTENER_MODULE`. Importing one of these in the outbound
+module would mean the REST client had grown a server, which is a different
+component wearing the same name.
+"""
+
+OUTBOUND_IMPORTS: Final[tuple[str, ...]] = ("http.client", "urllib.request", "ssl")
+"""Standard-library routes *out*, permitted only in :data:`OUTBOUND_MODULE`.
+
+**None of these were guarded before Phase 034, and that was a hole rather than an
+omission.** The rule as Phase 027 left it named ``socket``, ``socketserver`` and
+``http.server`` — every route to a *listener*. Any module in the package could
+have imported ``http.client`` or ``urllib.request`` and reached the internet, and
+nothing would have noticed. The phase that finally needed one outbound module is
+the phase that closes the door behind it.
+
+``ssl`` is here rather than beside ``socket`` because its only use in this package
+is building the client's verifying context. A second module reaching for it would
+be a second module deciding how TLS is configured, which is exactly what
+:func:`globin.adapters.rest_transport.secure_context` exists to prevent.
+"""
+
+SHARED_SOCKET_IMPORTS: Final[tuple[str, ...]] = ("socket",)
+"""The substrate both roles are built on, permitted in either named module.
+
+``socket`` cannot be assigned to one role: the listener binds one and the client
+connects one. What it can be is confined to the two modules that already have a
+declared role, which is what stops a third module being one ``connect()`` away
+from the thing this rule exists to prevent.
+"""
+
+SOCKET_ROUTES: Final[tuple[str, ...]] = (
+    *LISTENER_IMPORTS,
+    *OUTBOUND_IMPORTS,
+    *SHARED_SOCKET_IMPORTS,
+)
+"""Every route to a socket, of either direction."""
 
 WILDCARD_ADDRESS_TOKENS: Final[tuple[str, ...]] = (
     "0.0.0.0",  # noqa: S104 -- named so its absence can be asserted
@@ -124,26 +176,61 @@ def _identifiers(tree: ast.AST) -> set[str]:
     return found
 
 
+def _covers(imported: str, guarded: str) -> bool:
+    """Whether one imported dotted name is, or lives inside, a guarded module.
+
+    Args:
+        imported: The dotted name an import statement names.
+        guarded: The module being guarded.
+
+    Returns:
+        Whether the import reaches the guarded module.
+
+    **A dotted guard never matched before Phase 034, and that was a hole rather
+    than a simplification.** This function replaces ``name.split(".")[0] ==
+    guarded``, which compares only the first segment — so ``http.server`` had been
+    in :data:`LISTENER_IMPORTS` since Phase 026 matching nothing at all, because the
+    first segment of ``import http.server`` is ``http``. The rule passed its own
+    guard-the-guard test the whole time, because ``socketserver`` is a single
+    segment and one satisfied route was enough to prove the module reached *a*
+    socket.
+
+    Nothing had exploited it: ``diagnostics_http`` is the only module that imports
+    ``http.server`` and it is the permitted one. But the rule Phase 034 needs is
+    specifically about ``http.client`` against ``http.server`` — two dotted names
+    sharing a first segment — so the comparison had to become exact before it could
+    tell the two roles apart.
+    """
+    return imported == guarded or imported.startswith(f"{guarded}.")
+
+
 def _imports(tree: ast.AST, guarded: str) -> list[str]:
     """Every spelling of one guarded module in a parsed file.
 
     Args:
         tree: The parsed source.
-        guarded: The top-level module name.
+        guarded: The module name, dotted or not.
 
     Returns:
         The spellings found.
+
+    ``from http import client`` is caught by joining the module to each imported
+    name, which is the one spelling neither the statement's module nor its names
+    carry on their own.
     """
     found: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            found.extend(a.name for a in node.names if a.name.split(".")[0] == guarded)
-        elif (
-            isinstance(node, ast.ImportFrom)
-            and node.module
-            and node.module.split(".")[0] == guarded
-        ):
-            found.append(node.module)
+            found.extend(a.name for a in node.names if _covers(a.name, guarded))
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            if _covers(node.module, guarded):
+                found.append(node.module)
+            else:
+                found.extend(
+                    f"{node.module}.{a.name}"
+                    for a in node.names
+                    if _covers(f"{node.module}.{a.name}", guarded)
+                )
     return found
 
 
@@ -236,37 +323,76 @@ def test_the_listener_detector_reads_code_and_not_prose(source: str, caught: boo
     assert bool(used.intersection(FORBIDDEN_LISTENERS)) is caught
 
 
-def test_only_one_module_can_reach_a_socket_at_all(repo_root: Path) -> None:
-    """The count of modules able to open a socket is one, and it is named.
+def test_only_the_two_named_modules_can_reach_a_socket_at_all(repo_root: Path) -> None:
+    """The count of modules able to touch a socket is two, and both are named.
 
     A proxy rather than a proof, like its neighbours: a module handed an open socket
     would defeat it. What it catches is the realistic erosion — somebody importing
-    `socket` in a second place because it was convenient there too.
+    ``http.client`` in a second place because it was convenient there too, which
+    before Phase 034 this rule would not have caught anywhere.
     """
     offenders: dict[str, list[str]] = {}
     for path in _modules(repo_root):
         name = module_name(path, repo_root / PACKAGE_RELATIVE_PATH, ROOT_PACKAGE)
-        if name == LISTENER_MODULE:
+        if name in SOCKET_CAPABLE:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        found = sorted(
-            {spelling for guard in LISTENER_IMPORTS for spelling in _imports(tree, guard)}
-        )
+        found = sorted({spelling for guard in SOCKET_ROUTES for spelling in _imports(tree, guard)})
         if found:
             offenders[name] = found
-    assert not offenders, f"a socket became reachable outside {LISTENER_MODULE}: {offenders}"
+    permitted = ", ".join(sorted(SOCKET_CAPABLE))
+    assert not offenders, f"a socket became reachable outside {permitted}: {offenders}"
 
 
-def test_the_module_that_binds_does_import_what_it_needs(repo_root: Path) -> None:
-    """The other direction, so the check above is not vacuously true."""
-    relative = LISTENER_MODULE.removeprefix(f"{ROOT_PACKAGE}.").replace(".", "/")
-    path = repo_root / PACKAGE_RELATIVE_PATH / f"{relative}.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    found = {spelling for guard in LISTENER_IMPORTS for spelling in _imports(tree, guard)}
-    assert found, f"{LISTENER_MODULE} reaches no socket, so the rule guards nothing"
+@pytest.mark.parametrize(
+    ("module", "routes"),
+    [
+        pytest.param(LISTENER_MODULE, LISTENER_IMPORTS, id="listener"),
+        pytest.param(OUTBOUND_MODULE, OUTBOUND_IMPORTS, id="outbound"),
+    ],
+)
+def test_each_named_module_does_reach_what_its_role_needs(
+    repo_root: Path, module: str, routes: tuple[str, ...]
+) -> None:
+    """The other direction, so the rule cannot pass by a role vanishing.
+
+    ``test_process_discipline.py`` is the same shape for the same reason: a rule
+    that only forbids is satisfied by nobody doing the thing at all.
+    """
+    relative = module.removeprefix(f"{ROOT_PACKAGE}.").replace(".", "/")
+    tree = ast.parse((repo_root / PACKAGE_RELATIVE_PATH / f"{relative}.py").read_text("utf-8"))
+    found = {spelling for guard in routes for spelling in _imports(tree, guard)}
+    assert found, f"{module} reaches none of {routes}, so its half of the rule guards nothing"
 
 
-def test_the_binding_module_contains_no_address_literal_at_all(repo_root: Path) -> None:
+@pytest.mark.parametrize(
+    ("module", "forbidden", "role"),
+    [
+        pytest.param(LISTENER_MODULE, OUTBOUND_IMPORTS, "a client", id="listener-stays-a-server"),
+        pytest.param(OUTBOUND_MODULE, LISTENER_IMPORTS, "a server", id="client-stays-a-client"),
+    ],
+)
+def test_neither_named_module_grows_the_other_role(
+    repo_root: Path, module: str, forbidden: tuple[str, ...], role: str
+) -> None:
+    """Two permitted modules is not the same as two modules permitted everything.
+
+    Without this, naming a second socket-capable module would have widened the rule
+    twice over: the listener could have started making outbound requests and the
+    client could have started accepting them, with the count of socket-capable
+    modules still reading two. Each module keeps exactly the direction it was named
+    for.
+    """
+    relative = module.removeprefix(f"{ROOT_PACKAGE}.").replace(".", "/")
+    tree = ast.parse((repo_root / PACKAGE_RELATIVE_PATH / f"{relative}.py").read_text("utf-8"))
+    found = sorted({spelling for guard in forbidden for spelling in _imports(tree, guard)})
+    assert not found, f"{module} has become {role}: {found}"
+
+
+@pytest.mark.parametrize("module", sorted(SOCKET_CAPABLE))
+def test_neither_socket_module_contains_an_address_literal_at_all(
+    repo_root: Path, module: str
+) -> None:
     """The security posture of the whole feature, asserted rather than reviewed.
 
     Phase 026 asserted that `127.0.0.1` appeared as a literal in the binding module,
@@ -281,7 +407,7 @@ def test_the_binding_module_contains_no_address_literal_at_all(repo_root: Path) 
     refused everything that is not loopback. A future edit hardcoding *any* address
     fails here, whether or not somebody would have recognised it as dangerous.
     """
-    relative = LISTENER_MODULE.removeprefix(f"{ROOT_PACKAGE}.").replace(".", "/")
+    relative = module.removeprefix(f"{ROOT_PACKAGE}.").replace(".", "/")
     path = repo_root / PACKAGE_RELATIVE_PATH / f"{relative}.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     literals = sorted(
@@ -293,9 +419,7 @@ def test_the_binding_module_contains_no_address_literal_at_all(repo_root: Path) 
             and _is_address(node.value)
         }
     )
-    assert not literals, (
-        f"{LISTENER_MODULE} spells an address rather than being handed one: {literals}"
-    )
+    assert not literals, f"{module} spells an address rather than being handed one: {literals}"
 
 
 def _is_address(text: str) -> bool:
@@ -372,3 +496,42 @@ def test_the_detector_notices_a_reach_and_spares_everything_else(source: str, ca
     header would pass a module that had moved its import to the top.
     """
     assert bool(_imports(ast.parse(source), "opentelemetry")) is caught
+
+
+@pytest.mark.parametrize(
+    ("source", "routes", "caught"),
+    [
+        pytest.param("import http.client\n", "SOCKET", True, id="dotted-import"),
+        pytest.param("from http import client\n", "SOCKET", True, id="from-package-import-module"),
+        pytest.param("from http.client import HTTPConnection\n", "SOCKET", True, id="from-dotted"),
+        pytest.param("import urllib.request\n", "SOCKET", True, id="urllib-request"),
+        pytest.param("import socket\n", "SOCKET", True, id="bare-socket"),
+        pytest.param("import ssl\n", "SOCKET", True, id="ssl"),
+        pytest.param("import json\n", "SOCKET", False, id="innocent"),
+        pytest.param("import http\n", "SOCKET", False, id="the-package-alone-reaches-nothing"),
+        pytest.param("import http.client\n", "OUTBOUND", True, id="listener-would-grow-a-client"),
+        pytest.param("import socketserver\n", "LISTENER", True, id="client-would-grow-a-server"),
+        pytest.param("import http.server\n", "LISTENER", True, id="client-would-grow-a-server-2"),
+        pytest.param("import http.server\n", "OUTBOUND", False, id="server-is-not-client"),
+    ],
+)
+def test_the_socket_detector_tells_the_two_directions_apart(
+    source: str, routes: str, caught: bool
+) -> None:
+    """Guard the guard, in both directions and for both roles.
+
+    **Every dotted case here failed before Phase 034**, because the matcher compared
+    only an import's first segment. ``import http.client`` and ``import
+    http.server`` were indistinguishable from each other and from ``import http``,
+    which is precisely the distinction the two-role rule turns on. The cases are
+    parametrised rather than argued in prose so that a future simplification of
+    :func:`_covers` cannot quietly reintroduce the hole.
+    """
+    guards = {
+        "SOCKET": SOCKET_ROUTES,
+        "LISTENER": LISTENER_IMPORTS,
+        "OUTBOUND": OUTBOUND_IMPORTS,
+    }[routes]
+    tree = ast.parse(source)
+    found = bool({spelling for guard in guards for spelling in _imports(tree, guard)})
+    assert found is caught

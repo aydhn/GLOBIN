@@ -305,6 +305,29 @@ displaces = [34, 35, 36, 37]
 title_collisions = [34, 35, 36, 37]
 overlaps_complete = []
 
+[[amendment]]
+ordinal = 18
+ordinal_word = "Eighteenth"
+phase = 34
+scored = true
+record = "docs/adr/0088-phase-034-widens-to-deliver-the-rest-transport-substrate.md"
+summary = "Phase 034 delivered the REST transport substrate alongside the ingestion cadence its title names. The largest displacement in the programme -- six rows -- and the first amendment to rewrite a future row's text."
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "MET"
+score = 2
+displaces = [35, 36, 37, 41, 44, 45]
+# EMPTY, AND THAT IS NOT AN EVASION. The collision was with row 045's title
+# *REST Transport Layer*, which this amendment rewrote -- so a claim recorded
+# here would be checked against a title that no longer exists and would read as
+# a collision with the new one, which is false. `no_phase_owns_it = FAILED`
+# carries the substance; ROADMAP.md and ADR-0088 carry the history.
+title_collisions = []
+# The ingestion half is row 034's OWN subject, completing what Phase 033 left
+# by design rather than overlapping what it built.
+overlaps_complete = []
+
 # ---------------------------------------------------------------------------
 # What a later phase will find partly built.
 #
@@ -319,32 +342,60 @@ overlaps_complete = []
 # ---------------------------------------------------------------------------
 
 [[inheritance]]
-phase = 34
-title = "Official Documentation Ingestion and Change Tracking"
-already_built = "an allowlisted refresh over official machine-readable sources, source digests, and a deterministic classified diff"
-absent_by_design = "no cadence, no accumulated change log across runs, no review workflow for a breaking drift"
-from_phases = [33]
-
-[[inheritance]]
 phase = 35
 title = "Environment Classification Model"
-already_built = "production, demo and testnet as distinct kinds, each with documented semantics, hosts and per-product coverage"
-absent_by_design = "no guarantees attached to a class, and no internal simulation -- Binance documents none, so the registry cannot express it"
-from_phases = [33]
+already_built = "production, demo and testnet as distinct kinds, each with documented semantics, hosts and per-product coverage; and, since Phase 034, isolation enforced -- a resolution never substitutes one environment for another, and a transport is bound to one at construction"
+absent_by_design = "no guarantees attached to a class beyond whether real capital is at risk, and no internal simulation -- Binance documents none, so the registry cannot express it"
+from_phases = [33, 34]
 
 [[inheritance]]
 phase = 36
 title = "Product and Environment Capability Matrix"
-already_built = "the matrix itself, six status words, evidence kinds, and a query that separates an absent entry from a recorded UNKNOWN"
-absent_by_design = "nothing refuses an operation, because no operation exists to refuse"
-from_phases = [33]
+already_built = "the matrix itself, six status words, evidence kinds, a query that separates an absent entry from a recorded UNKNOWN, and -- since Phase 034 -- a capability gate that refuses a REST request the matrix does not support"
+absent_by_design = "nothing refuses a non-REST operation, because no other protocol has a caller"
+from_phases = [33, 34]
 
 [[inheritance]]
 phase = 37
 title = "Base URL and Endpoint Registry"
-already_built = "base URLs and endpoint families per product, environment and protocol, in one document no other module may spell"
-absent_by_design = "no per-operation paths, methods, security types or weights"
-from_phases = [33]
+already_built = "base URLs and endpoint families per product, environment and protocol, in one document no other module may spell; and, since Phase 034, a resolver over it and three declared public operation paths with their methods, security types and weights"
+absent_by_design = "no per-operation path for anything but the three public probes"
+from_phases = [33, 34]
+
+[[inheritance]]
+phase = 41
+title = "Rate Limit Weight Registry"
+already_built = "the three public probe weights, declared with citations, and typed extraction of the used-weight and order-count headers the venue actually returns"
+absent_by_design = "no weight for any other operation, and nothing that adds them up"
+from_phases = [34]
+
+[[inheritance]]
+phase = 43
+title = "Retry, Backoff and Idempotency Policy"
+already_built = "a side-effect classification per request, a send state that says whether bytes left the process, and every field a retry decision needs -- status, venue code, Retry-After, elapsed time, endpoint, environment"
+absent_by_design = "nothing retries, and the transport has no parameter that would make it. One rule is inherited rather than left open: an UNKNOWN outcome is never replayed"
+from_phases = [34]
+
+[[inheritance]]
+phase = 44
+title = "Error Code Mapping and Classification"
+already_built = "the venue's code and message carried uninterpreted, and one code classified -- -1007, because the venue's own text describes it as an unknown execution status"
+absent_by_design = "no mapping of any other documented code to the internal taxonomy, and no retryable-versus-fatal judgement"
+from_phases = [34]
+
+[[inheritance]]
+phase = 45
+title = "Binance SDK Adoption and REST Transport Reconciliation"
+already_built = "the whole REST transport -- resolution, canonical encoding, connection lifecycle, negotiation, outcome semantics, diagnostics and evidence"
+absent_by_design = "no SDK is adopted; binance-common and the product distributions the wheel survey records against this phase are still unreached"
+from_phases = [34]
+
+[[inheritance]]
+phase = 47
+title = "FIX and SBE Interface Assessment"
+already_built = "SBE negotiated at the transport level, gated on the registry's published schema lifecycle, with a binary answer carried opaquely and never handed to a JSON parser"
+absent_by_design = "nothing decodes SBE -- the decoder is a Protocol with no implementation -- and FIX is untouched. Whether either is worth its tooling is this phase's question"
+from_phases = [34]
 
 [[inheritance]]
 phase = 257

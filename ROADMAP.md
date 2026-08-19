@@ -33,14 +33,21 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-033 are complete. Phase 034 is next and has not started.**
-> Nothing beyond Phase 033 is implemented. The environment band is closed and
+> **Phases 001-034 are complete. Phase 035 is next and has not started.**
+> Nothing beyond Phase 034 is implemented. The environment band is closed and
 > frozen as `v0.2.0`; what that certifies, and the one criterion it could not,
 > are in
-> [`docs/release/ENVIRONMENT_ACCEPTANCE.md`](docs/release/ENVIRONMENT_ACCEPTANCE.md). GLOBIN does not trade, does not
-> connect to any exchange, and **holds no credentials** -- it now has somewhere to
-> put one and a way to be handed one, which is still a different thing. See
-> [`README.md`](README.md).
+> [`docs/release/ENVIRONMENT_ACCEPTANCE.md`](docs/release/ENVIRONMENT_ACCEPTANCE.md). GLOBIN does not trade and
+> **holds no credentials** -- it has somewhere to put one and a way to be handed
+> one, which is still a different thing.
+>
+> **It now connects to Binance**, which it did not before Phase 034, and the
+> boundary is narrow enough to state exactly: three public, unauthenticated,
+> read-only requests -- connectivity, server time and exchange information -- sent
+> from one named module, over verified TLS, to an endpoint resolved solely from the
+> Phase 033 registry. It signs nothing and places no order. See
+> [`README.md`](README.md) and
+> [`docs/engineering/REST_TRANSPORT.md`](docs/engineering/REST_TRANSPORT.md).
 >
 > **Phase 028 built the secret store, and measured what Windows would not tell it.**
 > The Credential Manager, reached through `ctypes` with no new dependency: a reference
@@ -178,10 +185,12 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Seventeen have been made. Each cost an ADR, and each is
+> **Scope amendments.** Eighteen have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
-> unchanged by all seventeen.
+> unchanged by all eighteen. **Two row texts are not**: the eighteenth rewrote
+> rows 034 and 045, which is the first time an amendment has done so and is
+> recorded as an exception rather than as precedent.
 >
 > This count said *seven* while listing eight from Phase 024 until Phase 025
 > repaired it. Nothing tested it, which is why it drifted and why it was worth
@@ -534,6 +543,56 @@ the contract:
 > reserves rewriting for Phase 048.
 
 
+> **Eighteenth.** Phase 034 still delivers the documentation ingestion and change
+> tracking its title names -- but only the third of it Phase 033 had left: a
+> declared re-check cadence per source regime, an append-only change journal
+> accumulated across runs, and a breaking-drift acknowledgement ledger that fails
+> in both directions. Alongside it, the REST transport substrate: endpoint
+> resolution driven solely by Phase 033's registry, canonical URL and query
+> encoding, a bounded connection lifecycle, JSON and SBE content negotiation, a
+> five-member outcome that preserves *unknown*, redacted diagnostics, public
+> credential-free probes, and deterministic evidence.
+>
+> **It scores two of four, and it fails *nothing displaced* against eight rows.**
+> That is twice the reach of the seventeenth, which held the previous record at
+> four. Rows 035, 036, 037, 041, 043, 044, 045 and 047 each lose work; row **045**
+> loses its whole title -- *REST Transport Layer* -- and what remains of it is
+> adopting `binance-common`, which
+> [`docs/engineering/wheel-survey.toml`](docs/engineering/wheel-survey.toml)
+> still records against that phase.
+>
+> ***The two halves need each other*, and this is the one amendment where that
+> condition did the deciding.** The brief's own fail-closed rule lists the states a
+> REST resolution must refuse: `unsupported`, `unknown`, **`stale`**, `conflicted`.
+> Nothing in this repository could answer whether a source was stale. Phase 033
+> recorded *when* each official document was read and **nothing consumed the date**
+> -- a registry read once and never again looked exactly like one re-checked
+> yesterday. Staleness is gate 9 of ten in `resolve()`, and without the cadence
+> that gate does not exist. *Nothing deferred*: both halves ship together.
+>
+> **A property that had held since Phase 001 ended here.** `src/globin` opened no
+> outbound connection; it now does, from exactly one module. What replaced the
+> absolute is a bounded rule -- two socket-capable modules, one direction each,
+> asserted in both directions -- and the outbound half is *stronger* than what it
+> replaced, because `http.client`, `urllib.request` and `ssl` had never been
+> guarded at all and the matcher that was supposed to guard `http.server` had never
+> matched a dotted name.
+> [ADR-0089](docs/adr/0089-an-unknown-outcome-is-preserved-and-a-second-module-may-reach-a-socket.md)
+> records the exchange.
+>
+> **The operator was shown the conflict before any code was written**, with the
+> options and their costs, and chose to deliver both halves.
+> [ADR-0088](docs/adr/0088-phase-034-widens-to-deliver-the-rest-transport-substrate.md)
+> states the displacement rather than arguing around it.
+>
+> **Row 034 and row 045 are both rewritten**, which no amendment before this one
+> did. The eight preceding it recorded displacement and left the future row's text
+> intact. Here the divergence is too large for that to be honest: a reader of row
+> 045 would otherwise plan a phase whose subject had already shipped. The
+> granularity review reserved rewriting for Phase 048, and this is the first
+> exception to it -- recorded as an exception rather than as precedent.
+
+
 ---
 
 ## Phases 001-016 — Repository Foundation and Engineering Contract
@@ -597,7 +656,7 @@ the transport, authentication and rate-limit machinery on top of that reality.
 | Phase | Title | Purpose | Status |
 |:-----:|-------|---------|:------:|
 | 033 | Binance Product Family Inventory | Enumerate the officially documented product families and the surfaces each one exposes; and, as the seventeenth scope amendment, deliver the Binance API reality registry -- production, demo and testnet as distinct kinds, the capability matrix over them, every base URL and endpoint family in one declared document, the SBE and FIX schema lifecycle, six status words that keep *not documented* apart from *documented absent*, and a refresh that classifies drift from official machine-readable sources only. | Complete |
-| 034 | Official Documentation Ingestion and Change Tracking | Establish a repeatable process for consuming official Binance documentation and detecting changes to it. | Planned |
+| 034 | Official Documentation Ingestion and Change Tracking | Complete the ingestion process Phase 033 began -- a declared re-check cadence per source regime, an accumulated change journal across runs, and a breaking-drift acknowledgement ledger that fails in both directions; and, as the eighteenth scope amendment, deliver the REST transport substrate -- endpoint resolution driven solely by the Phase 033 registry, canonical URL and query encoding, a bounded connection lifecycle, JSON and SBE content negotiation, a five-member outcome that preserves *unknown* rather than calling it a failure, redacted diagnostics, public credential-free probes, and deterministic evidence. | Complete |
 | 035 | Environment Classification Model | Model production, testnet, demo and internal simulation as distinct classes with distinct guarantees. | Planned |
 | 036 | Product and Environment Capability Matrix | Build the authoritative matrix of which products support which environments, driven by documented evidence. | Planned |
 | 037 | Base URL and Endpoint Registry | Centralise base URLs and endpoint definitions per product and environment with no hard-coded literals. | Planned |
@@ -608,7 +667,7 @@ the transport, authentication and rate-limit machinery on top of that reality.
 | 042 | Rate Limit Governor and Token Buckets | Implement proactive limiting that respects reported usage headers rather than reacting only to rejections. | Planned |
 | 043 | Retry, Backoff and Idempotency Policy | Define which failures are retryable, with what backoff, and which operations require idempotency keys. | Planned |
 | 044 | Error Code Mapping and Classification | Map documented exchange error codes to the internal taxonomy with explicit retryable and fatal classification. | Planned |
-| 045 | REST Transport Layer | Implement the REST client with timeouts, connection reuse, instrumentation and limit integration. | Planned |
+| 045 | Binance SDK Adoption and REST Transport Reconciliation | Adopt `binance-common` and the product SDK distributions the wheel survey records against this phase, and reconcile them with the REST transport Phase 034 delivered -- timeouts, connection reuse, instrumentation and limit integration already exist. | Planned |
 | 046 | WebSocket Transport and Stream Lifecycle | Implement connection lifecycle, keepalive, subscription management and backpressure for streams. | Planned |
 | 047 | FIX and SBE Interface Assessment | Evaluate whether the documented FIX and SBE interfaces provide material value for this system. | Planned |
 | 048 | API Layer Consolidation and Phase Gate Review | Reconcile the API band and certify the transport foundation before data acquisition begins. | Planned |

@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 033 of 320 complete — foundation only
+## Current status: Phase 034 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -28,7 +28,7 @@ capability cannot be claimed here without pointing at something real.
 |---|---|
 | Repository, branch policy, engineering contract — [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) | Implemented |
 | 320-phase roadmap, every phase named — [`ROADMAP.md`](ROADMAP.md) | Implemented |
-| Architecture decision records (87) — [`docs/adr/`](docs/adr/README.md) | Implemented |
+| Architecture decision records (89) — [`docs/adr/`](docs/adr/README.md) | Implemented |
 | Research source ledgers with primary sources — [`docs/research/`](docs/research/phase_001_sources.md) | Implemented |
 | UTC-only internal time: an injected clock, aware instants, milliseconds as a floored projection — [`TIME_POLICY.md`](docs/TIME_POLICY.md) | Implemented |
 | Exact decimal arithmetic, four rounding modes, tick and step alignment — [`PRECISION_POLICY.md`](docs/PRECISION_POLICY.md) | Implemented |
@@ -62,16 +62,23 @@ capability cannot be claimed here without pointing at something real.
 | A user-scoped DPAPI vault for key material the store's 2560-byte ceiling refuses, admitted by arithmetic and carrying its own integrity check — [`SECRET_VAULT.md`](docs/security/SECRET_VAULT.md) | Implemented |
 | Degraded operation: a necessity per component, a posture folded from what each factory returned, and a network declared rather than probed — [`DEGRADED_OPERATION.md`](docs/engineering/DEGRADED_OPERATION.md) | Implemented |
 | An environment capability inventory separating native from process architecture, with a fingerprint that excludes everything volatile — [`ENVIRONMENT_CAPABILITY.md`](docs/engineering/ENVIRONMENT_CAPABILITY.md) | Implemented |
+| A capability-gated REST transport that resolves an endpoint only from the venue registry, and preserves an unknown outcome rather than calling it a failure — [`REST_TRANSPORT.md`](docs/engineering/REST_TRANSPORT.md) | Implemented |
+| A re-check cadence over the official documentation, with an accumulated change journal and a drift ledger that fails in both directions — [`DOCUMENTATION_INGESTION.md`](docs/engineering/DOCUMENTATION_INGESTION.md) | Implemented |
 | Everything else | Not started |
 
 ### What does not exist
 
-Binance API integration, request signing, credential handling, WebSocket
+Authenticated Binance requests, request signing, credential handling, WebSocket
 clients, market data ingestion, order books, an execution engine, backtesting,
 technical indicators, strategies, machine learning, reinforcement learning,
 optimisation, portfolio and risk management, the Telegram interface, the
 orchestrator, and the `start_windows_paper.bat` / `start_windows_live.bat`
 launchers.
+
+Phase 034 gave GLOBIN a REST transport, so it now reaches Binance for three
+public, unauthenticated, read-only requests — connectivity, server time and
+exchange information. That is the whole of what it can send. It signs nothing,
+reads no credential, and places no order.
 
 Their contracts are documented. Their implementations belong to later phases and
 have not been written.

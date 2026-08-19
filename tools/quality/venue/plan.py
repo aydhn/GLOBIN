@@ -191,6 +191,13 @@ class Source:
     location: str
     regime: str
     digest: str
+    accessed: str = ""
+    """When the document was last read, as an ISO date.
+
+    Added in Phase 034, which needed to age a source against its declared cadence.
+    Phase 033 recorded the date and nothing consumed it, so this reader had no
+    reason to parse it.
+    """
     known_unparseable: bool = False
 
 
@@ -273,6 +280,7 @@ def parse_declaration(text: str) -> Declaration:
                 location=str(row.get("location", "")),
                 regime=str(row.get("regime", "")),
                 digest=str(row.get("digest", "")),
+                accessed=str(row.get("accessed", "")),
                 known_unparseable=row.get("known_unparseable") is True,
             )
             for row in _rows(document, "source")

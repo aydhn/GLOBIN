@@ -13,17 +13,20 @@ from pathlib import Path
 import pytest
 
 from tools.quality.venue import gate, plan
-from tools.quality.venue.cli import USAGE, UsageError, main, parse
+from tools.quality.venue.cli import CHECK, JOURNAL, REFRESH, USAGE, UsageError, main, parse
 from tools.quality.venue.gate import (
+    ARTEFACT_ROOT,
     EXIT_GATE_FAILED,
     EXIT_OK,
     EXIT_UNMEASURED,
     Fetcher,
     describe,
+    describe_journal,
     fetch,
     run_api_reality,
 )
-from tools.quality.venue.manifest import ManifestError, build, digest, load, render
+from tools.quality.venue.ingestion import REASON_SOURCE_STALE, append_journal
+from tools.quality.venue.manifest import DIRECTORY, ManifestError, build, digest, load, render
 from tools.quality.venue.plan import (
     REASON_CONDITION_MISSING,
     REASON_DUPLICATE_IDENTITY,
@@ -424,16 +427,24 @@ class TestManifest:
 
 
 class TestCommandLine:
-    """Two words, and the offline one is the default."""
+    """Three words, and the offline one is the default.
+
+    **The return type changed in Phase 034 and the reason is arithmetic.** Until a
+    third verb existed, ``parse`` answered a yes-or-no question -- *is this the
+    networked one* -- and a ``bool`` said exactly that. ``journal`` is neither, so a
+    boolean could only have carried it by making one of the three the "else" case.
+    The verb is returned instead.
+    """
 
     def test_no_argument_means_the_offline_verb(self) -> None:
         """The default must be the one that reaches nothing."""
-        assert parse([]) is False
+        assert parse([]) == CHECK
 
-    def test_check_is_offline_and_refresh_is_not(self) -> None:
+    def test_each_verb_parses_to_itself(self) -> None:
         """The networked word is opt-in, which is the shape every such gate uses."""
-        assert parse(["check"]) is False
-        assert parse(["refresh"]) is True
+        assert parse(["check"]) == CHECK
+        assert parse(["refresh"]) == REFRESH
+        assert parse(["journal"]) == JOURNAL
 
     @pytest.mark.parametrize("argv", [["probe"], ["check", "refresh"], ["--json"]])
     def test_anything_else_is_a_usage_error(self, argv: list[str]) -> None:
@@ -441,9 +452,9 @@ class TestCommandLine:
         with pytest.raises(UsageError):
             parse(argv)
 
-    def test_the_usage_text_names_both_verbs_and_every_code(self) -> None:
+    def test_the_usage_text_names_every_verb_and_every_code(self) -> None:
         """The usage block is the only place an operator reads the exit codes."""
-        for token in ("check", "refresh", "0", "1", "2", "3"):
+        for token in ("check", "refresh", "journal", "0", "1", "2", "3"):
             assert token in USAGE
 
 
@@ -575,3 +586,77 @@ def test_the_manifest_records_what_the_phase_promised() -> None:
     for key in ("status_counts", "current_schemas"):
         assert key in findings, f"the manifest omits findings.{key}"
     assert document["phase"] == 33
+
+
+class TestTheJournalReport:
+    """What `python -m tools.quality.venue journal` prints."""
+
+    def test_an_empty_journal_reports_empty_rather_than_failing(self, tmp_path: Path) -> None:
+        """Nothing has moved, or nothing has looked.
+
+        The two are told apart by whether a refresh has ever run, which the manifest
+        records and this deliberately does not guess.
+        """
+        text = describe_journal(tmp_path)
+        assert "empty" in text
+        assert "no refresh has run" in text
+
+    def test_recorded_runs_are_reported_oldest_first(self, tmp_path: Path) -> None:
+        """Every line is a moment something moved, in the order it moved."""
+        directory = tmp_path / ARTEFACT_ROOT / DIRECTORY
+        append_journal(
+            directory,
+            {
+                "recorded_at": "2026-08-01",
+                "sources_checked": 14,
+                "findings": [{"reason": "API_REALITY_SOURCE_CHANGED", "subject": "spot-rest"}],
+            },
+        )
+        append_journal(
+            directory, {"recorded_at": "2026-08-19", "sources_checked": 15, "findings": []}
+        )
+        text = describe_journal(tmp_path)
+        assert text.index("2026-08-01") < text.index("2026-08-19")
+        assert "API_REALITY_SOURCE_CHANGED" in text
+        assert "2 recorded runs" in text
+
+    def test_a_record_missing_fields_is_reported_rather_than_crashing(self, tmp_path: Path) -> None:
+        """The journal is machine-local and append-only, so an old record may lack a field.
+
+        Reporting a `?` beats refusing to print the whole log because one line
+        predates a field somebody added.
+        """
+        append_journal(tmp_path / ARTEFACT_ROOT / DIRECTORY, {"unexpected": True})
+        assert "?" in describe_journal(tmp_path)
+
+
+class TestTheIngestionHalfOfTheGate:
+    """Ageing produces notes; the ledger produces findings."""
+
+    def test_a_stale_source_becomes_a_note_and_not_a_finding(self, repo_root: Path) -> None:
+        """Ageing must not redden a gate on a machine that may have no network.
+
+        The transport fails closed on the same fact; that is where failing closed
+        belongs. Today nothing is stale, so what this asserts is the shape: a
+        source-stale reason never appears among the *findings*.
+        """
+        outcome = run_api_reality(root=repo_root, refresh=False)
+        assert outcome.code == EXIT_OK
+        assert all(item.reason != REASON_SOURCE_STALE for item in outcome.findings)
+
+    def test_the_committed_registry_ages_clean_today(self, repo_root: Path) -> None:
+        """Every source was read on the date the registry records."""
+        outcome = run_api_reality(root=repo_root, refresh=False)
+        assert outcome.notes == ()
+        assert outcome.code == EXIT_OK
+
+    def test_a_run_with_no_cadence_document_reports_unmeasured(self, tmp_path: Path) -> None:
+        """An absent policy establishes nothing rather than clearing everything.
+
+        Driven through the whole gate against a tree with no registry either, so
+        what is asserted is that the run completes and reports rather than raising
+        on the missing document.
+        """
+        outcome = run_api_reality(root=tmp_path, refresh=False)
+        assert outcome.code == EXIT_UNMEASURED
+        assert outcome.notes == ()

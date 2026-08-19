@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Final, TextIO
 
 from globin.adapters.api_reality import REGISTRY_PATH, read_registry
+from globin.adapters.api_reality import digest as api_reality_digest
 from globin.adapters.api_reality import summarise as summarise_registry
 from globin.adapters.bootstrap import (
     RUNTIME_CONTRACT_PATH,
@@ -57,10 +58,22 @@ from globin.adapters.environment import (
 )
 from globin.adapters.health import snapshot_document
 from globin.adapters.identifiers import new_run_id
+from globin.adapters.ingestion import POLICY_PATH, read_policy
 from globin.adapters.observability import new_correlation_id
+from globin.adapters.rest import CONTRACT_PATH, read_contract
+from globin.adapters.rest import EVIDENCE_DIRECTORY as REST_EVIDENCE_DIRECTORY
+from globin.adapters.rest import build as build_rest_manifest
+from globin.adapters.rest import write as write_rest_manifest
+from globin.adapters.rest_transport import HttpRestTransport
 from globin.adapters.telemetry_otel import opentelemetry_bridge
 from globin.adapters.telemetry_prometheus import prometheus_publisher
 from globin.application.provisioning import ProvisioningOutcome, ProvisioningProposal
+from globin.application.rest import (
+    resolution_report,
+    run_probe,
+    self_test,
+    survey_report,
+)
 from globin.application.secrets import (
     ENTRY_REMEDIATION,
     REMEDIATION,
@@ -68,7 +81,12 @@ from globin.application.secrets import (
     rotate_from_entry,
     set_from_entry,
 )
-from globin.domain.api_reality import ApiRealitySnapshot, SurfaceStatus
+from globin.domain.api_reality import (
+    ApiRealitySnapshot,
+    EnvironmentName,
+    ProductFamily,
+    SurfaceStatus,
+)
 from globin.domain.api_reality import diff as compare_registries
 from globin.domain.bootstrap import BootstrapOutcome, CheckStatus, ExitCode, RuntimePaths
 from globin.domain.config_evidence import (
@@ -110,10 +128,14 @@ from globin.domain.environment import (
 )
 from globin.domain.health import RuntimeHealthSnapshot, RuntimeHealthState
 from globin.domain.identifiers import EnvironmentId
+from globin.domain.ingestion import FreshnessReport, IngestionPolicy, assess
 from globin.domain.metrics import declared_series, metrics
 from globin.domain.observability import redact
 from globin.domain.preflight import PreflightOutcome
 from globin.domain.provisioning import NetworkPolicy, ProvisioningPlan
+from globin.domain.rest import RequestOutcome, RestExchange
+from globin.domain.rest_contract import TransportContract
+from globin.domain.rest_endpoint import EndpointResolution
 from globin.domain.runtime_state import RuntimeArea
 from globin.domain.secrets import (
     EntryFault,
@@ -141,10 +163,12 @@ from globin.runtime.composition import (
     build_api_reality_source,
     build_bootstrap,
     build_bundle_builder,
+    build_clock,
     build_config_sources,
     build_grant_register,
     build_health_collector,
     build_logger,
+    build_monotonic_clock,
     build_provisioning,
     build_runtime_state,
     build_secret_entry,
@@ -318,6 +342,69 @@ whether *a* backend can be reached, and this answers which of several this host
 has. It emits no value and reads no operator secret.
 """
 
+REST: Final[str] = "rest"
+"""The command group Phase 034 added: what the REST transport would do, and one probe.
+
+Named for the protocol rather than for the venue, because the resolver is driven by
+Phase 033's registry and would answer for any product family that registry
+describes. Today that is Spot; the command needs no edit when it is more.
+"""
+
+RESOLVE: Final[str] = "resolve"
+"""Which endpoint one product and environment resolves to, or why it does not."""
+
+ENDPOINTS: Final[str] = "endpoints"
+"""Every declared surface and how it resolves, refusals included."""
+
+PING: Final[str] = "ping"
+"""One public connectivity request. Reaches the venue."""
+
+SERVER_TIME: Final[str] = "server-time"
+"""One public server-time request. Reaches the venue, and sets no clock."""
+
+SELFTEST: Final[str] = "selftest"
+"""The package against its own declared contract. Reaches nothing."""
+
+REST_SUBCOMMANDS: Final[tuple[str, ...]] = (
+    RESOLVE,
+    ENDPOINTS,
+    PING,
+    SERVER_TIME,
+    SELFTEST,
+    EVIDENCE,
+)
+"""Every verb the REST surface answers, and no seventh.
+
+Four read and two reach the venue. **The verb is the opt-in**, which is the shape
+``venue check`` and ``venue refresh`` already use: there is no ``--network`` flag to
+forget, because a command that only makes sense over a network says so in its name.
+A configuration key gating the two would be a mechanism with no caller — nothing in
+GLOBIN runs long enough to consult one — and this repository refuses those.
+"""
+
+REST_SURFACE_SUBCOMMANDS: Final[tuple[str, ...]] = (RESOLVE, PING, SERVER_TIME)
+"""The verbs that name one product and one environment, and therefore require both.
+
+``endpoints``, ``selftest`` and ``evidence`` answer about everything or about the
+package, so passing them a family would be passing an argument that does nothing.
+"""
+
+REST_PROBE_OPERATIONS: Final[dict[str, str]] = {PING: "ping", SERVER_TIME: "time"}
+"""Which declared operation each probe verb asks the contract for.
+
+The suffix only. The full operation is ``{family}.{suffix}``, built at the call
+site, so a second product family needs a row in ``rest-transport.toml`` and no
+change here.
+"""
+
+FAMILY_FLAG: Final[str] = "--family"
+"""Which product family a REST command is about.
+
+Required rather than defaulted. ``spot`` is the only family with a documented REST
+surface today, and defaulting to it would make the command silently wrong on the day
+a second one arrives.
+"""
+
 API_REALITY_SUBCOMMANDS: Final[tuple[str, ...]] = (
     SHOW,
     PRODUCTS,
@@ -446,9 +533,8 @@ invites somebody to add it to a script that runs every minute; a verb reads like
 the deliberate act it is.
 """
 
-USAGE: Final[
-    str
-] = """usage: globin [--version] [doctor|bootstrap|config|diagnostics|secrets|api-reality]
+USAGE: Final[str] = """usage: globin [--version]
+                [doctor|bootstrap|config|diagnostics|secrets|api-reality|rest]
                      [subcommand] [--json] [--profile NAME]
                      [--config PATH] [--set KEY=VALUE]
 
@@ -482,6 +568,20 @@ Commands:
   api-reality verify    Re-read the registry and report its digest.
   api-reality diff PATH Compare the registry against another snapshot. Exits 1
                         when a finding is more than informational.
+  rest resolve          Which endpoint one product and environment resolves
+                        to, or why it does not. Needs --family and
+                        --environment. Reads the registry; opens nothing.
+                        Exits 14 when the ask cannot be resolved.
+  rest endpoints        Every declared surface and how it resolves, refusals
+                        included. Opens nothing.
+  rest selftest         The package against its own declared transport
+                        contract. Reaches nothing. Exits 1 on a mismatch.
+  rest evidence         Write .globin/rest/rest-manifest.json.
+  rest ping             One public, read-only, unauthenticated connectivity
+                        request. REACHES THE VENUE. Needs --family and
+                        --environment; never falls back between them.
+  rest server-time      One public, read-only server-time request. REACHES
+                        THE VENUE, and synchronises no clock.
   diagnostics snapshot  Measure this runtime once and report its health.
   diagnostics bundle    Write a redacted support archive and print its digest.
   diagnostics memory    Snapshot with the allocator tracer on, then off again.
@@ -601,6 +701,7 @@ class Invocation:
     as_json: bool = False
     profile: str = ""
     environment: str = ""
+    family: str = ""
     kind: str = ""
     name: str = ""
     provider: str = ""
@@ -675,6 +776,8 @@ def parse(argv: Sequence[str]) -> Invocation:
         return _parse_secrets(words[1:])
     if head == API_REALITY:
         return _parse_api_reality(words[1:])
+    if head == REST:
+        return _parse_rest(words[1:])
     msg = f"unrecognised argument: {head!r}"
     raise UsageError(msg)
 
@@ -1059,6 +1162,12 @@ def main(
             print(f"globin: the secret operation failed: {fault}", file=err)
             return int(ExitCode.SECRETS_UNREADY)
 
+    if invocation.command.startswith(REST):
+        try:
+            return _rest(invocation, out=out, err=err, start=start)
+        except (GlobinError, OSError) as fault:
+            print(f"globin: the REST surface could not answer: {fault}", file=err)
+            return int(ExitCode.GATE_FAILED)
     if invocation.command.startswith(API_REALITY):
         try:
             return _api_reality(invocation, out=out, err=err, start=start)
@@ -3268,3 +3377,500 @@ def _api_reality_diff(
     else:
         print(human, end="", file=out)
     return int(ExitCode.GATE_FAILED if found.demands_attention else ExitCode.OK)
+
+
+def _parse_rest(rest: Sequence[str]) -> Invocation:
+    """Read what follows ``rest``.
+
+    Args:
+        rest: The remaining words.
+
+    Returns:
+        The invocation.
+
+    Raises:
+        UsageError: If the subcommand is unrecognised, if a required option is
+            missing, or if an option appears where it means nothing.
+
+    ``--family`` and ``--environment`` are required by the four verbs that name a
+    single surface and refused by the two that do not. A default environment is
+    deliberately absent: defaulting it would mean one of ``production``,
+    ``testnet`` or ``demo`` was reached by typing nothing, and which one is exactly
+    the decision an operator must make out loud.
+    """
+    words = list(rest)
+    subcommand = RESOLVE
+    if words and not words[0].startswith("-"):
+        subcommand = words.pop(0)
+        if subcommand not in REST_SUBCOMMANDS:
+            msg = f"unrecognised argument: {subcommand!r}"
+            raise UsageError(msg)
+    options = _rest_options(words, subcommand)
+    if subcommand in REST_SURFACE_SUBCOMMANDS:
+        if not options.family:
+            msg = f"{REST} {subcommand} needs {FAMILY_FLAG}"
+            raise UsageError(msg)
+        if not options.environment:
+            msg = f"{REST} {subcommand} needs {ENVIRONMENT_FLAG}"
+            raise UsageError(msg)
+    elif options.family or options.environment:
+        msg = (
+            f"{REST} {subcommand} names no single surface, so {FAMILY_FLAG} and "
+            f"{ENVIRONMENT_FLAG} mean nothing here"
+        )
+        raise UsageError(msg)
+    return Invocation(
+        command=f"{REST} {subcommand}",
+        as_json=options.as_json,
+        family=options.family,
+        environment=options.environment,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _RestOptions:
+    """What a rest subcommand was given."""
+
+    as_json: bool = False
+    family: str = ""
+    environment: str = ""
+
+
+def _rest_options(words: Sequence[str], context: str) -> _RestOptions:
+    """Accept the three options a rest subcommand may take, and nothing else.
+
+    Args:
+        words: The remaining words.
+        context: What they followed, for the message.
+
+    Returns:
+        What was asked for.
+
+    Raises:
+        UsageError: If anything else appears, if an option repeats, or if one that
+            takes a value is given without one.
+
+    A separate reader rather than four more fields on :class:`Options`, for the
+    reason ``_secret_options`` gives: an option every command accepts is an option
+    every command has to be checked for, and a flag that silently does nothing is
+    how a caller ends up believing it asked for something.
+    """
+    remaining = list(words)
+    as_json = False
+    family = ""
+    environment = ""
+    while remaining:
+        word = remaining.pop(0)
+        if word == JSON_FLAG:
+            if as_json:
+                msg = f"{JSON_FLAG} was given twice"
+                raise UsageError(msg)
+            as_json = True
+            continue
+        if word == FAMILY_FLAG:
+            family = _valued(remaining, FAMILY_FLAG, family)
+            continue
+        if word == ENVIRONMENT_FLAG:
+            environment = _valued(remaining, ENVIRONMENT_FLAG, environment)
+            continue
+        msg = f"unrecognised argument after {context}: {word!r}"
+        raise UsageError(msg)
+    return _RestOptions(as_json=as_json, family=family, environment=environment)
+
+
+def _rest_sources(
+    start: Path | None,
+) -> tuple[ApiRealitySnapshot | None, TransportContract | None, IngestionPolicy | None]:
+    """The three committed documents the REST surface reads.
+
+    Args:
+        start: Where to begin looking for the repository root.
+
+    Returns:
+        Phase 033's registry, Phase 034's transport contract and Phase 034's
+        ingestion cadence. Any of the three is ``None`` when its document is absent.
+
+    Raises:
+        GlobinError: If a document is present and contradicts itself.
+    """
+    base = (start or Path.cwd()).resolve()
+    root = find_project_root(base) or base
+    return (
+        build_api_reality_source(root).snapshot(),
+        read_contract(root / CONTRACT_PATH),
+        read_policy(root / POLICY_PATH),
+    )
+
+
+def _rest_freshness(snapshot: ApiRealitySnapshot, policy: IngestionPolicy) -> FreshnessReport:
+    """How old every recorded source is, as of today.
+
+    Args:
+        snapshot: Phase 033's registry.
+        policy: The declared cadence.
+
+    Returns:
+        The report.
+
+    **This is where the phase's two halves meet.** The transport's fail-closed rule
+    names ``stale`` among the states it refuses, and nothing in this repository
+    could answer whether a source was stale until the cadence existed. Today's date
+    is read here, in the runtime layer, and handed down — the domain takes it as an
+    argument and reads no clock.
+    """
+    today = build_clock().now().moment.date().isoformat()
+    return assess(snapshot, policy, as_of=today)
+
+
+def _rest(invocation: Invocation, *, out: TextIO, err: TextIO, start: Path | None) -> int:
+    """Report what the REST transport would do, or make one public request.
+
+    Args:
+        invocation: What was asked for.
+        out: Where the report goes.
+        err: Where human text goes under ``--json``.
+        start: Where to begin the search for the project root.
+
+    Returns:
+        The exit code. ``3`` when a document is missing, ``14`` when the ask cannot
+        be resolved, ``1`` when a check or a probe failed, ``0`` otherwise.
+
+    **No twenty-sixth exit code.** A refused resolution is a configuration problem
+    -- the operator asked for a surface the registry does not describe -- so it is
+    ``14``, which already means exactly that. An absent registry established
+    nothing, which is ``3``. 26 stays free.
+    """
+    snapshot, contract, policy = _rest_sources(start)
+    absent = [
+        name
+        for name, document in (
+            ("the api reality registry", snapshot),
+            ("the transport contract", contract),
+            ("the ingestion policy", policy),
+        )
+        if document is None
+    ]
+    if snapshot is None or contract is None or policy is None:
+        print(
+            f"globin: {', '.join(absent)} is absent, so nothing was established",
+            file=err,
+        )
+        return int(ExitCode.UNMEASURED)
+    freshness = _rest_freshness(snapshot, policy)
+    subcommand = invocation.command.removeprefix(f"{REST} ")
+    if subcommand == SELFTEST:
+        return _rest_selftest(contract, out=out, as_json=invocation.as_json)
+    if subcommand == ENDPOINTS:
+        document = survey_report(snapshot, stale_sources=freshness.stale)
+        document["freshness"] = freshness.as_record()
+        _emit(document, _rest_survey_text(document), out=out, as_json=invocation.as_json)
+        return int(ExitCode.OK)
+    if subcommand == EVIDENCE:
+        return _rest_evidence(snapshot, contract, freshness, out=out, start=start)
+    resolution = resolution_report(
+        snapshot,
+        family=ProductFamily(invocation.family),
+        environment=EnvironmentName(invocation.environment),
+        stale_sources=freshness.stale,
+    )
+    if subcommand == RESOLVE:
+        _emit(
+            resolution.as_record(),
+            _rest_resolution_text(resolution),
+            out=out,
+            as_json=invocation.as_json,
+        )
+        return int(ExitCode.OK if resolution.permitted else ExitCode.CONFIGURATION_INVALID)
+    return _rest_probe(
+        resolution, contract, subcommand, out=out, err=err, as_json=invocation.as_json
+    )
+
+
+def _emit(document: Mapping[str, object], text: str, *, out: TextIO, as_json: bool) -> None:
+    """Print one report in whichever form was asked for.
+
+    Args:
+        document: The machine-readable form.
+        text: The human form.
+        out: Where it goes.
+        as_json: Which form was asked for.
+
+    Under ``--json`` standard output carries JSON and nothing else, which is the
+    rule every command group in this file already follows.
+    """
+    print(render_json_document(document) if as_json else text, file=out)
+
+
+def _rest_selftest(contract: TransportContract, *, out: TextIO, as_json: bool) -> int:
+    """Check the package against its declared contract and report.
+
+    Args:
+        contract: The declared transport contract.
+        out: Where the report goes.
+        as_json: Whether JSON was asked for.
+
+    Returns:
+        ``0`` when every check passed, ``1`` otherwise.
+    """
+    report = self_test(contract)
+    lines = ["REST transport self-test", ""]
+    lines += [
+        f"  {'pass' if item.passed else 'FAIL'}  {item.check:34} {item.detail}"
+        for item in report.findings
+    ]
+    lines += ["", f"  {len(report.findings)} checked, {len(report.failures)} failed"]
+    _emit(report.as_record(), "\n".join(lines), out=out, as_json=as_json)
+    return int(ExitCode.OK if report.passed else ExitCode.GATE_FAILED)
+
+
+def _rest_resolution_text(resolution: EndpointResolution) -> str:
+    """One resolution, for a person.
+
+    Args:
+        resolution: What was decided.
+
+    Returns:
+        The report.
+
+    The environment is on its own line and so is whether real capital is at risk,
+    because those two are what an operator is actually checking before they run
+    anything else.
+    """
+    lines = [
+        "REST endpoint resolution",
+        "",
+        f"  product      {resolution.requested_family}",
+        f"  environment  {resolution.requested_environment}",
+        f"  capability   {resolution.requested_capability}",
+        f"  intent       {resolution.intent.value}",
+        f"  outcome      {resolution.outcome.value}",
+    ]
+    endpoint = resolution.endpoint
+    if endpoint is None:
+        lines += ["", f"  refused: {resolution.detail}"]
+        return "\n".join(lines)
+    capital = (
+        "YES -- this environment carries real capital" if endpoint.carries_real_capital else "no"
+    )
+    lines += [
+        f"  role         {endpoint.role.value}",
+        f"  host         {endpoint.host}",
+        f"  path prefix  {endpoint.path_prefix or '(none)'}",
+        f"  auth         {endpoint.auth}",
+        f"  capabilities {', '.join(endpoint.capabilities)}",
+        f"  real capital {capital}",
+        f"  source       {endpoint.source}",
+    ]
+    if endpoint.schema_reference is not None:
+        reference = endpoint.schema_reference
+        lines.append(f"  sbe schema   {reference.identifier}:{reference.version}")
+    count = len(resolution.alternates)
+    if count:
+        noun = "endpoint is" if count == 1 else "endpoints are"
+        lines += [
+            "",
+            f"  {count} alternate {noun} recorded, and nothing fails over to",
+            "  them; a resolution is fixed for the life of one request.",
+        ]
+    return "\n".join(lines)
+
+
+def _rest_survey_text(document: Mapping[str, object]) -> str:
+    """Every declared surface and how it resolves, for a person.
+
+    Args:
+        document: What :func:`survey_report` produced.
+
+    Returns:
+        The report.
+    """
+    rows = document["resolutions"]
+    counts = document["counts"]
+    lines = ["REST endpoint survey", ""]
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            endpoint = row.get("endpoint")
+            where = endpoint["host"] if isinstance(endpoint, dict) else "--"
+            lines.append(
+                f"  {row['requested_family']:22} {row['requested_environment']:12} "
+                f"{row['outcome']:26} {where}"
+            )
+    lines += ["", f"  {document['resolved']} resolved, {document['refused']} refused"]
+    if isinstance(counts, dict):
+        named = ", ".join(f"{name}={count}" for name, count in sorted(counts.items()) if count)
+        lines.append(f"  {named}")
+    return "\n".join(lines)
+
+
+def _rest_probe(
+    resolution: EndpointResolution,
+    contract: TransportContract,
+    subcommand: str,
+    *,
+    out: TextIO,
+    err: TextIO,
+    as_json: bool,
+) -> int:
+    """Send one public, read-only request and report the exchange.
+
+    Args:
+        resolution: Where to send it, already decided.
+        contract: The declared contract, which names the path.
+        subcommand: Which probe was asked for.
+        out: Where the report goes.
+        err: Where the notice goes.
+        as_json: Whether JSON was asked for.
+
+    Returns:
+        ``14`` when the resolution refused, ``1`` when the exchange did not confirm
+        success, ``0`` otherwise.
+
+    **The notice is printed before the connection is opened**, names the
+    environment, and says the request is public and read-only. An operator running
+    this against production is entitled to see that before it happens rather than
+    to infer it from the verb.
+    """
+    if not resolution.permitted or resolution.endpoint is None:
+        _emit(
+            resolution.as_record(),
+            _rest_resolution_text(resolution),
+            out=out,
+            as_json=as_json,
+        )
+        return int(ExitCode.CONFIGURATION_INVALID)
+    family = ProductFamily(resolution.requested_family)
+    operation = f"{family.slug}.{REST_PROBE_OPERATIONS[subcommand]}"
+    descriptor = contract.probe(family, operation)
+    if descriptor is None:
+        print(
+            f"globin: the transport contract declares no {operation!r} probe for "
+            f"{resolution.requested_family}; a path is never guessed",
+            file=err,
+        )
+        return int(ExitCode.CONFIGURATION_INVALID)
+    endpoint = resolution.endpoint
+    print(
+        f"globin: sending a public, read-only, unauthenticated {descriptor.method.value} to "
+        f"{endpoint.host} in {endpoint.environment} (weight {descriptor.weight}, no credential)",
+        file=err,
+    )
+    correlation = new_correlation_id()
+    with HttpRestTransport(
+        environment=endpoint.environment, clock=build_monotonic_clock()
+    ) as transport:
+        exchange = run_probe(
+            transport,
+            resolution,
+            operation=descriptor.operation,
+            method=descriptor.method,
+            path=descriptor.path,
+            correlation_id=correlation,
+        )
+    _emit(
+        exchange.as_record(), _rest_exchange_text(exchange, endpoint.host), out=out, as_json=as_json
+    )
+    return int(
+        ExitCode.OK
+        if exchange.outcome is RequestOutcome.SUCCESS_CONFIRMED
+        else ExitCode.GATE_FAILED
+    )
+
+
+def _rest_exchange_text(exchange: RestExchange, host: str) -> str:
+    """One exchange, for a person.
+
+    Args:
+        exchange: What happened.
+        host: Where it went.
+
+    Returns:
+        The report.
+    """
+    record = exchange.diagnostics
+    lines = [
+        "REST probe",
+        "",
+        f"  operation    {exchange.operation}",
+        f"  host         {host}",
+        f"  environment  {record.environment}",
+        f"  send state   {exchange.send_state.value}",
+        f"  outcome      {exchange.outcome.value}",
+        f"  elapsed      {record.elapsed_nanoseconds // 1_000_000} ms",
+    ]
+    response = exchange.response
+    if response is not None:
+        lines += [
+            f"  status       {response.status}",
+            f"  body         {response.shape.value}, {record.response_bytes} bytes",
+        ]
+        limits = response.limits
+        if limits.used_weight:
+            lines.append(f"  used weight  {dict(limits.used_weight)}")
+        if limits.retry_after_seconds is not None:
+            lines.append(f"  retry after  {limits.retry_after_seconds}s")
+        if response.fault is not None:
+            lines.append(f"  venue said   {response.fault.code}: {response.fault.message}")
+    if exchange.failure is not None:
+        lines += ["", f"  failed: {exchange.detail}"]
+    if exchange.at_risk:
+        lines += ["", "  THIS OUTCOME IS UNKNOWN. Nothing retries it automatically."]
+    return "\n".join(lines)
+
+
+def _rest_evidence(
+    snapshot: ApiRealitySnapshot,
+    contract: TransportContract,
+    freshness: FreshnessReport,
+    *,
+    out: TextIO,
+    start: Path | None,
+) -> int:
+    """Write Phase 034's evidence manifest.
+
+    Args:
+        snapshot: Phase 033's registry.
+        contract: The declared transport contract.
+        freshness: How old each recorded source is, as of today.
+        out: Where the path is printed.
+        start: Where to begin the search for the project root.
+
+    Returns:
+        ``0`` when the self-test passed, ``1`` otherwise.
+
+    **No probe result is included and none is invented.** A manifest written on a
+    machine that ran no probe records ``unmeasured`` for that half, which is the
+    same answer ``drift`` gives for an unrecorded baseline: nothing was established,
+    which is not the same as nothing being wrong.
+    """
+    base = (start or Path.cwd()).resolve()
+    root = find_project_root(base) or base
+    report = self_test(contract)
+    survey = survey_report(snapshot, stale_sources=freshness.stale)
+    document = build_rest_manifest(
+        run={
+            "registry": REGISTRY_PATH,
+            "contract": CONTRACT_PATH,
+            "ingestion_policy": POLICY_PATH,
+            "registry_digest": api_reality_digest(snapshot.as_record()),
+            "contract_observed_on": contract.observed_on,
+            "probes_declared": [item.as_record() for item in contract.probes],
+            "probe_results": "unmeasured",
+            "reached_network": False,
+        },
+        findings={
+            "self_test": report.as_record(),
+            "resolution_survey": survey,
+            "source_freshness": freshness.as_record(),
+        },
+        verdict={
+            "passed": report.passed,
+            "resolved": survey["resolved"],
+            "refused": survey["refused"],
+        },
+    )
+    directory = root / RuntimePaths().artifacts / REST_EVIDENCE_DIRECTORY
+    written = write_rest_manifest(document, directory=directory)
+    print(f"wrote {written}", file=out)
+    return int(ExitCode.OK if report.passed else ExitCode.GATE_FAILED)

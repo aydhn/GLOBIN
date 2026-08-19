@@ -19,6 +19,122 @@ can be opened and read.
 
 ## [Unreleased]
 
+### The first phase that connects to the venue
+
+- **A REST transport whose endpoint comes from the registry and nowhere else.**
+  Ten gates, each refusing before the next is reached, over Phase 033's committed
+  document. Spot resolves in production, demo and testnet; the other seven recorded
+  families refuse, because their REST surface is `unknown` and the venue's
+  derivatives documentation has no admissible route. That refusal is the feature —
+  a transport that resolved one anyway would be inventing an endpoint.
+  [`REST_TRANSPORT.md`](docs/engineering/REST_TRANSPORT.md)
+
+- **Testnet cannot become production, and demo cannot become testnet.** Not by
+  rule: the only source of candidates filters on environment *before* returning, so
+  there is no branch in which a production URL is reachable from a testnet request.
+  A refusal carries **no endpoint at all** — the type refuses that combination — so
+  a caller that ignored the outcome finds nothing to misuse.
+
+- **A five-member outcome, because two is how an order gets placed twice.**
+  `SUCCESS_CONFIRMED`, `FAILURE_CONFIRMED`, `UNKNOWN`, `NOT_SENT`,
+  `REJECTED_BEFORE_SEND`. Binance documents the reason: of a 5XX, *"It is important
+  to **NOT** treat this as a failure operation; the execution status is
+  **UNKNOWN**."* The same 503 is a confirmed failure for a read and `UNKNOWN` for a
+  write, and a read-only request can never return `UNKNOWN` at all.
+
+- **The outcome is returned, never raised**, which is a security decision rather
+  than a style one. An exception reads as *this did not happen*; every caller writes
+  `except TransportError` and treats the body as the failure path. Raising `UNKNOWN`
+  would hand every caller a mechanism for destroying the one fact this phase exists
+  to preserve.
+
+- **403, 418 and 429 are confirmed failures even for a write.** All three are
+  refusals at the edge before any matching engine. Marking them ambiguous "to be
+  safe" would be unsafe: nothing retries `UNKNOWN`, so an ordinary rate-limit
+  rejection — the one failure that is always retryable — would become permanently
+  unretryable at Phase 043.
+
+- **Nothing retries, and there is no parameter that would make it.** Asserted
+  against the source, and against the object: one `send()` produces exactly one
+  connection attempt.
+
+- **Canonical encoding a signer can rely on.** Declaration order preserved,
+  duplicates kept, `Decimal` scale preserved (`0.10` is not `0.1` to a venue
+  comparing against a step size), `1E-8` rendered positionally, `bool` rendered
+  `true` rather than `1`, and *never mentioned* kept apart from *mentioned and
+  omitted*. The percent-encoder is hand-written because a domain module may not
+  import `urllib` — which made the safe set a stated constant this repository owns
+  rather than a standard-library default that may be widened.
+
+- **SBE negotiated, gated and never decoded.** `Accept: application/sbe` is offered
+  **alone**, because the venue documents that offering it beside JSON *"will fall
+  back to JSON"* when the schema is unsupported — a silent downgrade GLOBIN would
+  have recorded as SBE. Negotiability is derived from the registry's published
+  schema lifecycle, so SBE resolves in production and fails closed in testnet. The
+  decoder is a `Protocol` with no implementation; Phase 047 decides whether to build
+  one.
+
+- **`X-MBX-TIME-UNIT: MICROSECOND` is sent and `MILLISECOND` is not**, because the
+  documentation lists only the first and describes milliseconds as the default.
+  Asking for a documented default is the same act as not asking, and inventing the
+  spelling would have been the parameter value `SOURCE_POLICY.md` forbids.
+
+- **Exactly two modules may touch a socket, one direction each.** The rule did not
+  relax — it got stronger. `http.client`, `urllib.request` and `ssl` had never been
+  guarded at all, and the matcher meant to guard `http.server` had **never matched a
+  dotted name** since Phase 026. Both holes are closed, and neither named module may
+  grow the other's role. [ADR-0089](docs/adr/0089-an-unknown-outcome-is-preserved-and-a-second-module-may-reach-a-socket.md)
+
+- **TLS verification has no off switch.** `secure_context()` takes no arguments, and
+  no `CERT_NONE` appears as code anywhere in the package — checked against the AST
+  rather than the text, after the first draft flagged the transport's own docstring
+  explaining the rule.
+
+- **Public probes, and the verb is the opt-in.** Three documented security-`NONE`
+  GETs. The command prints what it is about to do, names the environment, and says
+  the request is unauthenticated — before the connection opens.
+
+### The ingestion cadence that gates it
+
+- **A re-check interval per source regime**, and a source past it makes every
+  endpoint resting on it unresolvable. Phase 033 recorded *when* each document was
+  read and nothing consumed the date; a registry read once and never again looked
+  exactly like one re-checked yesterday.
+  [`DOCUMENTATION_INGESTION.md`](docs/engineering/DOCUMENTATION_INGESTION.md)
+
+- **Ageing fails the transport closed and does not redden the gate.** A gate that
+  reddened on a calendar, on a machine that may have no network to clear it with, is
+  one people learn to re-run rather than read.
+
+- **Three freshness states, not two.** A machine whose clock is behind the registry
+  produces a negative age, which says something true about the *machine*. It is
+  never called stale and never silently called fresh.
+
+- **An append-only change journal**, and a run that finds nothing appends nothing —
+  so every line in it is a moment something moved.
+
+- **A breaking-drift ledger that fails in both directions.** A changed source with
+  no written decision fails; a decision whose finding stopped occurring fails too,
+  because a standing permission nobody re-examined is how an exemption outlives its
+  reason. It is currently **empty**, and an empty ledger is not permissive.
+
+### Found while building
+
+- **The send state advanced after the write rather than before it**, so a request
+  that failed mid-write reported `NOT_SENT` — the one direction the outcome model
+  must never be wrong in. Found by a unit test, not by review.
+
+- **`join_path` collapsed only the ends**, leaving `a//a` intact in the middle while
+  its docstring promised otherwise. Found by a property test.
+
+- **A 403 carrying a firewall's HTML page reported `UNKNOWN` for a write.** The
+  status was a complete answer and the body was decoration; consulting the body's
+  readability there manufactured doubt the venue had already resolved.
+
+- **Three of five sources changed the code**, which is the argument for reading the
+  documentation rather than remembering it.
+  [`phase_034_sources.md`](docs/research/phase_034_sources.md)
+
 ### The first phase whose subject is a venue
 
 - **A registry of what Binance documents, with provenance on every row.**

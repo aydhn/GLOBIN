@@ -76,3 +76,8 @@
 # --- The secret vault. The only module that protects material at rest, and the
 # only permitted loader of crypt32. Added in Phase 031; see docs/security/SECRET_VAULT.md.
 /src/globin/adapters/secret_vault.py   @aydhn
+
+# --- The outbound transport. The only module in the package that reaches a
+# network, and the only place a TLS context is built. Added in Phase 034; see
+# docs/engineering/REST_TRANSPORT.md and ADR-0089.
+/src/globin/adapters/rest_transport.py @aydhn

@@ -1,0 +1,247 @@
+# ---------------------------------------------------------------------------
+# GLOBIN REST transport contract.
+#
+# The declared half of `docs/engineering/REST_TRANSPORT.md`, and the provenance
+# record for every venue fact the transport encodes. Compared against
+# `src/globin/domain/rest.py` in BOTH directions by
+# `tests/contract/test_rest_contract.py`: a constant here that the code does not
+# carry fails, and a constant in the code that is not declared here fails too.
+#
+# WHY THIS FILE EXISTS AT ALL, when the code already holds the values.
+# `docs/engineering/SOURCE_OF_TRUTH.md` refuses a second copy of a rule unless a
+# test compares the copies -- and that test is exactly what buys the thing the
+# code alone cannot give: a *citation*. `X-MBX-SBE` in a Python module is a string
+# somebody typed. `X-MBX-SBE` here carries the document it was read from, the
+# digest that document had when it was read, and the date. Phase 033 established
+# that shape for endpoints; this is the same shape for headers.
+#
+# THIS FILE DECLARES NO SOURCES OF ITS OWN. Every `source` below names a row in
+# `docs/engineering/binance-api-reality.toml`, which is the repository's one
+# source ledger. A second ledger would drift from the first, and drifting about
+# *which document said what* is the failure this whole band exists to prevent.
+#
+# WHAT IS DELIBERATELY NOT HERE. No base URL, no host, no per-product endpoint
+# table -- those are the registry's, and `tests/architecture/test_api_reality_discipline.py`
+# fails if one appears in the package. No request weight beyond the three probes
+# (Phase 041 owns the weight registry). No retry policy (Phase 043). No rate-limit
+# thresholds (Phase 042). No error-code map (Phase 044).
+#
+# NOTHING WRITES THIS FILE.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+[target]
+venue = "binance-global"
+phase = 34
+observed_on = "2026-08-19"
+
+# ---------------------------------------------------------------------------
+# Content negotiation.
+#
+# Every value below was read from the venue's own documentation on the date in
+# `[target]`, and every one is quoted in `docs/research/phase_034_sources.md`.
+# ---------------------------------------------------------------------------
+
+[negotiation]
+accept_header = "Accept"
+media_type_json = "application/json"
+media_type_sbe = "application/sbe"
+sbe_schema_header = "X-MBX-SBE"
+sbe_schema_format = "<ID>:<VERSION>"
+time_unit_header = "X-MBX-TIME-UNIT"
+time_unit_microsecond = "MICROSECOND"
+retry_after_header = "Retry-After"
+used_weight_prefix = "X-MBX-USED-WEIGHT-"
+order_count_prefix = "X-MBX-ORDER-COUNT-"
+sbe_source = "spot-sbe-faq"
+source = "spot-rest"
+
+# THE MILLISECOND SPELLING IS ABSENT, AND THAT IS A FINDING RATHER THAN AN
+# OMISSION. The documentation states responses are "in milliseconds by default"
+# and documents exactly one header value -- `MICROSECOND`, in upper or lower case.
+# It never says `MILLISECOND` is accepted. `docs/SOURCE_POLICY.md` forbids
+# inventing a parameter value, so `TimeUnitPreference.MILLISECONDS` sends no
+# header at all: asking for the documented default is the same act as not asking.
+#
+# THE SBE ACCEPT HEADER NAMES ONE MEDIA TYPE, NOT TWO. The SBE FAQ documents that
+# an `Accept` offering both `application/sbe` and `application/json` "will fall
+# back to JSON" when the schema is unsupported. That is a silent downgrade: GLOBIN
+# would hold a JSON body while its own record said SBE. Offering one media type
+# deletes the downgrade branch rather than handling it.
+
+# ---------------------------------------------------------------------------
+# Outcome classification.
+#
+# `ambiguous_when_mutating` is the whole security property of Phase 034, declared
+# per status so that a reader can check each against the quotation beside it
+# rather than against a rule in prose. `classify()` in `domain/rest.py` is
+# recomputed from these rows by the contract test.
+# ---------------------------------------------------------------------------
+
+[[status]]
+code = 403
+meaning = "A WAF rule has been violated. A rate limit violation or a security block."
+ambiguous_when_mutating = false
+reason = """A refusal at the edge. The venue's own description places it before \
+any matching engine, so nothing was at stake and the answer is complete. The body \
+is typically HTML, and treating an unreadable body as uncertainty here would \
+manufacture doubt the venue had already resolved."""
+source = "spot-rest"
+
+[[status]]
+code = 409
+meaning = "A cancelReplace order partially succeeded."
+ambiguous_when_mutating = true
+reason = """The venue's own word is *partially*. Half of the operation may have \
+taken effect, which is the definition of an ambiguous write."""
+source = "spot-rest"
+
+[[status]]
+code = 418
+meaning = "An IP has been auto-banned for continuing to send requests after 429."
+ambiguous_when_mutating = false
+reason = """A gateway refusal, like 429. Recording it as ambiguous would be \
+unsafe rather than cautious: Phase 043 never retries an ambiguous outcome, so an \
+IP ban -- which is resolved by waiting -- would become permanently unretryable."""
+source = "spot-rest"
+
+[[status]]
+code = 429
+meaning = "A request rate limit was broken."
+ambiguous_when_mutating = false
+reason = """The request was rejected before processing. This is the one class of \
+failure that is always safe to retry, and marking it ambiguous would take that \
+away from Phase 043."""
+source = "spot-rest"
+
+[[status]]
+code = 500
+meaning = "An internal error on the venue's side."
+ambiguous_when_mutating = true
+reason = """Quoted: 5XX codes are "used for internal errors; the issue is on \
+Binance's side. It is important to NOT treat this as a failure operation; the \
+execution status is UNKNOWN.\""""
+source = "spot-rest"
+
+[[status]]
+code = 502
+meaning = "An internal error on the venue's side."
+ambiguous_when_mutating = true
+reason = "Within the 5XX class the documentation describes as UNKNOWN."
+source = "spot-rest"
+
+[[status]]
+code = 503
+meaning = "An internal error on the venue's side."
+ambiguous_when_mutating = true
+reason = """Within the documented 5XX class. USDⓈ-M Futures repeats the warning \
+for its 503 specifically, which is why this row is not merely inherited."""
+source = "spot-rest"
+
+[[status]]
+code = 504
+meaning = "An internal error on the venue's side."
+ambiguous_when_mutating = true
+reason = "Within the documented 5XX class."
+source = "spot-rest"
+
+[[exchange_code]]
+code = -1007
+name = "TIMEOUT"
+ambiguous_when_mutating = true
+reason = """Quoted: "Timeout waiting for response from backend server. Send \
+status unknown; execution status unknown." The documentation adds that this \
+"does not always mean that the request failed in the Matching Engine." The venue \
+is describing UNKNOWN in its own words, so this row is a transcription rather \
+than a judgement."""
+source = "spot-rest"
+
+# ---------------------------------------------------------------------------
+# Public probes.
+#
+# Credential-free, read-only, and the only requests Phase 034 is permitted to
+# send. Each names the capability it needs, so the endpoint resolver refuses it
+# against a host not documented for that capability rather than trusting the path.
+#
+# `path` is RELATIVE to the endpoint's recorded `path_prefix`. The registry
+# records `path_prefix = "/api"` for Spot REST and the venue documents every path
+# as beginning `/api/v3`, so `/v3/ping` joins to `/api/v3/ping`. Writing the full
+# path here would put the prefix in two places.
+#
+# WEIGHT IS RECORDED AND NOT ENFORCED. Phase 041 builds the weight registry and
+# Phase 042 the governor. These three are here because a probe that cost more than
+# it appeared to would be a bad thing to learn later.
+# ---------------------------------------------------------------------------
+
+[[probe]]
+family = "spot"
+operation = "spot.ping"
+method = "GET"
+path = "/v3/ping"
+capability = "market_data"
+weight = 1
+security = "NONE"
+notes = "Test connectivity. The documented empty-object response."
+source = "spot-rest"
+
+[[probe]]
+family = "spot"
+operation = "spot.time"
+method = "GET"
+path = "/v3/time"
+capability = "market_data"
+weight = 1
+security = "NONE"
+notes = "Check server time. Read for its timestamp unit, never to set a clock."
+source = "spot-rest"
+
+[[probe]]
+family = "spot"
+operation = "spot.exchange_info"
+method = "GET"
+path = "/v3/exchangeInfo"
+capability = "market_data"
+weight = 20
+security = "NONE"
+notes = """Bounded exchange information. Twenty times the weight of the other \
+two, which is why it is not the default probe."""
+source = "spot-rest"
+
+# ---------------------------------------------------------------------------
+# Transport bounds.
+#
+# Every one of these is a number the transport refuses to exceed. They are
+# declared rather than hardcoded so that a reader can see the whole envelope in
+# one place, and recomputed against the module constants by the contract test.
+# ---------------------------------------------------------------------------
+
+[limits]
+max_response_bytes = 8388608
+max_logged_body_bytes = 512
+max_query_parameters = 128
+max_headers = 32
+max_path_length = 256
+max_operation_length = 64
+pool_size = 4
+max_connection_uses = 100
+keepalive_seconds = 60
+
+# ---------------------------------------------------------------------------
+# What this transport will not do.
+#
+# Declared so the absences are testable rather than merely stated in prose.
+# `tests/contract/test_rest_contract.py` asserts each one against the source.
+# ---------------------------------------------------------------------------
+
+[prohibitions]
+automatic_retry = false
+retry_on_unknown = false
+endpoint_failover = false
+tls_verification_bypass = false
+environment_fallback = false
+credentialled_probe = false
+sbe_decoding = false
+rate_limit_enforcement = false
+clock_synchronisation = false
+request_signing = false

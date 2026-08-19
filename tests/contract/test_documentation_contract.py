@@ -801,7 +801,12 @@ CATCH_ALL_ROW: tuple[str, str] = ("Everything else", "Not started")
 #: onwards will legitimately break these, and the point is that they cannot do so
 #: without editing the README in the same commit.
 ABSENT_CAPABILITIES: tuple[tuple[str, str], ...] = (
-    ("Binance API integration", "binance"),
+    # Phase 034 built a REST transport, so "Binance API integration" stopped being
+    # true as a blanket claim: GLOBIN reaches the venue for three public, read-only
+    # requests. What is still absent is the authenticated half, and the fragment
+    # moves with it -- "auth" guards a module named for authentication appearing
+    # while the README still says none exists.
+    ("Authenticated Binance requests", "auth"),
     ("request signing", "signing"),
     ("credential handling", "credential"),
     ("WebSocket", "websocket"),
