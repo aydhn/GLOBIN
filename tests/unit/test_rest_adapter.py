@@ -257,7 +257,7 @@ class TestTheContractValueTypes:
             _probe(**overrides)
 
     def test_a_probe_lookup_returns_nothing_rather_than_guessing(self) -> None:
-        """Nine families have no declared probe, and none gets an invented path."""
+        """Twelve families have no declared probe, and none gets an invented path."""
         contract = TransportContract(
             negotiation=_negotiation(),
             probes=(_probe(),),

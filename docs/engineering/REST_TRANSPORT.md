@@ -136,7 +136,24 @@ against the first.
 | Spot | `supported` | production, demo, testnet |
 | Every other family | `unknown` | nothing |
 
-Nine of the twelve recorded families refuse. That is not a gap: the venue's
+Every count in this document is recomputed from the code and the registry by
+`tests/contract/test_rest_contract.py`, so none of them can drift from what the
+package actually does:
+
+| What | Count |
+|---|---|
+| Outcome members | 5 |
+| Resolution outcomes | 10 |
+| Body shapes | 9 |
+| Product families recorded | 13 |
+| Families whose REST surface resolves | 1 |
+| Families that refuse | 12 |
+| Product-and-environment pairs surveyed | 24 |
+| Pairs that resolve | 3 |
+| Declared public probes | 3 |
+| Self-test checks | 8 |
+
+Twelve of the thirteen recorded families refuse. That is not a gap: the venue's
 derivatives documentation is a client-rendered application with no admissible
 route, [`SOURCE_POLICY.md`](../SOURCE_POLICY.md) forbids both scraping it and
 accepting a generated summary, and `unknown` is the honest answer. A transport that
@@ -203,7 +220,7 @@ publishes a current `spot_sbe` schema for one and not the other.
 
 ## Response decoding
 
-Eight shapes, told apart **before** anything tries to use the body:
+Nine shapes, told apart **before** anything tries to use the body:
 
 `EMPTY` · `OBJECT` · `ARRAY` · `SCALAR` · `MALFORMED_JSON` · `HTML` · `TEXT` ·
 `BINARY` · `UNEXPECTED_CONTENT_TYPE`
@@ -231,6 +248,7 @@ system convinces itself an order failed when it did not.
 | One transport, one environment | Bound at construction; a resolution from elsewhere is refused before a socket opens |
 | A probe cannot become a write | The probe path hardcodes `READ_ONLY` and `PUBLIC`; there is no parameter for either |
 | No credential is read on a probe path | The intent is `PUBLIC`, so nothing consults the secret store |
+| No request can be redirected through a proxy | **There is no proxy path at all** — nothing calls `set_tunnel` and nothing reads a proxy setting from the environment, so the host reached is exactly the host resolved |
 
 ### What a diagnostic record may contain
 

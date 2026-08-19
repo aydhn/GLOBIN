@@ -108,7 +108,7 @@ class ResolutionStatus(StrEnum):
     """The product exists and its REST surface is not documented as supported.
 
     The state every non-Spot family is in today, and the reason a fail-closed
-    transport refuses nine of the twelve recorded families.
+    transport refuses twelve of the thirteen recorded families.
     """
 
     ENVIRONMENT_UNDOCUMENTED = "environment_undocumented"

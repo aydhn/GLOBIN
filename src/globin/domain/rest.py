@@ -286,6 +286,14 @@ class EndpointRole(StrEnum):
     Spot REST endpoints; which to prefer, and whether to move between them, is a
     policy question this phase deliberately does not answer — see
     :mod:`globin.domain.rest_endpoint` on why nothing fails over.
+
+    **Three members, and there is deliberately no environment-specific fourth.**
+    Environment is a *dimension* of a resolution rather than a role within one:
+    every resolved endpoint is already specific to the environment it was asked
+    for, because the candidate set is filtered on environment before a role is
+    assigned. A fourth member would be true of every endpoint and would therefore
+    distinguish nothing — and worse, it would suggest that endpoints *without* it
+    are environment-agnostic, which none is.
     """
 
     PRIMARY = "primary"

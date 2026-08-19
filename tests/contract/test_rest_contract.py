@@ -12,9 +12,10 @@ because a validator can only refuse what reaches it and none of these would.
 """
 
 import ast
+import re
 import tomllib
 from pathlib import Path
-from typing import Final
+from typing import ClassVar, Final
 
 import pytest
 
@@ -40,11 +41,17 @@ from globin.domain.rest import (
     TIME_UNIT_HEADER,
     TIME_UNIT_MICROSECOND,
     USED_WEIGHT_PREFIX,
+    BodyShape,
     RateLimitReport,
+    RequestOutcome,
     RestDiagnosticsRecord,
 )
 from globin.domain.rest_contract import TransportContract
+from globin.domain.rest_endpoint import ResolutionStatus
 from globin.runtime.composition import PACKAGE_RELATIVE_PATH
+
+GUIDE: Final[str] = "docs/engineering/REST_TRANSPORT.md"
+"""The engineering record whose every count this file recomputes."""
 
 REGISTRY_PATH: Final[str] = "docs/engineering/binance-api-reality.toml"
 """Phase 033's registry, which every source cited by the contract must live in."""
@@ -283,13 +290,55 @@ class TestProbes:
     def test_a_family_with_no_declared_probe_gets_none_rather_than_a_guess(
         self, contract: TransportContract
     ) -> None:
-        """Nine families have no documented REST surface, so they have no probe."""
+        """Twelve families have no documented REST surface, so they have no probe."""
         assert contract.probes_for(ProductFamily("options")) == ()
         assert contract.probe(ProductFamily("options"), "options.ping") is None
 
 
 class TestTheProhibitionsAreReal:
     """Each declared absence, asserted against the source rather than believed."""
+
+    PROXY_ROUTES: ClassVar[tuple[str, ...]] = (
+        "set_tunnel",
+        "getproxies",
+        "ProxyHandler",
+        "proxy_bypass",
+    )
+    """Every route to a proxied connection the standard library offers.
+
+    `http.client.HTTPConnection.set_tunnel` is the one that matters: it is how a
+    connection is pointed through a CONNECT proxy, and it is the only way this
+    transport could reach a host other than the one it resolved. The three
+    `urllib` routes are here because they read proxy settings from the
+    environment, which is the shape that would make GLOBIN's destination depend on
+    a variable nobody declared.
+    """
+
+    def test_no_module_in_the_package_can_route_through_a_proxy(self, repo_root: Path) -> None:
+        """The brief asks that a proxy be reachable only by explicit configuration.
+
+        What is delivered is stronger and simpler: **there is no proxy path at
+        all.** No module calls `set_tunnel`, and nothing reads a proxy setting from
+        the environment — so the host a request reaches is exactly the host the
+        registry resolved, and no environment variable can redirect it.
+
+        Recorded as a test rather than left as an incidental absence, because an
+        absence nobody asserts is one the next phase can remove without noticing.
+        """
+        offenders: dict[str, list[str]] = {}
+        for path in sorted((repo_root / PACKAGE_RELATIVE_PATH).rglob("*.py")):
+            used = _live_identifiers(ast.parse(path.read_text(encoding="utf-8")))
+            found = sorted(used.intersection(self.PROXY_ROUTES))
+            if found:
+                offenders[str(path)] = found
+        assert not offenders, f"a proxy route appeared in the package: {offenders}"
+
+    def test_the_proxy_detector_would_notice_one(self) -> None:
+        """Guard the guard, in both directions."""
+        caught = _live_identifiers(ast.parse("connection.set_tunnel('elsewhere', 443)\n"))
+        assert caught.intersection(self.PROXY_ROUTES)
+        spared = _live_identifiers(ast.parse('note = "set_tunnel is forbidden"\n'))
+        assert not spared.intersection(self.PROXY_ROUTES)
 
     def test_every_prohibition_is_declared_prohibited(self, contract: TransportContract) -> None:
         """Every entry in that table names something the transport does not do.
@@ -470,3 +519,102 @@ class TestThePhase031RedactionContractOverTransportRecords:
         assert emitted["outcome"] == "unknown"
         assert emitted["exchange_code"] == -1007
         assert REDACTED not in str(emitted)
+
+
+class TestTheGuideStatesTheCountsTheCodeCarries:
+    """Every number in `REST_TRANSPORT.md`, recomputed rather than believed.
+
+    **This test exists because the first draft got two of them wrong.** The
+    document said *eight* body shapes where there are nine, and *nine of the
+    twelve* families where the registry records thirteen and twelve refuse. Both
+    read plausibly, both survived a careful re-read, and neither would ever have
+    been noticed — which is precisely the failure `ROADMAP.md` records about its
+    own amendment count: *"Nothing tests it, which is why it drifted."*
+
+    ``SOURCE_OF_TRUTH.md`` permits a restatement only where a test compares it to
+    its source. This is that comparison for Phase 034's guide.
+    """
+
+    def _counts(self, repo_root: Path) -> dict[str, int]:
+        """The guide's own count table, parsed back out of it.
+
+        Args:
+            repo_root: The repository root.
+
+        Returns:
+            Each label mapped to the number the document claims.
+        """
+        text = (repo_root / GUIDE).read_text(encoding="utf-8")
+        rows = re.findall(r"^\| ([A-Z][^|]+?) \| (\d+) \|$", text, re.MULTILINE)
+        return {label.strip(): int(count) for label, count in rows}
+
+    def test_the_table_is_present_and_populated(self, repo_root: Path) -> None:
+        """Guard the guard: an absent table would make every check below vacuous."""
+        counts = self._counts(repo_root)
+        assert len(counts) >= 10, f"{GUIDE} states {len(counts)} counts; expected the full table"
+
+    def test_the_enumeration_sizes_match(self, repo_root: Path) -> None:
+        """Three vocabularies the document describes member by member.
+
+        A member added without the prose moving is the drift this catches — and an
+        outcome member in particular is not a detail, since the whole phase turns on
+        there being exactly five.
+        """
+        counts = self._counts(repo_root)
+        assert counts["Outcome members"] == len(list(RequestOutcome))
+        assert counts["Resolution outcomes"] == len(list(ResolutionStatus))
+        assert counts["Body shapes"] == len(list(BodyShape))
+
+    def test_the_registry_derived_counts_match(self, repo_root: Path) -> None:
+        """What the committed registry actually resolves to, today.
+
+        Recomputed through the real resolver against the real document, so a
+        registry edit that changed what resolves would fail here rather than leaving
+        the guide quietly wrong.
+        """
+        from globin.adapters.api_reality import REGISTRY_PATH, read_registry
+        from globin.domain.api_reality import EnvironmentName
+        from globin.domain.rest_endpoint import resolve, survey
+
+        registry = read_registry(repo_root / REGISTRY_PATH)
+        assert registry is not None
+        counts = self._counts(repo_root)
+
+        resolutions = [
+            resolve(registry, family=item.family, environment=EnvironmentName("production"))
+            for item in registry.products
+        ]
+        resolving = sum(1 for item in resolutions if item.permitted)
+        pairs = survey(registry)
+
+        assert counts["Product families recorded"] == len(registry.products)
+        assert counts["Families whose REST surface resolves"] == resolving
+        assert counts["Families that refuse"] == len(registry.products) - resolving
+        assert counts["Product-and-environment pairs surveyed"] == len(pairs)
+        assert counts["Pairs that resolve"] == sum(1 for item in pairs if item.permitted)
+
+    def test_the_contract_derived_counts_match(
+        self, repo_root: Path, contract: TransportContract
+    ) -> None:
+        """The probe count and the self-test size, from the documents that own them."""
+        counts = self._counts(repo_root)
+        assert counts["Declared public probes"] == len(contract.probes)
+        assert counts["Self-test checks"] == len(self_test(contract).findings)
+
+    def test_the_guide_does_not_claim_a_capability_the_phase_refused(self, repo_root: Path) -> None:
+        """The document must not describe in the present tense what does not exist.
+
+        Four things Phase 034 deliberately did not build, each of which a reader
+        could otherwise believe from a skim. Asserted as *absence of a claim*
+        rather than presence of a caveat, because a caveat can sit three
+        paragraphs from the sentence that misleads.
+        """
+        text = (repo_root / GUIDE).read_text(encoding="utf-8")
+        for forbidden in (
+            "GLOBIN signs",
+            "signs the request",
+            "synchronises the clock",
+            "decodes SBE",
+            "retries automatically",
+        ):
+            assert forbidden not in text, f"{GUIDE} claims {forbidden!r}, which this phase refused"

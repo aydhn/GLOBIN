@@ -193,3 +193,63 @@ class TestUnacknowledgedDrift:
         )
         assert superseded([], (row,)) == (row,)
         assert superseded([("API_REALITY_SOURCE_CHANGED", "spot-rest")], (row,)) == ()
+
+
+class TestTheIngestionGuideStatesWhatIsTrue:
+    """The one counted claim in `DOCUMENTATION_INGESTION.md`, recomputed.
+
+    Phase 034's REST guide got two counts wrong on its first draft, which is the
+    argument for binding every restatement rather than the confident ones.
+    `SOURCE_OF_TRUTH.md` permits a restatement only where a test compares it to its
+    source; this is that comparison.
+    """
+
+    GUIDE = "docs/engineering/DOCUMENTATION_INGESTION.md"
+
+    def test_the_declared_source_count_matches_the_registry(self, repo_root: Path) -> None:
+        """The guide names a number of sources; the registry is what has them."""
+        from globin.adapters.api_reality import REGISTRY_PATH, read_registry
+
+        registry = read_registry(repo_root / REGISTRY_PATH)
+        assert registry is not None
+        spelled = {
+            10: "Ten",
+            11: "Eleven",
+            12: "Twelve",
+            13: "Thirteen",
+            14: "Fourteen",
+            15: "Fifteen",
+            16: "Sixteen",
+            17: "Seventeen",
+            18: "Eighteen",
+            19: "Nineteen",
+            20: "Twenty",
+        }
+        claim = f"{spelled[len(registry.sources)]} sources are declared"
+        text = (repo_root / self.GUIDE).read_text(encoding="utf-8")
+        assert claim in text, f"{self.GUIDE} does not state {claim!r}; the registry carries that"
+
+    def test_every_declared_regime_has_a_row_in_the_guide(
+        self, repo_root: Path, gate_policy: GatePolicy
+    ) -> None:
+        """A cadence nobody documented is a number an operator cannot argue with.
+
+        The other direction matters more than the count: a regime added to the
+        policy without a row in the guide is a rule that fires and is never
+        explained.
+        """
+        text = (repo_root / self.GUIDE).read_text(encoding="utf-8")
+        missing = [item.regime for item in gate_policy.rules if f"`{item.regime}`" not in text]
+        assert not missing, f"{self.GUIDE} documents no cadence for: {missing}"
+
+    def test_every_documented_interval_is_the_one_declared(
+        self, repo_root: Path, gate_policy: GatePolicy
+    ) -> None:
+        """The interval beside each regime, not merely the regime's name."""
+        text = (repo_root / self.GUIDE).read_text(encoding="utf-8")
+        wrong = [
+            item.regime
+            for item in gate_policy.rules
+            if f"| `{item.regime}` | {item.recheck_days} days |" not in text
+        ]
+        assert not wrong, f"{self.GUIDE} states the wrong interval for: {wrong}"

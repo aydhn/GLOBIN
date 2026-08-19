@@ -247,9 +247,23 @@ def test_a_well_formed_tree_passes_every_check_it_can_and_says_which_it_cannot(
     """The gate refuses to claim it measured an environment it is not running from.
 
     Everything about the host, the interpreter and the environment on disk passes.
-    The one finding that fails is the one asserting the gate ran *inside* the
+    What fails is only the family of findings asserting the gate ran *inside* the
     environment it judged, which cannot be true of a temporary tree — and reporting
-    it is better than a pass that would mean nothing.
+    that is better than a pass which would mean nothing.
+
+    **The assertion names the family rather than one member, and that is a
+    correction.** It read ``== [REASON_INTERPRETER_FOREIGN]`` and so passed or
+    failed on where the *running* interpreter's pip happens to live: under
+    ``.venv`` and on CI, pip sits inside the interpreter's own prefix and only one
+    reason fires; under a bare interpreter with a user-site pip, ``PIP_FOREIGN``
+    fires too. Both are true statements about the runner and neither is a statement
+    about the tree — so an exact list made a local environment detail decide the
+    result, and every phase since has had to re-diagnose the same red.
+
+    What replaces it is **stronger where it matters**: every tree-related reason is
+    now forbidden *by name*, so a defect in the built tree fails here whether or not
+    anybody remembered to enumerate it, and `REASON_INTERPRETER_FOREIGN` is still
+    required to be present so the check cannot pass by the gate finding nothing.
     """
     build_tree(tmp_path, declaration=contract())
     assert run(tmp_path) == gate.EXIT_GATE_FAILED
@@ -259,7 +273,31 @@ def test_a_well_formed_tree_passes_every_check_it_can_and_says_which_it_cannot(
     assert findings["host"] == {"verdict": "passed", "problems": []}
     assert findings["interpreter"] == {"verdict": "passed", "problems": []}
     assert findings["environment"] == {"verdict": "passed", "problems": []}
-    assert reasons_of(document) == [REASON_INTERPRETER_FOREIGN]
+
+    reasons = set(reasons_of(document))
+    # Properties of whoever ran the gate, not of the tree it judged.
+    about_the_runner = {REASON_INTERPRETER_FOREIGN, REASON_PIP_FOREIGN}
+    # Anything the built tree could have got wrong. None may appear.
+    about_the_tree = {
+        REASON_DECLARATION_UNREADABLE,
+        REASON_HOST_UNSUPPORTED,
+        REASON_INTERPRETER_NONCOMPLIANT,
+        REASON_ENVIRONMENT_ABSENT,
+        REASON_ENVIRONMENT_NONCOMPLIANT,
+        REASON_TOOLCHAIN_UNAVAILABLE,
+        REASON_BOOTSTRAP_FAILED,
+        REASON_DELETION_REFUSED,
+        REASON_MANIFEST_LEAKAGE,
+    }
+    assert REASON_INTERPRETER_FOREIGN in reasons, (
+        "the gate judged a temporary tree and did not say it was running elsewhere"
+    )
+    assert not reasons & about_the_tree, (
+        f"a well-formed tree produced findings about itself: {sorted(reasons & about_the_tree)}"
+    )
+    assert reasons <= about_the_runner, (
+        f"an unclassified reason appeared: {sorted(reasons - about_the_runner)}"
+    )
 
 
 def test_the_manifest_records_the_contract_it_judged_against(tmp_path: Path) -> None:

@@ -60,9 +60,10 @@ from globin.adapters.health import snapshot_document
 from globin.adapters.identifiers import new_run_id
 from globin.adapters.ingestion import POLICY_PATH, read_policy
 from globin.adapters.observability import new_correlation_id
-from globin.adapters.rest import CONTRACT_PATH, read_contract
+from globin.adapters.rest import CONTRACT_PATH, DIGEST_KEY, read_contract
 from globin.adapters.rest import EVIDENCE_DIRECTORY as REST_EVIDENCE_DIRECTORY
 from globin.adapters.rest import build as build_rest_manifest
+from globin.adapters.rest import load as load_rest_manifest
 from globin.adapters.rest import write as write_rest_manifest
 from globin.adapters.rest_transport import HttpRestTransport
 from globin.adapters.telemetry_otel import opentelemetry_bridge
@@ -3872,5 +3873,11 @@ def _rest_evidence(
     )
     directory = root / RuntimePaths().artifacts / REST_EVIDENCE_DIRECTORY
     written = write_rest_manifest(document, directory=directory)
+    # Produced, then VERIFIED by reopening the finished file and recomputing its
+    # digest -- the shape `SUPPORT_BUNDLE.md` uses, and for the same reason: a
+    # writer that checked only what it held in memory would pass on a truncated
+    # write. `load` raises if the digest does not match the content.
+    verified = load_rest_manifest(written.read_text(encoding="utf-8"))
     print(f"wrote {written}", file=out)
+    print(f"verified {verified[DIGEST_KEY]}", file=out)
     return int(ExitCode.OK if report.passed else ExitCode.GATE_FAILED)

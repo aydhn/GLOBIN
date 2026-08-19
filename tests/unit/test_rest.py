@@ -16,6 +16,7 @@ from globin.domain.rest import (
     AMBIGUOUS_STATUSES,
     MAX_BODY_BYTES,
     MAX_HEADERS,
+    MAX_LOGGED_BODY_BYTES,
     MAX_PATH_LENGTH,
     MAX_QUERY_PARAMETERS,
     MAX_RESPONSE_BYTES,
@@ -846,3 +847,55 @@ class TestTheRemainingRefusalsAndRecords:
         )
         for record in (request.as_record(), response.as_record()):
             assert json.loads(json.dumps(record))
+
+
+class TestBoundedBodyLogging:
+    """External text reaching a record is truncated, whatever its length.
+
+    The venue's error message is the one piece of *its* prose that GLOBIN writes
+    down. It carries no credential, but it is unbounded external input reaching a
+    log — which is the shape `RUNTIME_DIAGNOSTICS.md` bounds everywhere else.
+    """
+
+    def test_a_long_venue_message_is_truncated_to_the_declared_bound(self) -> None:
+        """The bound is applied, not merely declared beside the constant."""
+        fault = ExchangeFault(code=-1121, message="x" * (MAX_LOGGED_BODY_BYTES * 4))
+        record = fault.as_record()
+        assert len(record["message"]) == MAX_LOGGED_BODY_BYTES  # type: ignore[arg-type]
+
+    def test_a_short_message_survives_intact(self) -> None:
+        """The other direction, so truncation is not silently destroying every message."""
+        fault = ExchangeFault(code=-1121, message="Invalid symbol.")
+        assert fault.as_record()["message"] == "Invalid symbol."
+
+    def test_a_message_exactly_at_the_bound_is_not_truncated(self) -> None:
+        """Off-by-one at the boundary, which is where a slice is usually wrong."""
+        fault = ExchangeFault(code=-1, message="y" * MAX_LOGGED_BODY_BYTES)
+        assert len(fault.as_record()["message"]) == MAX_LOGGED_BODY_BYTES  # type: ignore[arg-type]
+
+    def test_the_diagnostic_record_never_carries_a_body_at_all(self) -> None:
+        """Stronger than truncation, and the reason truncation only guards one field.
+
+        A response body reaches no record whatsoever — only its byte count does — so
+        the only external text that can be logged is the venue's own error message,
+        which is the field bounded above.
+        """
+        record = RestDiagnosticsRecord(
+            correlation_id="c1",
+            operation="p",
+            family="spot",
+            environment="testnet",
+            role="primary",
+            host="h",
+            method="GET",
+            intent="public",
+            side_effect="read_only",
+            encoding="json",
+            time_unit="provider_default",
+            send_state="completed",
+            outcome="success_confirmed",
+            response_bytes=8_000_000,
+        ).as_record()
+        assert record["response_bytes"] == 8_000_000
+        assert "body" not in record
+        assert "payload" not in record

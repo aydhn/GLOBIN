@@ -239,6 +239,7 @@ automatic_retry = false
 retry_on_unknown = false
 endpoint_failover = false
 tls_verification_bypass = false
+proxied_connection = false
 environment_fallback = false
 credentialled_probe = false
 sbe_decoding = false

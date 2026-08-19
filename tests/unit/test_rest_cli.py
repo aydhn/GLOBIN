@@ -112,7 +112,7 @@ class TestResolve:
     def test_an_undocumented_product_refuses_and_exits_fourteen(self, repo_root: Path) -> None:
         """The acceptance criterion for fail-closed resolution.
 
-        Nine of the twelve recorded families have no documented REST surface, so
+        Twelve of the thirteen recorded families have no documented REST surface, so
         this is the ordinary case rather than a contrived one — and ``14`` is
         ``CONFIGURATION_INVALID``, which already means *the ask cannot be
         satisfied*. No twenty-sixth exit code was added.
@@ -230,6 +230,19 @@ class TestEvidence:
         code, out, _ = _run("rest", "evidence", start=repo_root)
         assert code == int(ExitCode.OK)
         assert "rest-manifest.json" in out
+
+    def test_it_verifies_by_reopening_the_finished_file(self, repo_root: Path) -> None:
+        """Produced *and* verified, which is what the phase brief asks for.
+
+        The digest is recomputed from the file on disk rather than from what the
+        writer held in memory — the shape `SUPPORT_BUNDLE.md` uses, because a
+        writer that checked only its own buffer would pass on a truncated write.
+        """
+        _, out, _ = _run("rest", "evidence", start=repo_root)
+        assert "verified sha256:" in out
+        manifest = repo_root / ".globin" / "rest" / "rest-manifest.json"
+        recorded = json.loads(manifest.read_text(encoding="utf-8"))["digest"]
+        assert recorded in out
 
     def test_two_runs_produce_the_same_digest(self, repo_root: Path) -> None:
         """Determinism, asserted rather than intended.
