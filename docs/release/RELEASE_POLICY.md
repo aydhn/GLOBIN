@@ -200,9 +200,17 @@ published after the setting was enabled.
 | `sbom.cyclonedx.json` | The dependency inventory, copied from the supply gate |
 | `SHA256SUMS` | Digests for every other asset |
 
-**No wheel and no source distribution.** Nothing has ever built one, so
-publishing one would attach an unverified artifact to a release that claims to be
-verified. That belongs to Phases 017-032.
+**No wheel and no source distribution**, and since Phase 032 the reason has
+changed. Building *is* verified now --- the wheel and the source distribution were
+built, installed into a throwaway environment and exercised, recorded as
+`ENV-C-04` in [`ENVIRONMENT_ACCEPTANCE.md`](ENVIRONMENT_ACCEPTANCE.md). What is
+still absent is a *gate*: `hatchling` is the build backend and is not in
+`pylock.dev.toml`, so build isolation reaches an index, and every command in
+[`../engineering/QUALITY_GATES.md`](../engineering/QUALITY_GATES.md) runs offline.
+Publishing a distribution from a release gate that runs offline would mean
+attaching an artefact this gate did not build. Locking the backend is a dependency
+review under [`../DEPENDENCY_POLICY.md`](../DEPENDENCY_POLICY.md), and Phase 048
+owns it.
 
 `SHA256SUMS` never lists itself — a file whose own digest is one of its lines
 cannot be written, since the digest would change the contents. The manifest
