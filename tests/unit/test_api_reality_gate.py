@@ -182,10 +182,11 @@ class TestFindings:
         assert REASON_SOURCE_OFF_ALLOWLIST in reasons(broken)
 
     def test_a_claim_of_observation_is_reported(self) -> None:
-        """GLOBIN has never contacted the venue, so no row may say it has.
+        """No row may claim a live response, and the gate refuses one that does.
 
-        The member exists for a later phase that will have a transport. Until then
-        writing it is a lie the gate refuses.
+        The second reader's half of the same rule the package asserts. Phase 034
+        gave GLOBIN a transport without changing it: what a document says and what
+        one request returned are different claims, and only the first belongs here.
         """
         assert REASON_OBSERVED_CLAIMED in reasons(MINIMAL.replace('"documented"', '"observed"'))
 

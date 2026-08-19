@@ -824,9 +824,11 @@ class SecretReadiness:
 
     Args:
         required: The references a start-up needs resolved. Empty today, and
-            empty on purpose rather than by omission: GLOBIN reaches no exchange
-            and holds no credential, so the set of secrets a start-up requires is
-            genuinely nothing.
+            empty on purpose rather than by omission: GLOBIN opens no
+            authenticated connection and holds no credential, so the set of
+            secrets a start-up requires is genuinely nothing. Reaching the venue
+            and needing a secret to do it are different things, and since Phase
+            034 GLOBIN does the first without the second.
         unavailable: Required references that could not be resolved, sorted.
 
     **No value ever reaches this type.** A reference identifies a secret; it is

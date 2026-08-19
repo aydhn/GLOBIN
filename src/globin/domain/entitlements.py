@@ -71,10 +71,15 @@ class VerificationState(StrEnum):
     """What is known about whether a credential may do what is being asked.
 
     **Four members, and none of them means confirmed.** That absence is the
-    design: GLOBIN cannot reach the issuer, so a member meaning "the issuer
-    agrees" would be a lie with a name. Phase 039 is where an answer of that kind
-    becomes possible, and it will add the member along with the ability to earn
-    it.
+    design: GLOBIN cannot ask the issuer, so a member meaning "the issuer agrees"
+    would be a lie with a name. Phase 039 is where an answer of that kind becomes
+    possible, and it will add the member along with the ability to earn it.
+
+    **Phase 034 gave GLOBIN a transport and changed nothing here**, which is worth
+    saying because it looks as though it should have. That transport sends three
+    public, unauthenticated requests; asking what a *credential* may do needs a
+    signed request, and signing is Phase 038's. Reaching the venue and being able
+    to ask it about a key are different capabilities.
     """
 
     DECLARED = "declared"

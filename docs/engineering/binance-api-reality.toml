@@ -18,8 +18,10 @@
 # and for no other product family; see `docs/research/phase_033_sources.md`, S-11.
 #
 # EVIDENCE KINDS. `documented`, `inferred`, `observed`. **Nothing here may be
-# `observed`**: GLOBIN has never contacted Binance, and a contract test fails if a
-# row claims otherwise.
+# `observed`**, and a contract test fails if a row claims otherwise. Until Phase 034
+# that held because GLOBIN could not reach Binance at all; it now can, for three
+# public read-only requests, and the rule is unchanged -- a probe result is evidence
+# about a run and never an edit to this file.
 #
 # ADDING A ROW IS A DECISION, NOT AN EDIT. Every capability row names a source, and
 # a source that is not declared below is refused. Read

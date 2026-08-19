@@ -898,8 +898,10 @@ changes without GLOBIN being redeployed.
 *documented absent* are different facts; 56 rows carry `unknown` against 51
 `supported`, and **`unsupported` appears zero times** because that word claims a
 document states an absence and none does. `EvidenceKind.OBSERVED` exists and
-**nothing may write it** -- GLOBIN has never contacted the venue, and a contract
-test enforces by assertion what `VerificationState` enforces by omission.
+**nothing may write it**, and a contract test enforces by assertion what
+`VerificationState` enforces by omission. Phase 033's reason was that GLOBIN could
+not reach the venue; **Phase 034 removed that reason and kept the rule** -- a probe
+result is evidence about a *run*, never an edit to the registry.
 
 **Demo and testnet are separate kinds**, with the semantics Binance tabulates, and
 each non-production environment declares the substring its hosts are spelled with --
@@ -907,9 +909,11 @@ so a live host filed as paper is refused structurally rather than by review.
 
 **The gate is a second reader.** Nothing under `tools/` imports `globin`, so the two
 parse the same document with no shared code, and a contract test compares what they
-see. `refresh` reaches the network and lives outside the package deliberately:
-`src/globin` still opens **no outbound connection**, and Phase 045 is where it earns
-one. **No new exit code** -- 26 stays free.
+see. `refresh` reaches the network and lives outside the package deliberately, and it
+still does: it maintains a committed document, which is a repository act rather
+than a product capability. **Phase 034 gave the package its own outbound module**,
+bounded by the two-role socket rule -- see below. **No new exit code** -- 26 stays
+free.
 
 **Three of Binance's four machine-readable lifecycle files are not valid JSON**,
 measured rather than remembered. Each is marked `known_unparseable`, and a source

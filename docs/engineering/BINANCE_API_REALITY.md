@@ -7,8 +7,10 @@ Delivered by Phase 033 under [ADR-0086](../adr/0086-phase-033-widens-to-deliver-
 with the technical decisions in [ADR-0087](../adr/0087-the-api-reality-registry-is-declared-with-provenance-and-drift-is-measured-in-two-regimes.md).
 
 > **This is a dated snapshot of documentation, not runtime truth about the venue.**
-> Every row records what a named document said on a named day. Nothing here has ever
-> been confirmed against a live response, because GLOBIN has never contacted Binance.
+> Every row records what a named document said on a named day. Nothing here has been
+> confirmed against a live response. Since Phase 034 GLOBIN *can* reach Binance --
+> three public, read-only requests -- and that changed nothing about this file: a
+> probe result is evidence about a run, never an edit to a row.
 
 ---
 
@@ -98,9 +100,11 @@ that a document states an absence, and none of the documents read for this phase
 states one.
 
 Each row also carries an **evidence kind**: `documented`, `inferred` or `observed`.
-**Nothing may be `observed`**, and a contract test fails if a row claims it. GLOBIN
-has never contacted the venue; the member exists because Phase 045 will have a
-transport.
+**Nothing may be `observed`**, and a contract test fails if a row claims it. Phase
+033 could rely on GLOBIN having no transport at all; **Phase 034 built one and the
+rule did not move**, because what makes a row `observed` is a claim about the
+registry rather than about a run. See
+[`REST_TRANSPORT.md`](REST_TRANSPORT.md).
 
 ---
 

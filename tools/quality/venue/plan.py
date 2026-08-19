@@ -9,8 +9,9 @@ the same line between its lock parser and the reference implementation.
 **Every verdict below is recomputed from the document.** Nothing is believed
 because it is written down: a ``restricted`` row must name its condition, an
 endpoint filed under a marked environment must carry that environment's marker in
-its host, and a row claiming to have been *observed* is refused outright because
-GLOBIN has never contacted the venue.
+its host, and a row claiming to have been *observed* is refused outright -- the
+registry records what documents say, and a live response is a different kind of
+claim needing a different kind of record.
 
 **This module reaches no network.** It imports nothing that could. The half that
 does is in :mod:`tools.quality.venue.gate`, behind a verb an operator has to
@@ -452,7 +453,8 @@ def _claim_findings(declaration: Declaration) -> list[Finding]:
                 Finding(
                     REASON_OBSERVED_CLAIMED,
                     subject,
-                    "claims to have been observed, and GLOBIN has never contacted the venue",
+                    "claims to have been observed; this registry records what documents "
+                    "say, and a live response is evidence about a run rather than a row",
                 )
             )
         if status not in STATUSES:

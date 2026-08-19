@@ -216,6 +216,8 @@ this phase does not guess it. Giving the type a version field now would fix the
 shape of something Phases 097 and beyond have to design.
 
 **Nothing here places an order.** `OrderId` exists so that the execution phases
-inherit a form rather than inventing one under deadline. GLOBIN does not trade,
-does not connect to any exchange, and has no credentials — see
-[`README.md`](../README.md).
+inherit a form rather than inventing one under deadline. GLOBIN does not trade and
+has no credentials. Since Phase 034 it *does* reach Binance — three public,
+unauthenticated, read-only requests and nothing else, which is a long way from an
+order — see [`README.md`](../README.md) and
+[`engineering/REST_TRANSPORT.md`](engineering/REST_TRANSPORT.md).

@@ -491,10 +491,16 @@ class SurfaceStatus(StrEnum):
 class EvidenceKind(StrEnum):
     """How a claim came to be recorded.
 
-    Three members, and one of them cannot be produced. GLOBIN has never contacted
-    the venue, so no record here may claim observation; a contract test asserts
-    that none does. The member exists because a later phase will have a transport,
-    and re-versioning the schema then would be worse than declaring it now.
+    Three members, and one of them may not be written. No record here may claim
+    observation, and a contract test asserts that none does.
+
+    **Phase 033's reason for that was that GLOBIN could not reach the venue. Phase
+    034 built a transport and the rule did not move**, which is the more useful
+    form of it: what makes a row `observed` is a claim about *this registry*, and a
+    probe result is evidence about a *run*. The registry records what documents
+    say; a live response would be a different kind of claim needing a different
+    kind of record, and conflating them would let one successful request rewrite a
+    row that a document is answerable for.
     """
 
     DOCUMENTED = "documented"

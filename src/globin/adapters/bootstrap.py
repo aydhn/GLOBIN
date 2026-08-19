@@ -727,9 +727,10 @@ class StoreBackedSecrets:
     Args:
         store: The local secret store.
         required: The references a start-up must resolve. **Empty today**, and
-            empty because GLOBIN holds no credentials rather than by omission —
-            it reaches no exchange and opens no authenticated connection, so the
-            set is genuinely nothing.
+            empty because GLOBIN holds no credentials rather than by omission — it
+            opens no authenticated connection, so the set is genuinely nothing.
+            Phase 034 gave it a transport and left this untouched: the three
+            requests it can send are public, and a public request reads no secret.
 
     Phase 028 replaced :class:`NoSecretsRequired` with this, which is what the
     port existed for. The behaviour with an empty ``required`` set is identical

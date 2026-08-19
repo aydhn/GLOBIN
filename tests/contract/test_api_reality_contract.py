@@ -78,11 +78,13 @@ def test_both_readers_count_the_same_rows(registry_text: str, registry: ApiReali
 
 
 def test_nothing_claims_to_have_been_observed(registry: ApiRealitySnapshot) -> None:
-    """GLOBIN has never contacted the venue.
+    """The registry records what documents say, and never what a request returned.
 
-    The evidence kind exists because a later phase will have a transport. Until
-    then, a row claiming observation is a lie the registry cannot be allowed to
-    tell, and this is the assertion that stops one being written.
+    **Phase 034 is when this test started earning its keep.** Until then GLOBIN had
+    no transport, so no row *could* claim observation and the assertion was free.
+    There is a transport now, and the rule is unchanged: a probe result is evidence
+    about a run, and letting one rewrite a row would put a single response's word
+    against the document that row is answerable for.
     """
     for product in registry.products:
         assert product.capability.evidence is not EvidenceKind.OBSERVED

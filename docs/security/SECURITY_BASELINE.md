@@ -15,8 +15,15 @@ Reporting a vulnerability is [`../../SECURITY.md`](../../SECURITY.md); respondin
 
 ## Why this exists before there is a secret
 
-GLOBIN holds no credentials. It reaches no exchange, has no account, and its runtime dependency
-list is empty. Writing secret-handling rules now looks premature and is the opposite.
+GLOBIN holds no credentials and has no account. Writing secret-handling rules now looks
+premature and is the opposite.
+
+Two things this paragraph used to add are no longer true and are worth naming rather than
+quietly dropping. The runtime dependency list stopped being empty at Phase 021 and now
+holds nine roots, each with a written review. And GLOBIN stopped reaching no exchange at
+Phase 034: it now sends three public, unauthenticated, read-only requests. **Neither
+changes the sentence above** — no credential is read on that path, and the transport has
+no parameter that would let one be.
 
 The day a credential first exists is the day the rules are least likely to be written, because
 there will be something more urgent to do with the key than decide where it may live. Every
