@@ -73,6 +73,24 @@ can be opened and read.
   not representable as a binary float — so a TOML float would have changed the
   value before any type could refuse it. A `float` is refused outright.
 
+- **A bootstrap summary that grew with the dependency list is now bounded.**
+  `dependency.lock` listed every declared-but-not-installed distribution, so the
+  length of a row a person reads depended on how many were *absent* — none on a
+  developed host, all of them in CI, which installs no runtime dependency. Adopting
+  `cryptography`, whose name sorts first, pushed that row to 217 characters and CI's
+  200-character bound caught it. It now names three and counts the rest, which the
+  two branches beside it already did; the whole list is in the evidence at
+  `observed.dependencies.missing`. The bound is asserted against a sixty-item list
+  rather than against whatever this host happens to be missing, so it holds where it
+  is actually tested.
+
+  Auditing the module's other joined summaries found the same defect in the
+  `bootstrap.ready` aggregate, reachable without adopting anything: every check
+  failing renders at 392 characters. That is the state a fresh clone with no
+  environment is in, and the aggregate is the line an operator reads first. It
+  counts too — nothing is lost, since every failing check already has its own row
+  and its own remediation directly above it.
+
 ### The first phase that connects to the venue
 
 - **A REST transport whose endpoint comes from the registry and nowhere else.**

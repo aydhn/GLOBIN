@@ -19,6 +19,7 @@ from globin.adapters import bootstrap as adapters
 from globin.adapters.bootstrap import MANIFEST_NAME, build, load, render
 from globin.domain.bootstrap import (
     AGGREGATE_CHECK,
+    NAMED_IN_SUMMARY,
     CheckStatus,
     ExitCode,
     RuntimePaths,
@@ -409,3 +410,18 @@ def test_the_section_name_check_would_catch_the_defect_it_was_written_for() -> N
     assert is_sensitive("secret_references")
     assert is_sensitive("credential_references")
     assert not is_sensitive("references")
+
+
+def test_the_guide_states_how_many_names_a_summary_carries() -> None:
+    """A number restated in prose, and therefore compared against its source.
+
+    ``BOOTSTRAP.md`` tells an operator that the `dependency.lock` row names the
+    first few and counts the rest, which is the difference between reading the row
+    as a complete list and knowing to look in the evidence. If `NAMED_IN_SUMMARY`
+    ever moves, a document saying "three" would quietly start lying about what the
+    operator is looking at.
+    """
+    spelled = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+    guide = (REPO_ROOT / "docs" / "engineering" / "BOOTSTRAP.md").read_text(encoding="utf-8")
+    claim = f"names the first {spelled[NAMED_IN_SUMMARY]} and counts the rest"
+    assert claim in guide, f"BOOTSTRAP.md does not state {claim!r}"

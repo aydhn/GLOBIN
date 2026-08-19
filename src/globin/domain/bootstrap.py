@@ -490,6 +490,24 @@ class CheckSpec:
 AGGREGATE_CHECK: Final[str] = "bootstrap.ready"
 """The identifier of the check that answers for all the others."""
 
+NAMED_IN_SUMMARY: Final[int] = 3
+"""How many items a summary names before it falls back to counting them.
+
+Three, which is what the two ``dependency.lock`` branches that already truncated
+chose, and what this constant makes one decision rather than three literals.
+
+A check summary is one row of a table a person reads, and ``render_human`` holds
+every row under 200 characters. A summary built by joining a set whose size is not
+fixed -- the missing distributions, the checks that failed -- breaks that bound on
+exactly the host whose report most needs reading, and on no developed host at all.
+So a summary counts and names a few.
+
+**Where the full set lives differs by summary, and neither is the JSON rendering
+of the check** -- that publishes this same string. The missing distributions are in
+the evidence at ``observed.dependencies.missing``; the checks that failed each have
+their own row and their own remediation directly above the aggregate.
+"""
+
 
 def checks() -> tuple[CheckSpec, ...]:
     """Return every registered check, in the order the pipeline performs them.
@@ -1343,12 +1361,29 @@ def dependency_outcome(readiness: DependencyReadiness) -> CheckOutcome:
     Nothing is resolved and no index is consulted. A process that ran a resolver
     to start would need a network to start, which is a property GLOBIN must not
     acquire by accident.
+
+    **The summary names a bounded number and counts the rest**, which the two
+    branches below it already did and this one did not. It listed every missing
+    distribution, so the line grew with `project.dependencies` -- invisibly on a
+    host that has them installed, and at full length in CI, which installs none.
+    Phase 035 adopted a tenth dependency whose name sorts first and pushed the line
+    past the 200-character bound `test_bootstrap_cli.py` puts on a rendered row.
+    That test was right: a diagnostic that grows without limit is the defect, and
+    the roadmap schedules a dozen more dependencies.
+
+    Nothing is lost by bounding it. The complete list is in the evidence at
+    ``observed.dependencies.missing``, which is where an operator debugging *which*
+    ten should look -- and the one place carrying it, since the JSON rendering of a
+    check publishes this same summary rather than the facts behind it.
     """
     if readiness.missing:
         return CheckOutcome(
             identifier="dependency.lock",
             status=CheckStatus.FAIL,
-            summary=f"declared but not installed: {_joined(readiness.missing)}",
+            summary=(
+                f"{len(readiness.missing)} declared distribution(s) are not installed: "
+                f"{_joined(readiness.missing[:NAMED_IN_SUMMARY])}"
+            ),
             remediation=(
                 "Install from the lock with scripts/bootstrap.ps1. "
                 "Do not install them individually: the lock is what makes the set reproducible."
@@ -1420,7 +1455,8 @@ def dependency_outcome(readiness: DependencyReadiness) -> CheckOutcome:
                 identifier="dependency.lock",
                 status=CheckStatus.FAIL,
                 summary=(
-                    f"{len(divergent)} distribution(s) diverge from the lock: {_joined(names[:3])}"
+                    f"{len(divergent)} distribution(s) diverge from the lock: "
+                    f"{_joined(names[:NAMED_IN_SUMMARY])}"
                 ),
                 remediation=(
                     "Reinstall from the lock with scripts/bootstrap.ps1. "
@@ -1434,7 +1470,7 @@ def dependency_outcome(readiness: DependencyReadiness) -> CheckOutcome:
                 status=CheckStatus.WARN,
                 summary=(
                     f"pylock.toml carries {len(inventory.unknown_keys)} key(s) this "
-                    f"GLOBIN does not know: {_joined(inventory.unknown_keys[:3])}"
+                    f"GLOBIN does not know: {_joined(inventory.unknown_keys[:NAMED_IN_SUMMARY])}"
                 ),
                 remediation=(
                     "PEP 751 makes an unknown key inside a supported major "
@@ -1710,7 +1746,9 @@ def ready_outcome(preceding: Sequence[CheckOutcome]) -> CheckOutcome:
         return CheckOutcome(
             identifier=AGGREGATE_CHECK,
             status=CheckStatus.FAIL,
-            summary=f"{_joined(refused)} did not pass",
+            summary=(
+                f"{len(refused)} check(s) did not pass: {_joined(refused[:NAMED_IN_SUMMARY])}"
+            ),
             remediation="Act on the remediation each of those checks gave.",
         )
     warned = [outcome.identifier for outcome in preceding if outcome.status is CheckStatus.WARN]
@@ -1718,7 +1756,10 @@ def ready_outcome(preceding: Sequence[CheckOutcome]) -> CheckOutcome:
         return CheckOutcome(
             identifier=AGGREGATE_CHECK,
             status=CheckStatus.WARN,
-            summary=f"ready, with {_joined(warned)} worth reading",
+            summary=(
+                f"ready, with {len(warned)} warning(s) worth reading: "
+                f"{_joined(warned[:NAMED_IN_SUMMARY])}"
+            ),
             remediation="Nothing blocks start-up; the warnings above are worth acting on.",
         )
     return CheckOutcome(

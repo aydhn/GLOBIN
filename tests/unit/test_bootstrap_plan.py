@@ -10,6 +10,7 @@ import pytest
 
 from globin.domain.bootstrap import (
     CREATED_PATHS,
+    NAMED_IN_SUMMARY,
     BootstrapOutcome,
     BootstrapReport,
     CheckOutcome,
@@ -466,6 +467,29 @@ def test_a_declared_dependency_that_is_not_installed_is_refused() -> None:
     assert "bootstrap.ps1" in outcome.remediation
 
 
+def test_the_missing_summary_is_bounded_however_many_are_missing() -> None:
+    """The bound holds where the list is longest, which is not where anyone runs.
+
+    ``render_human`` holds every row under 200 characters, and this summary was the
+    one row that grew with ``project.dependencies``. It listed every missing name,
+    so its length depended on how many were *absent* -- zero on any developed host,
+    all of them in CI, which installs no runtime dependency at all. Phase 035 added
+    a tenth whose name sorts first and the row reached 217.
+
+    So the bound is asserted here, against a list far longer than the project will
+    plausibly declare, rather than only in the rendering test that happens to see a
+    real one. Sixty names is not a prediction; it is enough to prove the length no
+    longer depends on the count.
+    """
+    many = tuple(f"distribution-with-a-long-name-{index:02d}" for index in range(60))
+    outcome = dependency_outcome(DependencyReadiness(declared=many, locked=True, missing=many))
+    assert outcome.status is CheckStatus.FAIL
+    assert len(outcome.summary) < 160
+    assert "60 declared" in outcome.summary
+    assert outcome.summary.count("; ") == NAMED_IN_SUMMARY - 1
+    assert many[NAMED_IN_SUMMARY] not in outcome.summary
+
+
 def test_a_declared_dependency_with_no_lock_beside_it_is_refused() -> None:
     """The pairing ADR-0054 enforces, asserted here where a process can see it."""
     readiness = DependencyReadiness(declared=("numpy",), locked=False)
@@ -671,6 +695,29 @@ def test_the_aggregate_names_what_did_not_pass() -> None:
     outcome = ready_outcome(tuple(outcomes))
     assert outcome.status is CheckStatus.FAIL
     assert "runtime.host" in outcome.summary
+
+
+def test_the_aggregate_stays_one_line_when_everything_fails() -> None:
+    """The worst host, which is the one whose report most needs reading.
+
+    Every check failing is the state a fresh clone with no environment is in, and
+    the aggregate is the line an operator reads first. Joined whole it was 392
+    characters against ``render_human``'s 200 -- the same defect as the
+    ``dependency.lock`` row above, in the same function, reachable without adopting
+    anything. Nothing is lost by counting: every failing check has its own row and
+    its own remediation directly above this line.
+    """
+    outcomes = tuple(
+        CheckOutcome(
+            identifier=name, status=CheckStatus.FAIL, summary="wrong", remediation="fix it"
+        )
+        for name in check_identifiers()[:-1]
+    )
+    outcome = ready_outcome(outcomes)
+    assert outcome.status is CheckStatus.FAIL
+    assert len(outcome.summary) < 160
+    assert f"{len(outcomes)} check(s)" in outcome.summary
+    assert outcomes[NAMED_IN_SUMMARY].identifier not in outcome.summary
 
 
 def test_the_aggregate_passes_when_everything_before_it_did() -> None:

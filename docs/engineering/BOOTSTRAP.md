@@ -232,7 +232,7 @@ says the capability exists; a contract test enforces it.
 | `this interpreter is not running inside a virtual environment` | Build `.venv` with `scripts/bootstrap.ps1` and run through `.venv\Scripts\python.exe`. |
 | `this interpreter belongs to a different environment` | Same, and check what `python` resolves to — `sys.prefix` is what decides, not `PATH`. |
 | `this is Python X, and the contract declares Y` | A tree verified on one line has not been verified on another. Rebuild `.venv`, or raise the line deliberately in `runtime-contract.toml`. |
-| `declared but not installed` | `scripts/bootstrap.ps1`. Do not install the packages individually: the lock is what makes the set reproducible. |
+| `declared distribution(s) are not installed` | `scripts/bootstrap.ps1`. Do not install the packages individually: the lock is what makes the set reproducible. The summary names the first three and counts the rest, so a row a person reads stays a row; `observed.dependencies.missing` in `bootstrap check --json` carries the whole list. |
 | `no runtime lock accompanies them` | The checkout is incomplete. Fetch it again rather than resolving versions locally. |
 | `the configuration could not be bound` | Correct the setting the message names. [`../CONFIGURATION_POLICY.md`](../CONFIGURATION_POLICY.md) lists every key and its permitted values. |
 | `the ... root could not be created` | Make the named location writable. GLOBIN creates nothing outside the project root. |
