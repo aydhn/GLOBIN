@@ -9,6 +9,7 @@ satisfying the port, so a test never touches a real user profile.
 """
 
 import json
+import re
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -131,8 +132,22 @@ def test_the_manifest_declares_what_it_is() -> None:
 
 
 def test_the_manifest_carries_no_timestamp() -> None:
-    """It is compared between runs, and a clock reading would make every run differ."""
-    rendered = render(_manifest())
+    """It is compared between runs, and a clock reading would make every run differ.
+
+    **Setting NAMES are blanked before the scan, and that is a narrowing rather
+    than a weakening.** What this test exists to catch is a *clock reading* in the
+    evidence: a value that differs between two runs of an unchanged tree would make
+    the determinism check compare the clock. A configuration key called
+    `auth.timestamp_unit` is not one — it is stable vocabulary, it is compared for
+    stability by `test_the_documented_settings_are_exactly_the_settings_that_exist`,
+    and it arrived in Phase 035 and turned this assertion red for a reason that had
+    nothing to do with time.
+
+    Blanking only the `key` field keeps every value in scope, which is where a
+    timestamp would actually appear. A setting whose *value* was a clock reading
+    still fails here.
+    """
+    rendered = re.sub(r'"key":"[^"]*"', '"key":""', render(_manifest()))
     for word in ("timestamp", "generated_at", "recorded_at", "when"):
         assert word not in rendered
 

@@ -342,13 +342,6 @@ overlaps_complete = []
 # ---------------------------------------------------------------------------
 
 [[inheritance]]
-phase = 35
-title = "Environment Classification Model"
-already_built = "production, demo and testnet as distinct kinds, each with documented semantics, hosts and per-product coverage; and, since Phase 034, isolation enforced -- a resolution never substitutes one environment for another, and a transport is bound to one at construction"
-absent_by_design = "no guarantees attached to a class beyond whether real capital is at risk, and no internal simulation -- Binance documents none, so the registry cannot express it"
-from_phases = [33, 34]
-
-[[inheritance]]
 phase = 36
 title = "Product and Environment Capability Matrix"
 already_built = "the matrix itself, six status words, evidence kinds, a query that separates an absent entry from a recorded UNKNOWN, and -- since Phase 034 -- a capability gate that refuses a REST request the matrix does not support"
@@ -361,6 +354,13 @@ title = "Base URL and Endpoint Registry"
 already_built = "base URLs and endpoint families per product, environment and protocol, in one document no other module may spell; and, since Phase 034, a resolver over it and three declared public operation paths with their methods, security types and weights"
 absent_by_design = "no per-operation path for anything but the three public probes"
 from_phases = [33, 34]
+
+[[inheritance]]
+phase = 38
+title = "Request Signing and Authentication"
+already_built = "the whole signing surface -- capability-gated selection read from the registry's own key_types, HMAC, RSA and Ed25519 over the exact characters that reach the wire, eight fail-closed gates, and the venue's own published HMAC vectors reproduced"
+absent_by_design = "required_credentials() is still empty, so no start-up demands a credential and advapi32 stays observed not-applicable; nothing verifies at the venue that a key carries the permissions declared for it, which is Phase 039's; and no register names which operation needs which security type"
+from_phases = [35]
 
 [[inheritance]]
 phase = 41
@@ -508,3 +508,40 @@ title = "Live Monitoring and Escalation"
 already_built = "a readiness and liveness projection, a scrape surface"
 absent_by_design = "no escalation thresholds"
 from_phases = [26, 27]
+
+# ---------------------------------------------------------------------------
+# Nineteenth. Phase 035, delivering the REST authentication layer alongside the
+# environment classification model its title names.
+#
+# The condition it MEETS is the interesting one for once. Every amendment before
+# this argued `the two halves need each other` and most of them conceded it; here
+# `accepts_credential` is gate 1 of the authentication admission, so a request in a
+# simulated environment is refused with no credential having been reached for --
+# and no type outside this phase could say so, because a registry of venue facts
+# has nowhere to put an environment the venue has never heard of.
+# ---------------------------------------------------------------------------
+
+[[amendment]]
+ordinal = 19
+ordinal_word = "Nineteenth"
+phase = 35
+scored = true
+record = "docs/adr/0090-phase-035-widens-to-deliver-the-rest-authentication-layer.md"
+summary = """Phase 035 delivered the REST authentication layer alongside the \
+environment classification model its title names. Row 038 loses its whole \
+subject, and the package named that phase for this work in five places. What the \
+titled half contributes is not decoration: the internal-simulation class is the \
+one Phase 033's registry structurally cannot hold, and its accepts_credential \
+guarantee is gate 1 of the admission -- so a paper-profile request is refused \
+before the registry is consulted and before any credential is reached for. Row \
+038 is NOT rewritten: the eighteenth amendment recorded its own rewrite as an \
+exception rather than a precedent, and row 038's title covers authentication \
+broadly with permission verification still open under it."""
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "MET"
+score = 2
+displaces = [38]
+title_collisions = [38]
+overlaps_complete = []

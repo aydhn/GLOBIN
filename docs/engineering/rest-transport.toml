@@ -234,6 +234,15 @@ keepalive_seconds = 60
 # `tests/contract/test_rest_contract.py` asserts each one against the source.
 # ---------------------------------------------------------------------------
 
+# PHASE 035 DID NOT FLIP `request_signing`, AND THAT IS THE CORRECT ANSWER RATHER
+# THAN AN OVERSIGHT. This table says what THIS TRANSPORT will not do, and Phase 035
+# did not teach it to sign: `globin.adapters.rest_transport` has no signer, no key
+# and no credential, and `_exchange` renders exactly the request it was handed.
+# What changed is that a different module -- `globin.application.auth` -- produces
+# an already-signed `RestRequest`, which arrives here indistinguishable from any
+# other. That separation is the reason the transport can stay this simple, and
+# flipping a flag here to celebrate a capability built elsewhere would make this
+# table describe the package rather than the module it is about.
 [prohibitions]
 automatic_retry = false
 retry_on_unknown = false

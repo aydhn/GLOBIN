@@ -24,6 +24,17 @@ url = "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8
 sha256 = "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775"
 
 [[packages]]
+name = "cffi"
+version = "2.1.1"
+
+[[packages.wheels]]
+name = "cffi-2.1.1-cp314-cp314-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/a7/06/1c3e01e3ba14c39f6d10bfbac52753b7e22259e38088e5cfe1d704918690/cffi-2.1.1-cp314-cp314-win_amd64.whl"
+
+[packages.wheels.hashes]
+sha256 = "3222ba5d678f80a030e6afbcc33dc1ae5cb45facabb61cee2c7016b8432fde48"
+
+[[packages]]
 name = "charset-normalizer"
 version = "3.5.1"
 
@@ -44,6 +55,17 @@ url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed
 
 [packages.wheels.hashes]
 sha256 = "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"
+
+[[packages]]
+name = "cryptography"
+version = "50.0.0"
+
+[[packages.wheels]]
+name = "cryptography-50.0.0-cp311-abi3-win_amd64.whl"
+url = "https://files.pythonhosted.org/packages/32/2e/c9db68a0c4bfa28e310707527c0ee3a2bd254104d2e02e68f368e197aa4c/cryptography-50.0.0-cp311-abi3-win_amd64.whl"
+
+[packages.wheels.hashes]
+sha256 = "bd1c592e4d5974f0d08d4888e432157adba757c66da0246918e43677fafa2d30"
 
 [[packages]]
 name = "googleapis-common-protos"
@@ -198,6 +220,17 @@ url = "https://files.pythonhosted.org/packages/b4/90/e2159492b5426be0c1fef7acba8
 
 [packages.wheels.hashes]
 sha256 = "eb7e81434c8d223ec4a219b5fc1c47d0417b12be7ea866e24fb5ad6e84b3d988"
+
+[[packages]]
+name = "pycparser"
+version = "3.0"
+
+[[packages.wheels]]
+name = "pycparser-3.0-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/0c/c3/44f3fbbfa403ea2a7c779186dc20772604442dde72947e7d01069cbe98e3/pycparser-3.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992"
 
 [[packages]]
 name = "pyproject-hooks"

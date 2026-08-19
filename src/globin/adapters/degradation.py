@@ -300,6 +300,7 @@ def system_arms(
     from globin.adapters.health import UnavailableProcessProbe, system_process_probe
     from globin.adapters.secret_vault import UnavailableSecretVault, secret_vault
     from globin.adapters.secrets import UnavailableSecretStore, windows_credential_store
+    from globin.adapters.signing import UnavailableAsymmetricSigner, asymmetric_signers
     from globin.adapters.telemetry_otel import UnavailableOpenTelemetry, opentelemetry_bridge
     from globin.adapters.telemetry_prometheus import (
         UnavailablePrometheus,
@@ -368,6 +369,20 @@ def system_arms(
             return _absent(identifier, "crypt32 or its deallocator is unavailable")
         return _present(identifier)
 
+    def cryptography_arm() -> ComponentObservation:
+        """Whether the asymmetric signers are the real ones.
+
+        Both arms of that factory move together — one library supplies both
+        algorithms, so a host has both or neither — which is why this reads one of
+        the pair rather than checking each and reconciling two answers that cannot
+        legitimately differ.
+        """
+        identifier = "component.library.cryptography"
+        rsa_signer, _ = asymmetric_signers()
+        if isinstance(rsa_signer, UnavailableAsymmetricSigner):
+            return _absent(identifier, "cryptography is not importable in this environment")
+        return _present(identifier)
+
     return {
         "globin.adapters.health.system_process_probe": psutil_arm,
         "globin.adapters.telemetry_otel.opentelemetry_bridge": otel_arm,
@@ -375,4 +390,5 @@ def system_arms(
         "globin.adapters.environment.windows_system_api": kernel32_arm,
         "globin.adapters.secrets.windows_credential_store": advapi32_arm,
         "globin.adapters.secret_vault.secret_vault": crypt32_arm,
+        "globin.adapters.signing.asymmetric_signers": cryptography_arm,
     }

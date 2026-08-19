@@ -682,3 +682,97 @@ a ports, application or runtime signature. It is also the one runtime dependency
 PRESENT ON EVERY CI RUN, because pytest declares `packaging>=22` itself; that made \
 it safe to import, and `.github/workflows/quality.yml` now pins it explicitly so \
 the availability is a declaration rather than a circumstance."""
+
+# ---------------------------------------------------------------------------
+# Adopted in Phase 035 — the first dependency adopted for a SECURITY capability.
+#
+# Every runtime entry above supplies observability, numerics or packaging
+# metadata; getting one wrong produces a wrong number or a missing measurement.
+# Getting this one wrong produces a request the venue rejects, or — the case that
+# matters — one it accepts that GLOBIN did not mean to send. The review is longer
+# than the others because question 5 deserved a real answer rather than a
+# category, and question 6 has a different shape here than anywhere above.
+# ---------------------------------------------------------------------------
+
+[[review]]
+name = "cryptography"
+ecosystem = "pypi"
+scope = "runtime"
+licence = "Apache-2.0 OR BSD-3-Clause"
+licence_source = "https://github.com/pyca/cryptography/blob/main/LICENSE"
+adopted = "phase-035"
+reviewed = 2026-08-19
+verdict = "adopted"
+reason = """Two of the three signature algorithms Binance documents for a SIGNED \
+REST request. HMAC-SHA256 is `hmac` and `hashlib` and needs nothing at all; \
+RSASSA-PKCS1-v1_5 with SHA-256 and Ed25519 have NO standard-library \
+implementation, and `docs/research/phase_035_sources.md` S-04 records the venue \
+calling Ed25519 "recommended" and HMAC "deprecated" in the same document. A \
+signing layer able to offer only the deprecated algorithm would be one this \
+repository chose not to finish.
+
+WHAT IT COSTS TRANSITIVELY: THREE DISTRIBUTIONS, AND THE NUMBER WAS MEASURED \
+BEFORE IT WAS ACCEPTED, NOT AFTER. `Requires-Dist` on 50.0.0 is `cffi>=2.0.0` \
+behind `platform_python_implementation != "PyPy"`, `typing-extensions>=4.13.2` \
+behind `python_full_version < "3.11"` — a marker this project's `requires-python` \
+of `>=3.12` cannot satisfy — and `bcrypt` behind an `ssh` extra nobody requests. \
+So on this interpreter it is `cffi`, which brings `pycparser`, and nothing else. \
+The relock confirmed it exactly: `pylock.toml` went from twenty-six packages to \
+twenty-nine and NO existing version moved. Against the fifteen distributions the \
+Phase 026 telemetry adoption pulled, this is the second-cheapest runtime adoption \
+in this register after `packaging`, which cost nothing because it was already \
+there.
+
+LICENCE. `Apache-2.0 OR BSD-3-Clause`, read from the project's own LICENSE, which \
+states the software is dual-licensed and ships both LICENSE.APACHE and \
+LICENSE.BSD. This is the SECOND `OR` expression in this register and it is \
+handled the way `docs/DEPENDENCY_POLICY.md` requires and the way `packaging` \
+established: an `OR` is a choice somebody must make and write down, not a lookup. \
+GLOBIN CHOOSES Apache-2.0, for its explicit patent grant, which matters more for \
+a cryptographic implementation than for a metadata parser. Both branches were \
+already on the allow list. The Rust components vendored in the wheel carry their \
+own notices and are covered by the same dual licence at the top level.
+
+MAINTAINED. Published by the Python Cryptographic Authority, which is the same \
+kind of answer `packaging` gives for PyPA: the question 3 test is whether one \
+person could stop and nobody would notice, and this is the library `requests`, \
+`urllib3`, `paramiko`, `pyOpenSSL` and effectively every TLS-touching package in \
+the ecosystem already depends on. Release cadence is regular and security \
+releases are announced with CVE identifiers against a published policy.
+
+RUNTIME, AND FREE. No paid tier, no account, no service, no telemetry. ADR-0003 \
+is satisfied.
+
+COULD IT BE WRITTEN INSTEAD? NO, AND THIS IS THE ONE ENTRY WHERE THAT ANSWER IS \
+NOT CLOSE. ADR-0033's mutation harness and ADR-0036's shard planner are the \
+precedents for writing something rather than taking it, and both are \
+deterministic transformations of text whose failures are visible. A signature \
+scheme is neither. RSASSA-PKCS1-v1_5 requires DigestInfo DER construction and \
+constant-time PKCS#1 padding; Ed25519 requires curve arithmetic over \
+GF(2^255-19) with no data-dependent branches. A subtly wrong implementation of \
+either does not fail loudly — it produces a signature the venue rejects with \
+`-1022` at best, and at worst one that verifies while leaking key material \
+through timing. The repository already refuses to hand-roll advisory range \
+matching (`pip-audit`) on the weaker argument that getting it wrong fails \
+silently; this fails silently AND is the boundary a private key sits behind.
+
+WHAT BREAKS IF IT DISAPPEARS? LESS THAN FOR ANY OTHER RUNTIME ENTRY, BECAUSE IT \
+IS ABSENT-SAFE BY CONSTRUCTION. This is the opposite of `packaging`, whose entry \
+above records that it has NO absent-safe factory and states the consequence \
+plainly. Here the whole import lives inside \
+`globin.adapters.signing.asymmetric_signers`, which returns \
+`UnavailableAsymmetricSigner` on `ImportError` — the seventh such factory, \
+declared as `component.library.cryptography` in \
+`docs/engineering/degradation-contract.toml` with necessity `optional`, \
+withdrawing exactly `auth.signing.rsa` and `auth.signing.ed25519`. On a host \
+without it GLOBIN starts, reports the withdrawal by name, signs with HMAC, and \
+REFUSES an RSA or Ed25519 request with `AuthFailure.SIGNER_UNAVAILABLE` rather \
+than falling back to a different algorithm. That refusal is the important half: \
+a degradation that quietly downgraded Ed25519 to HMAC would be a security \
+regression wearing the clothes of resilience.
+
+That absent-safety is not optional politeness. The CI `quality` job installs the \
+toolchain with plain `pip` and never builds `.venv`, so `cryptography` is absent \
+on every one of those runs — the same condition ADR-0063 records for psutil, and \
+the reason `tests/architecture/test_degradation_discipline.py` fails if a factory \
+appears without a contract row."""

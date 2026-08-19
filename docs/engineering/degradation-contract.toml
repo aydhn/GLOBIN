@@ -164,3 +164,47 @@ adding one would both create a mechanism with no caller and remove a guarantee
 the architecture tests currently prove. Phase 045 is the first phase with a
 caller and owns measuring this; Phase 297 owns refusing a live start on it.
 """
+
+# ---------------------------------------------------------------------------
+# The seventh factory, added in Phase 035, and the first whose absence changes
+# what GLOBIN *does* rather than what it can *measure*.
+#
+# Every row above describes a lost measurement or a lost export. This one
+# describes a lost ALGORITHM, and the difference matters because the obvious
+# degradation here would be a security regression: signing with HMAC instead
+# would use a secret enrolled for a different key, on the algorithm the venue
+# documents as deprecated. So the stand-in refuses, and the refusal is the
+# feature.
+# ---------------------------------------------------------------------------
+
+[[component]]
+id = "component.library.cryptography"
+kind = "library"
+necessity = "optional"
+reached_through = "globin.adapters.signing.asymmetric_signers"
+withdraws = ["auth.signing.rsa", "auth.signing.ed25519"]
+owner_phase = 0
+absence_means = """
+RSA and Ed25519 request signing are unavailable. HMAC-SHA256 still works, because
+it is `hmac` and `hashlib` from the standard library and needs nothing — so a
+degraded host can still authenticate, and what it has lost is the venue's
+RECOMMENDED key type rather than authentication itself.
+
+An RSA or Ed25519 request is refused with `AuthStatus.SIGNER_UNAVAILABLE`, naming
+the missing distribution, BEFORE any credential is read. It is never downgraded to
+HMAC: the venue's own API Key Types document says "HMAC keys are deprecated", so a
+fallback would move an operator onto the algorithm they are being asked to leave,
+using material they enrolled for something else.
+
+OPTIONAL rather than opportunistic, and rather than required. Not opportunistic,
+because two of the three documented key types are a declared capability an
+operator configures and losing them silently would mean a setting that appears to
+work and does nothing. Not required, because `required_credentials()` is empty and
+GLOBIN reaches no authenticated surface at start-up, so refusing a start for a
+capability no caller uses would be the same mistake `advapi32`'s row above avoids.
+
+The CI `quality` job installs the toolchain with plain `pip` and never builds
+`.venv`, so this library is absent on every one of those runs — the same condition
+ADR-0063 records for psutil, and the reason the absent arm is exercised on every
+CI run rather than only in a test.
+"""

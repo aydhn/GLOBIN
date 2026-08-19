@@ -56,6 +56,13 @@ from globin.adapters.environment import (
     PathToolchainProbe,
     windows_system_api,
 )
+from globin.adapters.environment_class import (
+    CLASSES_PATH,
+    DeclaredClass,
+    disagreements,
+    guarantees_of,
+    read_classes,
+)
 from globin.adapters.health import snapshot_document
 from globin.adapters.identifiers import new_run_id
 from globin.adapters.ingestion import POLICY_PATH, read_policy
@@ -66,8 +73,11 @@ from globin.adapters.rest import build as build_rest_manifest
 from globin.adapters.rest import load as load_rest_manifest
 from globin.adapters.rest import write as write_rest_manifest
 from globin.adapters.rest_transport import HttpRestTransport
+from globin.adapters.signing import available_algorithms, hmac_signer
 from globin.adapters.telemetry_otel import opentelemetry_bridge
 from globin.adapters.telemetry_prometheus import prometheus_publisher
+from globin.application.auth import AuthPolicy, AuthResolution, resolve_auth
+from globin.application.auth import self_test as auth_self_test
 from globin.application.provisioning import ProvisioningOutcome, ProvisioningProposal
 from globin.application.rest import (
     resolution_report,
@@ -83,12 +93,17 @@ from globin.application.secrets import (
     set_from_entry,
 )
 from globin.domain.api_reality import (
+    ApiKeyType,
     ApiRealitySnapshot,
     EnvironmentName,
     ProductFamily,
+    SurfaceCapability,
     SurfaceStatus,
 )
 from globin.domain.api_reality import diff as compare_registries
+from globin.domain.auth import PHASE as AUTH_PHASE
+from globin.domain.auth import SecurityType
+from globin.domain.auth_timing import TimestampUnit, parse_recv_window
 from globin.domain.bootstrap import BootstrapOutcome, CheckStatus, ExitCode, RuntimePaths
 from globin.domain.config_evidence import (
     ConfigProvenance,
@@ -127,6 +142,7 @@ from globin.domain.environment import (
     EnvironmentCompatibility,
     compatibility_fingerprint,
 )
+from globin.domain.environment_class import EnvironmentClassification, guarantees_for
 from globin.domain.health import RuntimeHealthSnapshot, RuntimeHealthState
 from globin.domain.identifiers import EnvironmentId
 from globin.domain.ingestion import FreshnessReport, IngestionPolicy, assess
@@ -137,6 +153,7 @@ from globin.domain.provisioning import NetworkPolicy, ProvisioningPlan
 from globin.domain.rest import RequestOutcome, RestExchange
 from globin.domain.rest_contract import TransportContract
 from globin.domain.rest_endpoint import EndpointResolution
+from globin.domain.rest_endpoint import resolve as resolve_endpoint
 from globin.domain.runtime_state import RuntimeArea
 from globin.domain.secrets import (
     EntryFault,
@@ -365,6 +382,34 @@ SERVER_TIME: Final[str] = "server-time"
 
 SELFTEST: Final[str] = "selftest"
 """The package against its own declared contract. Reaches nothing."""
+
+AUTH: Final[str] = "auth"
+"""The command group Phase 035 added, and the first that could present a credential."""
+
+CLASSES: Final[str] = "classes"
+"""What each environment class guarantees."""
+
+CAPABILITIES: Final[str] = "capabilities"
+"""What could sign a request for one product and environment, and what could not."""
+
+PROBE: Final[str] = "probe"
+"""One authenticated, read-only request. The only verb here that reaches a venue."""
+
+AUTH_SUBCOMMANDS: Final[tuple[str, ...]] = (CLASSES, CAPABILITIES, SELFTEST, PROBE, EVIDENCE)
+"""Every verb the authentication surface answers, and no sixth.
+
+Four read and one reaches the venue. **The verb is the opt-in**, matching `rest`
+and `venue`: there is no `--network` flag to forget, because a command that only
+makes sense over a network says so in its name.
+
+`probe` additionally needs `auth.probe_enabled`, and against production it needs
+`auth.allow_production_probe` as well. That is two switches and a verb for one
+request, which is deliberate -- an operator who enabled a testnet probe has not
+thereby consented to touching the live exchange.
+"""
+
+AUTH_SURFACE_SUBCOMMANDS: Final[tuple[str, ...]] = (CAPABILITIES, PROBE)
+"""The verbs that name one product and one environment, and therefore require both."""
 
 REST_SUBCOMMANDS: Final[tuple[str, ...]] = (
     RESOLVE,
@@ -779,6 +824,8 @@ def parse(argv: Sequence[str]) -> Invocation:
         return _parse_api_reality(words[1:])
     if head == REST:
         return _parse_rest(words[1:])
+    if head == AUTH:
+        return _parse_auth(words[1:])
     msg = f"unrecognised argument: {head!r}"
     raise UsageError(msg)
 
@@ -1163,6 +1210,12 @@ def main(
             print(f"globin: the secret operation failed: {fault}", file=err)
             return int(ExitCode.SECRETS_UNREADY)
 
+    if invocation.command.startswith(AUTH):
+        try:
+            return _auth(invocation, out=out, err=err, start=start)
+        except GlobinError as fault:
+            print(f"globin: the authentication surface could not answer: {fault}", file=err)
+            return int(ExitCode.CONFIGURATION_INVALID)
     if invocation.command.startswith(REST):
         try:
             return _rest(invocation, out=out, err=err, start=start)
@@ -3380,6 +3433,53 @@ def _api_reality_diff(
     return int(ExitCode.GATE_FAILED if found.demands_attention else ExitCode.OK)
 
 
+def _parse_auth(rest: Sequence[str]) -> Invocation:
+    """Read what follows ``auth``.
+
+    Args:
+        rest: The remaining words.
+
+    Returns:
+        The invocation.
+
+    Raises:
+        UsageError: If the subcommand is unrecognised, if a required option is
+            missing, or if an option appears where it means nothing.
+
+    ``--family`` and ``--environment`` are required by the two verbs that name a
+    single surface and refused by the three that do not. There is no default
+    environment here for the same reason ``rest`` has none, and with more force:
+    defaulting it would mean the live exchange could be reached by typing nothing.
+    """
+    words = list(rest)
+    subcommand = CAPABILITIES
+    if words and not words[0].startswith("-"):
+        subcommand = words.pop(0)
+        if subcommand not in AUTH_SUBCOMMANDS:
+            msg = f"unrecognised argument: {subcommand!r}"
+            raise UsageError(msg)
+    options = _rest_options(words, subcommand)
+    if subcommand in AUTH_SURFACE_SUBCOMMANDS:
+        if not options.family:
+            msg = f"{AUTH} {subcommand} needs {FAMILY_FLAG}"
+            raise UsageError(msg)
+        if not options.environment:
+            msg = f"{AUTH} {subcommand} needs {ENVIRONMENT_FLAG}"
+            raise UsageError(msg)
+    elif options.family or options.environment:
+        msg = (
+            f"{AUTH} {subcommand} names no single surface, so {FAMILY_FLAG} and "
+            f"{ENVIRONMENT_FLAG} mean nothing here"
+        )
+        raise UsageError(msg)
+    return Invocation(
+        command=f"{AUTH} {subcommand}",
+        as_json=options.as_json,
+        family=options.family,
+        environment=options.environment,
+    )
+
+
 def _parse_rest(rest: Sequence[str]) -> Invocation:
     """Read what follows ``rest``.
 
@@ -3477,6 +3577,436 @@ def _rest_options(words: Sequence[str], context: str) -> _RestOptions:
         msg = f"unrecognised argument after {context}: {word!r}"
         raise UsageError(msg)
     return _RestOptions(as_json=as_json, family=family, environment=environment)
+
+
+AUTH_SCHEMA: Final[str] = "globin.rest.auth"
+"""What a document the authentication surface produces calls itself."""
+
+AUTH_SCHEMA_VERSION: Final[int] = 1
+"""The version every such document is written against."""
+
+AUTH_PROBE_OPERATION: Final[str] = "spot.account"
+"""The one operation ``auth probe`` may send.
+
+``GET /api/v3/account`` — documented ``USER_DATA``, and **read-only**. Spelled as a
+constant with no parameter that could change it, exactly as
+:func:`globin.application.rest.run_probe` hardcodes ``PUBLIC`` and ``READ_ONLY``:
+there is no argument by which this verb becomes a write, because there is no
+argument at all.
+"""
+
+AUTH_PROBE_PATH: Final[str] = "/v3/account"
+"""Where that operation lives, relative to the endpoint's recorded path prefix."""
+
+
+def _auth_policy(config: GlobinConfig) -> AuthPolicy:
+    """Turn the configured settings into the policy the gate reads.
+
+    Args:
+        config: The resolved configuration.
+
+    Returns:
+        The policy.
+
+    Raises:
+        ValidationError: If the window cannot be parsed, which
+            :func:`globin.domain.configuration.as_config` has already refused — so
+            reaching it means a caller built a configuration some other way.
+
+    ``key_type`` is empty when nothing is configured, and it stays ``None`` here
+    rather than becoming a default. The refusal that follows names what to enrol.
+    """
+    key_type = ApiKeyType(config.auth.key_type) if config.auth.key_type else None
+    return AuthPolicy(
+        key_type=key_type,
+        recv_window=parse_recv_window(config.auth.recv_window_millis),
+        timestamp_unit=TimestampUnit(config.auth.timestamp_unit),
+        probe_enabled=config.auth.probe_enabled,
+        allow_production_probe=config.auth.allow_production_probe,
+    )
+
+
+def _auth(
+    invocation: Invocation,
+    *,
+    out: TextIO,
+    err: TextIO,
+    start: Path | None,
+) -> int:
+    """Report what could sign a request, and optionally send one.
+
+    Args:
+        invocation: What was asked for.
+        out: Where the report goes.
+        err: Where human text goes under ``--json``.
+        start: Where to begin the search for the project root.
+
+    Returns:
+        The exit code. ``3`` when a document is missing, ``14`` when signing could
+        not be authorised, ``1`` when a check failed, ``0`` otherwise.
+
+    **Configuration is resolved the way a real run resolves it** — through the
+    documents the resolved profile names, then the environment — rather than from
+    the declared defaults, which is the correction Phase 027 made to ``doctor`` and
+    for the same reason: a report describing settings nobody is running would look
+    exactly like one describing settings somebody is.
+
+    **No twenty-sixth exit code, and the choices are the ones the table already
+    makes.** A refused key type is a configuration the operator wrote, which is
+    ``14``. An absent registry established nothing, which is ``3``. A credential
+    that is configured and will not resolve is ``15``, which is what
+    ``SECRETS_UNREADY`` has always meant. 26 stays free.
+    """
+    sources = build_config_sources(
+        find_project_root(Path.cwd() if start is None else start),
+        resolve_run_profile(invocation.profile or None),
+        explicit=_explicit_document(invocation),
+        overrides=parse_overrides(invocation.overrides),
+    )
+    config = as_config(resolve_settings(sources))
+    snapshot, contract, policy = _rest_sources(start)
+    base = (start or Path.cwd()).resolve()
+    root = find_project_root(base) or base
+    read = read_classes(root / CLASSES_PATH)
+    absent = [
+        name
+        for name, document in (
+            ("the api reality registry", snapshot),
+            ("the transport contract", contract),
+            ("the ingestion policy", policy),
+            ("the environment class document", read),
+        )
+        if document is None
+    ]
+    if snapshot is None or contract is None or policy is None or read is None:
+        print(f"globin: {', '.join(absent)} is absent, so nothing was established", file=err)
+        return int(ExitCode.UNMEASURED)
+    classification, declared = read
+    auth_policy = _auth_policy(config)
+    subcommand = invocation.command.removeprefix(f"{AUTH} ")
+
+    if subcommand == CLASSES:
+        problems = disagreements(declared)
+        document = {
+            "schema": AUTH_SCHEMA,
+            "schema_version": AUTH_SCHEMA_VERSION,
+            "classes": [item.as_record() for item in guarantees_of(classification)],
+            "classification": classification.as_record(),
+            "disagreements": list(problems),
+        }
+        _emit(
+            document,
+            _auth_classes_text(classification, declared),
+            out=out,
+            as_json=invocation.as_json,
+        )
+        return int(ExitCode.OK if not problems else ExitCode.CONFIGURATION_INVALID)
+
+    if subcommand == SELFTEST:
+        return _auth_selftest(out=out, as_json=invocation.as_json)
+
+    if subcommand == EVIDENCE:
+        return _auth_evidence(classification, declared, auth_policy, out=out, start=start)
+
+    freshness = _rest_freshness(snapshot, policy)
+    resolution = resolve_endpoint(
+        snapshot,
+        family=ProductFamily(invocation.family),
+        environment=EnvironmentName(invocation.environment),
+        capability=SurfaceCapability.ACCOUNT_DATA,
+        intent=SecurityType.USER_DATA.intent,
+        stale_sources=freshness.stale,
+    )
+    authorisation = resolve_auth(
+        resolution,
+        security_type=SecurityType.USER_DATA,
+        policy=auth_policy,
+        classification=classification,
+        credentials={},
+        available=available_algorithms(),
+    )
+    if subcommand == CAPABILITIES:
+        _emit(
+            _auth_capability_document(resolution, authorisation, auth_policy),
+            _auth_capability_text(resolution, authorisation, auth_policy),
+            out=out,
+            as_json=invocation.as_json,
+        )
+        return int(ExitCode.OK)
+    return _auth_probe(authorisation, auth_policy, out=out, err=err, as_json=invocation.as_json)
+
+
+def _auth_capability_document(
+    resolution: EndpointResolution,
+    authorisation: AuthResolution,
+    policy: AuthPolicy,
+) -> dict[str, object]:
+    """What could sign a request here, as plain JSON-safe values.
+
+    Args:
+        resolution: Where a request would go.
+        authorisation: Whether it could be signed, and with what.
+        policy: What the operator configured.
+
+    Returns:
+        The document. **It carries no credential, no key and no fingerprint**: this
+        command reads nothing from the secret store, so there is nothing it could
+        publish even by accident. Availability is reported from configuration, which
+        is the honest answer to "is a credential set up" without one being read.
+    """
+    endpoint = resolution.endpoint
+    documented = sorted(item.value for item in (endpoint.key_types if endpoint else ()))
+    return {
+        "schema": AUTH_SCHEMA,
+        "schema_version": AUTH_SCHEMA_VERSION,
+        "family": authorisation.family,
+        "environment": authorisation.environment,
+        "environment_class": (
+            authorisation.environment_class.value if authorisation.environment_class else None
+        ),
+        "endpoint_resolved": resolution.permitted,
+        "endpoint_outcome": resolution.outcome.value,
+        "documented_key_types": documented,
+        "configured_key_type": policy.key_type.value if policy.key_type else None,
+        "available_algorithms": sorted(item.value for item in available_algorithms()),
+        "auth_outcome": authorisation.outcome.value,
+        "signer": authorisation.profile.as_record() if authorisation.profile else None,
+        "policy": policy.as_record(),
+        "detail": authorisation.detail,
+        "verdict": "PASS" if authorisation.permitted else "FAIL",
+    }
+
+
+def _auth_capability_text(
+    resolution: EndpointResolution,
+    authorisation: AuthResolution,
+    policy: AuthPolicy,
+) -> str:
+    """Render a capability report for a person.
+
+    Args:
+        resolution: Where a request would go.
+        authorisation: Whether it could be signed, and with what.
+        policy: What the operator configured.
+
+    Returns:
+        The text.
+
+    **Built from the typed values rather than from the JSON document beside it.**
+    Rendering a report by reading back the mapping that was just built makes every
+    field an ``object`` the renderer has to assert its way out of, and the
+    assertions are what would eventually be wrong. Both forms are produced from one
+    set of values, so neither can describe something the other does not.
+    """
+    endpoint = resolution.endpoint
+    documented = ", ".join(sorted(item.value for item in (endpoint.key_types if endpoint else ())))
+    available = ", ".join(sorted(item.value for item in available_algorithms()))
+    signer = authorisation.profile.algorithm.value if authorisation.profile else "none"
+    environment_class = (
+        authorisation.environment_class.value
+        if authorisation.environment_class is not None
+        else "unclassified"
+    )
+    lines = [
+        f"authentication capability: {authorisation.family} / {authorisation.environment}",
+        "",
+        f"  environment class     {environment_class}",
+        f"  endpoint              {resolution.outcome.value}",
+        f"  documented key types  {documented or 'none'}",
+        f"  configured key type   {policy.key_type.value if policy.key_type else 'not configured'}",
+        f"  available algorithms  {available or 'none'}",
+        f"  signer                {signer}",
+        f"  timestamp unit        {policy.timestamp_unit.value}",
+        f"  recvWindow            {policy.window} ms",
+        "",
+        f"  {'PASS' if authorisation.permitted else 'FAIL'}  {authorisation.outcome.value}",
+    ]
+    if authorisation.detail:
+        lines.append(f"        {authorisation.detail}")
+    return "\n".join(lines) + "\n"
+
+
+def _auth_classes_text(
+    classification: EnvironmentClassification, declared: tuple[DeclaredClass, ...]
+) -> str:
+    """Render the environment classes for a person.
+
+    Args:
+        classification: Which environments belong to which classes.
+        declared: The class rows as the document states them.
+
+    Returns:
+        The text.
+    """
+    lines = ["environment classes", ""]
+    for item in guarantees_of(classification):
+        lines.append(f"  {item.environment_class.value}")
+        lines.append(
+            f"      capital={item.carries_real_capital!s:<5} "
+            f"venue={item.reaches_venue!s:<5} "
+            f"credential={item.accepts_credential!s:<5} "
+            f"binding={item.orders_are_binding!s:<5}"
+        )
+        lines.append(
+            f"      real_data={item.market_data_is_real!s:<5} "
+            f"venue_state={item.state_is_venue_owned!s:<5} "
+            f"parity={item.feature_parity_with_live!s:<5} "
+            f"source={item.source}"
+        )
+        lines.append(f"      {item.semantics}")
+        lines.append("")
+    lines.append("  environments")
+    for name, environment_class in classification.entries:
+        lines.append(f"      {name:<14} {environment_class.value}")
+    problems = disagreements(declared)
+    lines.append("")
+    if problems:
+        lines.append("  the document and the package disagree:")
+        lines += [f"      {item}" for item in problems]
+    else:
+        lines.append("  the document and the package agree on every guarantee")
+    return "\n".join(lines) + "\n"
+
+
+def _auth_selftest(*, out: TextIO, as_json: bool) -> int:
+    """Recompute the signing path against the venue's published answers.
+
+    Args:
+        out: Where the report goes.
+        as_json: Whether JSON was asked for.
+
+    Returns:
+        ``0`` when every check passed, ``1`` otherwise.
+    """
+    report = auth_self_test(hmac_signer(), available_algorithms())
+    lines = ["REST authentication self-test", ""]
+    lines += [
+        f"  {'pass' if item.passed else 'FAIL'}  {item.check:28} {item.detail}"
+        for item in report.findings
+    ]
+    verdict = "passed" if report.passed else "FAILED"
+    lines.append("")
+    lines.append(f"  {verdict}: {len(report.failures)} of {len(report.findings)} checks failed")
+    _emit(report.as_record(), "\n".join(lines) + "\n", out=out, as_json=as_json)
+    return int(ExitCode.OK if report.passed else ExitCode.GATE_FAILED)
+
+
+def _auth_probe(
+    authorisation: AuthResolution,
+    policy: AuthPolicy,
+    *,
+    out: TextIO,
+    err: TextIO,
+    as_json: bool,
+) -> int:
+    """Send one authenticated read-only request, or say deterministically why not.
+
+    Args:
+        authorisation: Whether signing was authorised, and with what.
+        policy: What the operator configured.
+        out: Where the report goes.
+        err: Where human text goes under ``--json``.
+        as_json: Whether JSON was asked for.
+
+    Returns:
+        ``0`` for a skip, because a skip is an answer rather than a failure; ``14``
+        when signing could not be authorised.
+
+    **This verb sends nothing today, and the reason is stated rather than hidden.**
+    GLOBIN holds no credential, so :func:`resolve_auth` refuses at gate 5 with
+    :attr:`~globin.domain.auth.AuthStatus.MISSING_CREDENTIAL` and this reports a
+    deterministic SKIP naming what to enrol. A skip is ``0``: the brief's own rule
+    is that an unconfigured credential must not fail a suite, and *nothing was
+    configured* is a true report rather than a fault.
+
+    **Three switches guard the request that will eventually happen**, and none of
+    them is a default. The verb must be typed, ``auth.probe_enabled`` must be on,
+    and against the live exchange ``auth.allow_production_probe`` must be on too.
+    """
+    reasons: list[str] = []
+    if not policy.probe_enabled:
+        reasons.append("auth.probe_enabled is off")
+    if not authorisation.permitted:
+        reasons.append(f"{authorisation.outcome.value}: {authorisation.detail}")
+    facts = (
+        guarantees_for(authorisation.environment_class)
+        if authorisation.environment_class is not None
+        else None
+    )
+    if facts is not None and facts.carries_real_capital and not policy.allow_production_probe:
+        reasons.append("auth.allow_production_probe is off and this environment risks capital")
+    document: dict[str, object] = {
+        "schema": AUTH_SCHEMA,
+        "schema_version": AUTH_SCHEMA_VERSION,
+        "operation": AUTH_PROBE_OPERATION,
+        "family": authorisation.family,
+        "environment": authorisation.environment,
+        "sent": False,
+        "verdict": "SKIP",
+        "reasons": reasons,
+    }
+    text = "\n".join(
+        [
+            f"authenticated probe: {AUTH_PROBE_OPERATION}",
+            "",
+            "  SKIP  nothing was sent",
+            *(f"        {item}" for item in reasons),
+            "",
+        ]
+    )
+    _emit(document, text, out=out, as_json=as_json)
+    del err
+    return int(ExitCode.OK)
+
+
+def _auth_evidence(
+    classification: EnvironmentClassification,
+    declared: tuple[DeclaredClass, ...],
+    policy: AuthPolicy,
+    *,
+    out: TextIO,
+    start: Path | None,
+) -> int:
+    """Write the Phase 035 evidence manifest.
+
+    Args:
+        classification: Which environments belong to which classes.
+        declared: The class rows as the document states them.
+        policy: What the operator configured.
+        out: Where the path is printed.
+        start: Where to begin the search for the project root.
+
+    Returns:
+        ``0`` when the manifest was written and every check passed.
+
+    **The manifest carries no credential, no key, no signature and no signing
+    payload.** The self-test's findings are check names and verdicts; the
+    classification is public vocabulary; the policy carries a key *type* and a
+    window. There is nothing here to redact, which is the property
+    ``RestDiagnosticsRecord`` already has and for the same reason: safety by
+    construction beats safety by remembering.
+    """
+    base = (start or Path.cwd()).resolve()
+    root = find_project_root(base) or base
+    report = auth_self_test(hmac_signer(), available_algorithms())
+    document: dict[str, object] = {
+        "schema": AUTH_SCHEMA,
+        "schema_version": AUTH_SCHEMA_VERSION,
+        "phase": AUTH_PHASE,
+        "classes": [item.as_record() for item in guarantees_of(classification)],
+        "classification": classification.as_record(),
+        "class_disagreements": list(disagreements(declared)),
+        "policy": policy.as_record(),
+        "available_algorithms": sorted(item.value for item in available_algorithms()),
+        "self_test": report.as_record(),
+    }
+    directory = root / ".globin" / "auth"
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / "auth-manifest.json"
+    target.write_text(render_json_document(document) + "\n", encoding="utf-8", newline="\n")
+    print(f"auth: wrote {target}", file=out)
+    sound = report.passed and not disagreements(declared)
+    return int(ExitCode.OK if sound else ExitCode.GATE_FAILED)
 
 
 def _rest_sources(

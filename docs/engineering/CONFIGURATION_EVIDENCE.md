@@ -287,7 +287,7 @@ write `REPLACE_ME`.
 | Collecting configuration an operator has not supplied | 291 |
 | Backing configuration up and restoring it | 283 |
 | Reloading configuration without restarting | Not scheduled; no phase owns it |
-| What an environment is, and how production, testnet and demo differ | 035 |
+| What an environment is, and how production, testnet and demo differ | 035, delivered — [`ENVIRONMENT_CLASSES.md`](ENVIRONMENT_CLASSES.md) |
 
 **Hot reload is deliberately absent rather than deferred to a named phase.** The
 effective configuration is an immutable snapshot after validation, and the API is

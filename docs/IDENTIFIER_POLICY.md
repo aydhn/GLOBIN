@@ -196,7 +196,7 @@ absence of a rule.
 | The value types a price, quantity or market is carried in | 008, delivered — [`VALUE_TYPES_POLICY.md`](VALUE_TYPES_POLICY.md) |
 | Serialization and schema evolution for persisted identifiers | 012, delivered — [`SERIALIZATION_POLICY.md`](SERIALIZATION_POLICY.md) |
 | Which product families Binance offers, and what each is called there | 033, delivered — [`engineering/binance-api-reality.toml`](engineering/binance-api-reality.toml) |
-| What an environment is, and what each class guarantees | 035 |
+| What an environment is, and what each class guarantees | 035, delivered — [`engineering/ENVIRONMENT_CLASSES.md`](engineering/ENVIRONMENT_CLASSES.md) |
 | Which product and environment pairs are usable | 036 |
 | The venue spelling of a market, such as the concatenated form | 049 |
 | Which instruments exist, and their metadata | 049-050 |
@@ -206,7 +206,7 @@ absence of a rule.
 Three are worth spelling out.
 
 **Naming an environment is not classifying one.** ADR-0006 refuses to treat "not
-production" as a single thing, and Phase 035 models the classes and their
+production" as a single thing, and Phase 035 modelled the classes and their
 guarantees. `EnvironmentId` carries a name and asserts nothing about what the
 name promises.
 

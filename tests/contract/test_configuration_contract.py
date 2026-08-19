@@ -26,11 +26,13 @@ from typing import Final
 import pytest
 
 from globin.domain.configuration import (
+    AUTH_SECTION,
     DIAGNOSTICS_HTTP_SECTION,
     DIAGNOSTICS_SECTION,
     LOGGING_SECTION,
     TELEMETRY_SECTION,
     WATCHDOG_SECTION,
+    AuthConfig,
     DiagnosticsConfig,
     DiagnosticsHttpConfig,
     LoggingConfig,
@@ -58,8 +60,17 @@ POLICY_RELATIVE_PATH: Final[str] = "docs/CONFIGURATION_POLICY.md"
 #: should makes every comparison below weaker without making any of them red, which
 #: is why ``test_the_row_reader_finds_its_own_failing_case`` now includes a dotted
 #: default among its examples.
+#:
+#: **The default may now be empty**, and the same argument applies a second time.
+#: Phase 035 added ``auth.key_type``, whose default is deliberately the empty
+#: string — there is no key type GLOBIN may assume, and the register has to be able
+#: to say so. With ``+`` the reader skipped that row silently, which made the
+#: comparisons below weaker without turning any of them red: exactly the failure
+#: the paragraph above describes, arriving again for a different reason. ``*``
+#: fixes it, and the self-test carries an empty default among its examples so the
+#: change is exercised rather than assumed.
 SETTING_ROW_RE: Final[re.Pattern[str]] = re.compile(
-    r"^\| `(?P<key>[a-z][a-z0-9_.]*)` \| `(?P<type>\w+)` \| `(?P<default>[\w.:]+)` \|",
+    r"^\| `(?P<key>[a-z][a-z0-9_.]*)` \| `(?P<type>\w+)` \| `(?P<default>[\w.:]*)` \|",
     re.MULTILINE,
 )
 
@@ -109,6 +120,7 @@ def test_the_row_reader_finds_its_own_failing_case() -> None:
             "| `alpha.one` | `Severity` | `DEBUG` | Something. |",
             "| `alpha.two` | `str` | `127.0.0.1` | A default that is not one word. |",
             "| `alpha.three` | `str` | `::1` | Nor is this one. |",
+            "| `alpha.four` | `str` | `` | A default that is deliberately empty. |",
             "| Prose in the first cell | `X` | `Y` | Not a setting. |",
             "",
         ]
@@ -117,6 +129,7 @@ def test_the_row_reader_finds_its_own_failing_case() -> None:
         Row(("alpha.one", "Severity", "DEBUG")),
         Row(("alpha.two", "str", "127.0.0.1")),
         Row(("alpha.three", "str", "::1")),
+        Row(("alpha.four", "str", "")),
     )
     assert settings_rows("no table here") == ()
 
@@ -142,6 +155,7 @@ def test_every_documented_type_is_the_type_the_default_actually_has(
         **section_defaults(WATCHDOG_SECTION, WatchdogConfig),
         **section_defaults(TELEMETRY_SECTION, TelemetryConfig),
         **section_defaults(DIAGNOSTICS_HTTP_SECTION, DiagnosticsHttpConfig),
+        **section_defaults(AUTH_SECTION, AuthConfig),
     }
     for key, declared, _default in rows:
         assert type(defaults[key]).__name__ == declared, key

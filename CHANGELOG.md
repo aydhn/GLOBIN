@@ -19,6 +19,60 @@ can be opened and read.
 
 ## [Unreleased]
 
+### The first phase that can sign a request
+
+- **Capability-gated authentication over HMAC, RSA and Ed25519.** Which algorithm
+  may sign a request is read from Phase 033's registry — `key_types` per endpoint —
+  rather than from a table in the signing layer. There is no `if family == …`
+  anywhere, and **no fallback algorithm in any direction**: a key type with no
+  mapped algorithm is a refusal, and a host missing `cryptography` refuses an RSA or
+  Ed25519 request naming the library rather than quietly signing with HMAC. That
+  matters more than it looks, because HMAC is the algorithm the venue's own API Key
+  Types document calls **deprecated**.
+  [`REST_AUTHENTICATION.md`](docs/engineering/REST_AUTHENTICATION.md)
+
+- **The bytes signed are the bytes sent, proved against a socket.** Binance's rule
+  is that the payload is *"the query string concatenated without separator to the
+  HTTP body"* with *"any non-ASCII character percent-encoded before signing"*.
+  GLOBIN required no change for either: Phase 034 wrote the encoder from RFC 3986
+  for a different reason, and `canonical()` renders the string that goes on the
+  wire — so the signed span is a literal **prefix** of the transmitted query.
+  Asserted three ways: as a string comparison, as a property over generated
+  parameters, and against the **raw request line a real server received**.
+
+- **The venue's own published HMAC vectors reproduce exactly**, both of them,
+  including the one whose symbol is fullwidth digits. Rendered from GLOBIN's own
+  parameters the full target is character for character the URL in the venue's
+  `curl` example, signature included.
+
+- **Four environment classes with distinct guarantees**, including the one no venue
+  publishes. `paper` is GLOBIN's own simulated execution, has no registry row and
+  structurally cannot have one, and its `accepts_credential` guarantee is **gate 1**
+  of the authentication admission — so a paper-profile request is refused with *no
+  credential having been reached for*, before the registry is consulted.
+  [`ENVIRONMENT_CLASSES.md`](docs/engineering/ENVIRONMENT_CLASSES.md)
+
+- **`cryptography` adopted as the tenth runtime dependency**, the first for a
+  security capability and the seventh absent-safe component. Three distributions,
+  measured before acceptance; one `abi3` wheel serves both interpreters CI tests.
+  HMAC is standard library and never unavailable, so a degraded host still
+  authenticates — what it loses is the venue's recommended key type.
+
+- **Two findings from reading the documentation rather than remembering it.** The
+  venue's *worked Ed25519 examples are RSA output* — one decodes to 256 bytes and
+  is byte-identical to the RSA section's, the other is 343 base64 characters, which
+  is not a valid length; an Ed25519 signature is 64 bytes, so the known-answer
+  vectors come from RFC 8032 instead. And *HMAC is documented deprecated*, in a
+  document `rest-api.md` links to by name that neither it nor the CHANGELOG
+  restates — this phase's own plan recorded the opposite and was corrected by
+  following the link.
+  [`phase_035_sources.md`](docs/research/phase_035_sources.md)
+
+- **`recvWindow` is a `Decimal` and a quoted string in configuration.** The venue
+  documents three decimal places and publishes `6000.346` as its example, which is
+  not representable as a binary float — so a TOML float would have changed the
+  value before any type could refuse it. A `float` is refused outright.
+
 ### The first phase that connects to the venue
 
 - **A REST transport whose endpoint comes from the registry and nowhere else.**

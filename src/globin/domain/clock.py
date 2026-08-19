@@ -183,6 +183,28 @@ class Instant:
         """
         return _microseconds_since_epoch(self.moment) // MICROSECONDS_PER_MILLISECOND
 
+    @property
+    def epoch_micros(self) -> int:
+        """This moment as whole microseconds since the Unix epoch.
+
+        Returns:
+            The count, exactly. Unlike :attr:`epoch_millis` nothing is discarded:
+            a :class:`~datetime.datetime` carries microseconds and this is the
+            same unit, so the conversion is total rather than lossy.
+
+        Added in Phase 035, because Binance documents a ``timestamp`` parameter
+        that "should be the current timestamp either in milliseconds **or
+        microseconds**" and a ``recvWindow`` that "supports up to three decimal
+        places of precision ... so that microseconds may be specified". Deriving
+        this by multiplying :attr:`epoch_millis` would first throw the
+        microseconds away and then multiply the loss by a thousand, which is
+        exactly the shape of bug a unit conversion is supposed to prevent.
+
+        Both properties share :func:`_microseconds_since_epoch`, so the two units
+        cannot disagree about which moment they describe.
+        """
+        return _microseconds_since_epoch(self.moment)
+
 
 @dataclass(frozen=True, slots=True, order=True)
 class Duration:

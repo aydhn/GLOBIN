@@ -60,7 +60,7 @@ artefact_host = "files.pythonhosted.org"
 
 # A bare TOML date, not a string. TOML has a date type, and a quoted date has
 # been validated as a date by nothing.
-locked = 2026-08-17
+locked = 2026-08-19
 
 # ---------------------------------------------------------------------------
 # What the contents must satisfy
@@ -163,12 +163,26 @@ compiler here: `charset-normalizer` publishes a native `cp314` wheel, and
 `protobuf` publishes `protobuf-7.35.1-cp310-abi3-win_amd64.whl` — a stable-ABI
 wheel of exactly the kind psutil's paragraph above describes, serving 3.14
 through a tag that does not name it.
+
+Phase 035 added cryptography, and it is the cheapest compiled adoption here:
+THREE distributions, measured against the fifteen the paragraph above records.
+`cffi` and `pycparser` arrive with it and nothing else moved — the relock held
+every existing pin, so this lock went from twenty-six packages to twenty-nine
+with no version anywhere else changing.
+
+`allow_source = false` holds a third time, and for the third time the reason is
+a stable-ABI wheel: `cryptography-50.0.0-cp311-abi3-win_amd64.whl` is built
+against the CPython 3.11 stable ABI, so it serves BOTH interpreters CI tests —
+3.12 and 3.14 — from one artefact. That matters more here than for psutil or
+protobuf, because a library carrying a Rust extension is the one nobody wants to
+discover has no wheel on an interpreter bump.
 """
 
 # Every root the runtime lock was resolved from. Compared against
 # `project.dependencies` in both directions, exactly as [dev] roots is compared
 # against the dev extra.
 roots = [
+    "cryptography>=50.0.0",
     "numpy>=2.5.2",
     "opentelemetry-api>=1.44.0",
     "opentelemetry-exporter-otlp-proto-http>=1.44.0",

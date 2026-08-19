@@ -19,7 +19,9 @@ uses only free components and only officially documented interfaces.
 **It does not trade yet.** Check [`ROADMAP.md`](ROADMAP.md) for the current
 phase before assuming any capability exists. Since Phase 034 it *does* reach
 Binance -- three public, unauthenticated, read-only requests, from one named
-module. It signs nothing and places no order.
+module. Since Phase 035 it *could* sign one, which is a different claim: it holds
+no key, `required_credentials()` is still empty, no start-up demands a credential,
+and every authenticated verb reports a deterministic skip. It places no order.
 
 Phase 016 closed the first band and cut `v0.1.0`, the foundation baseline. What
 that certifies — and the one criterion it could not — is in
@@ -79,6 +81,8 @@ that certifies — and the one criterion it could not — is in
 | How does an operator get from a clean clone to a host that starts? | [`docs/engineering/PROVISIONING.md`](docs/engineering/PROVISIONING.md), [ADR-0085](docs/adr/0085-a-plan-is-derived-from-a-report-and-one-module-may-start-a-process.md) |
 | Is the foundation band complete, and on what evidence? | [`docs/release/FOUNDATION_ACCEPTANCE.md`](docs/release/FOUNDATION_ACCEPTANCE.md), [`docs/engineering/foundation-acceptance.toml`](docs/engineering/foundation-acceptance.toml) |
 | What does Binance actually document, and how sure are we? | [`docs/engineering/BINANCE_API_REALITY.md`](docs/engineering/BINANCE_API_REALITY.md), [ADR-0087](docs/adr/0087-the-api-reality-registry-is-declared-with-provenance-and-drift-is-measured-in-two-regimes.md) |
+| What does an environment promise, and which one may never receive a credential? | [`docs/engineering/ENVIRONMENT_CLASSES.md`](docs/engineering/ENVIRONMENT_CLASSES.md), [ADR-0090](docs/adr/0090-phase-035-widens-to-deliver-the-rest-authentication-layer.md) |
+| Which algorithm signs a request, and what stops one product's contract standing in for another's? | [`docs/engineering/REST_AUTHENTICATION.md`](docs/engineering/REST_AUTHENTICATION.md), [ADR-0091](docs/adr/0091-authentication-is-capability-driven-and-product-scoped.md) |
 | How does GLOBIN send a REST request, and what does it do when it cannot tell whether one took effect? | [`docs/engineering/REST_TRANSPORT.md`](docs/engineering/REST_TRANSPORT.md), [ADR-0089](docs/adr/0089-an-unknown-outcome-is-preserved-and-a-second-module-may-reach-a-socket.md) |
 | How often must the official documentation be re-read, and what happens when it moves? | [`docs/engineering/DOCUMENTATION_INGESTION.md`](docs/engineering/DOCUMENTATION_INGESTION.md), [ADR-0088](docs/adr/0088-phase-034-widens-to-deliver-the-rest-transport-substrate.md) |
 | What does this term mean? | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
@@ -1001,6 +1005,63 @@ gate calling a source fresh while the transport refused to use it.
 Nothing in `full` reaches a network. Details:
 [`docs/engineering/REST_TRANSPORT.md`](docs/engineering/REST_TRANSPORT.md) and
 [`docs/engineering/DOCUMENTATION_INGESTION.md`](docs/engineering/DOCUMENTATION_INGESTION.md).
+
+Phase 035 gave GLOBIN a way to **sign** a request, and gave an environment a
+**class**. It still holds no credential.
+
+```bash
+.venv\Scripts\globin.exe auth classes
+```
+
+```bash
+.venv\Scripts\globin.exe auth capabilities --family spot --environment testnet
+```
+
+```bash
+.venv\Scripts\globin.exe auth selftest
+```
+
+**Signer selection is a lookup, never a branch.** Phase 033 recorded `key_types`
+per endpoint and nothing consumed it; that column is now what decides which
+algorithm may sign. There is **no fallback in any direction** -- a key type with no
+mapped algorithm is a refusal, and a host missing `cryptography` refuses an RSA or
+Ed25519 request *naming the library* rather than signing with HMAC. That is the
+dangerous fallback, not a cautious one: the venue's own API Key Types document says
+**"HMAC keys are deprecated"**, in a page `rest-api.md` links to by name and which
+neither it nor the CHANGELOG restates.
+
+**The bytes signed are the bytes sent, and Phase 034 had already built it.**
+`canonical()` renders the wire string, so the signed span is a literal **prefix**
+of the transmitted query -- asserted as a string comparison, as a property over
+generated parameters, and against the **raw request line a real server received**.
+Both of the venue's published HMAC vectors reproduce exactly, and the full rendered
+target is character for character the URL in its own `curl` example.
+
+**Gate 1 is the environment class, and it runs before the registry.**
+`internal_simulation` is GLOBIN's `paper`, which the registry structurally cannot
+hold -- a registry of venue facts has nowhere to put an environment the venue has
+never heard of. Its `accepts_credential` guarantee refuses a request *before a
+credential is reached for*, asserted with a secret store that raises if anything
+asks it. **The domain layer may not name an environment**, so the name-to-class
+mapping lives in a document; the first draft put it in code and
+`tests/architecture/test_identifier_discipline.py` caught it.
+
+**Two findings from reading rather than remembering.** The venue's *worked Ed25519
+examples are RSA output* -- one 256 bytes and byte-identical to the RSA section's,
+one 343 base64 characters, which is not a valid length; an Ed25519 signature is 64
+bytes, so the vectors come from RFC 8032. And **HMAC's deprecation is in neither
+`rest-api.md` nor the CHANGELOG** -- this phase's own plan recorded the opposite
+and was corrected by following the link.
+
+**`cryptography` is the tenth runtime dependency and the seventh absent-safe
+factory** -- three distributions, one `abi3` wheel serving both CI interpreters.
+Do not add a second import site; add a factory, and give it a row in
+`degradation-contract.toml` or `test_degradation_discipline.py` fails.
+**`required_credentials()` stays empty**, so no host stops starting; filling it is
+Phase 039's, and it flips `advapi32` to required. **No new exit code -- 26 stays
+free.** Details:
+[`docs/engineering/REST_AUTHENTICATION.md`](docs/engineering/REST_AUTHENTICATION.md)
+and [`docs/engineering/ENVIRONMENT_CLASSES.md`](docs/engineering/ENVIRONMENT_CLASSES.md).
 
 ---
 

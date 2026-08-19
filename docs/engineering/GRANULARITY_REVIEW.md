@@ -65,6 +65,7 @@ different band.
 | 16 | 032 | [ADR-0084](../adr/0084-phase-032-widens-to-deliver-the-bootstrap-provisioning-surface.md) | 2/4 |
 | 17 | 033 | [ADR-0086](../adr/0086-phase-033-widens-to-deliver-the-binance-api-reality-registry.md) | 2/4 |
 | 18 | 034 | [ADR-0088](../adr/0088-phase-034-widens-to-deliver-the-rest-transport-substrate.md) | 2/4 |
+| 19 | 035 | [ADR-0090](../adr/0090-phase-035-widens-to-deliver-the-rest-authentication-layer.md) | 2/4 |
 
 Mean 1.73 of four.
 
@@ -76,13 +77,13 @@ This is the review's central result, and it is arithmetic rather than argument.
 
 | Condition | Met |
 |---|:---:|
-| `nothing_displaced` | 1/15 |
-| `nothing_deferred` | 15/15 |
-| `no_phase_owns_it` | 1/15 |
-| `halves_need_each_other` | 9/15 |
+| `nothing_displaced` | 1/16 |
+| `nothing_deferred` | 16/16 |
+| `no_phase_owns_it` | 1/16 |
+| `halves_need_each_other` | 10/16 |
 
 **One condition has never once failed.** Every amendment delivered its titled
-scope in full. Nothing was ever traded away to make room, in fifteen
+scope in full. Nothing was ever traded away to make room, in sixteen
 consecutive applications of a test whose job is to discriminate.
 
 **Two conditions have failed all but once**, and the once is the same phase for

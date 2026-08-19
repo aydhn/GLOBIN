@@ -48,6 +48,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import MISSING, dataclass, fields
 from typing import Any, Final
 
+from globin.domain.api_reality import ApiKeyType
+from globin.domain.auth_timing import TimestampUnit, parse_recv_window
 from globin.domain.diagnostics import (
     MAXIMUM_BACKUP_COUNT,
     MAXIMUM_ROTATION_BYTES,
@@ -140,6 +142,24 @@ TELEMETRY_SECTION: Final[str] = "telemetry"
 
 What GLOBIN measures about itself, and whether any of it leaves the machine.
 The default answers are "measure" and "no".
+"""
+
+AUTH_SECTION: Final[str] = "auth"
+
+"""The sixth section, added in Phase 035.
+
+**Every key in it is about a POLICY, and none is about a secret.** A credential
+lives in the Windows Credential Manager or the DPAPI vault and is named by a
+reference; ``docs/security/SECURITY_BASELINE.md`` forbids one in this tree, and the
+shape of this section is what makes that easy to keep rather than a rule somebody
+remembers. What an operator sets here is which key type is expected, how long a
+request stays valid, and whether an authenticated probe is permitted at all.
+
+**`auth.key_type` has no default**, which is the same refusal
+:func:`globin.domain.auth.algorithm_for` makes at the other end. A default would
+be HMAC on every unconfigured host -- the algorithm the venue documents as
+deprecated -- and it would apply silently to whatever secret happened to be
+enrolled.
 """
 
 DIAGNOSTICS_HTTP_SECTION: Final[str] = "diagnostics_http"
@@ -367,6 +387,16 @@ Off by default even when the surface is on, because it is the most detailed thin
 the surface can say about this process and the only one an operator has to opt into
 twice.
 """
+
+AUTH_KEY_TYPE: Final[str] = f"{AUTH_SECTION}{KEY_SEPARATOR}key_type"
+
+AUTH_RECV_WINDOW_MILLIS: Final[str] = f"{AUTH_SECTION}{KEY_SEPARATOR}recv_window_millis"
+
+AUTH_TIMESTAMP_UNIT: Final[str] = f"{AUTH_SECTION}{KEY_SEPARATOR}timestamp_unit"
+
+AUTH_PROBE_ENABLED: Final[str] = f"{AUTH_SECTION}{KEY_SEPARATOR}probe_enabled"
+
+AUTH_ALLOW_PRODUCTION_PROBE: Final[str] = f"{AUTH_SECTION}{KEY_SEPARATOR}allow_production_probe"
 
 ENDPOINT_METRICS_ENABLED: Final[str] = f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}metrics_enabled"
 """Whether the scrape route answers."""
@@ -826,6 +856,51 @@ class DiagnosticsHttpConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class AuthConfig:
+    """How GLOBIN authenticates a REST request, and whether it may send one.
+
+    Args:
+        key_type: Which API key type is expected, as its
+            :class:`~globin.domain.api_reality.ApiKeyType` value. Empty means
+            **not configured**, which is a different state from a wrong one.
+        recv_window_millis: How long a signed request stays valid, in
+            milliseconds, **as text**.
+        timestamp_unit: Which unit the ``timestamp`` parameter carries.
+        probe_enabled: Whether the authenticated read-only probe may run at all.
+        allow_production_probe: Whether it may run against the live exchange.
+
+    **`recv_window_millis` is a string and that is not an oversight.** The venue
+    documents *"up to three decimal places of precision (e.g., 6000.346)"*, and
+    ``6000.346`` is not representable as a binary float — a TOML float would have
+    changed the number before any type could refuse it, and a TOML integer could
+    not express it at all. Reading the operator's own characters and parsing them
+    into a :class:`~decimal.Decimal` at
+    :func:`~globin.domain.auth_timing.parse_recv_window` means the value that
+    reaches the venue is the value they wrote.
+
+    **`key_type` defaults to empty rather than to a key type.** A default here
+    would be a global assumption about which algorithm a host uses, applied to
+    whatever secret happens to be enrolled, and the obvious default is the one the
+    venue calls deprecated. Empty produces
+    :attr:`~globin.domain.auth.AuthStatus.MISSING_CREDENTIAL` with a message
+    naming what to enrol.
+
+    **Two switches for the probe, not one**, and the second is not redundant.
+    ``probe_enabled`` says an authenticated read-only request may be made at all;
+    ``allow_production_probe`` says it may be made against the environment where
+    an order would move capital. An operator who turns the first on for testnet has
+    not thereby consented to the second, and a single switch would make those the
+    same decision.
+    """
+
+    key_type: str = ""
+    recv_window_millis: str = "5000"
+    timestamp_unit: str = "milliseconds"
+    probe_enabled: bool = False
+    allow_production_probe: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class GlobinConfig:
     """Everything an operator may vary, one field per subsystem that has any.
 
@@ -854,6 +929,7 @@ class GlobinConfig:
     watchdog: WatchdogConfig
     telemetry: TelemetryConfig
     diagnostics_http: DiagnosticsHttpConfig
+    auth: AuthConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -1064,6 +1140,7 @@ def known_keys() -> tuple[str, ...]:
         + section_keys(WATCHDOG_SECTION, WatchdogConfig)
         + section_keys(TELEMETRY_SECTION, TelemetryConfig)
         + section_keys(DIAGNOSTICS_HTTP_SECTION, DiagnosticsHttpConfig)
+        + section_keys(AUTH_SECTION, AuthConfig)
     )
 
 
@@ -1127,6 +1204,7 @@ def default_layer() -> ConfigLayer:
             **section_defaults(WATCHDOG_SECTION, WatchdogConfig),
             **section_defaults(TELEMETRY_SECTION, TelemetryConfig),
             **section_defaults(DIAGNOSTICS_HTTP_SECTION, DiagnosticsHttpConfig),
+            **section_defaults(AUTH_SECTION, AuthConfig),
         },
     )
 
@@ -1147,6 +1225,7 @@ def default_config() -> GlobinConfig:
         watchdog=WatchdogConfig(),
         telemetry=TelemetryConfig(),
         diagnostics_http=DiagnosticsHttpConfig(),
+        auth=AuthConfig(),
     )
 
 
@@ -1361,6 +1440,13 @@ def as_config(resolved: ResolvedConfig) -> GlobinConfig:
             metrics_enabled=_flag(resolved.setting(ENDPOINT_METRICS_ENABLED)),
             health_enabled=_flag(resolved.setting(ENDPOINT_HEALTH_ENABLED)),
         ),
+        auth=AuthConfig(
+            key_type=_key_type(resolved.setting(AUTH_KEY_TYPE)),
+            recv_window_millis=_window(resolved.setting(AUTH_RECV_WINDOW_MILLIS)),
+            timestamp_unit=_timestamp_unit(resolved.setting(AUTH_TIMESTAMP_UNIT)),
+            probe_enabled=_flag(resolved.setting(AUTH_PROBE_ENABLED)),
+            allow_production_probe=_flag(resolved.setting(AUTH_ALLOW_PRODUCTION_PROBE)),
+        ),
     )
 
 
@@ -1533,6 +1619,112 @@ def _bounded(setting: Setting, *, low: int, high: int) -> int:
         raise ConfigurationError(msg)
     if not low <= value <= high:
         msg = f"{setting.origin}: {setting.key} is {value}; expected between {low} and {high}"
+        raise ConfigurationError(msg)
+    return value
+
+
+def _key_type(setting: Setting) -> str:
+    """Read a configured API key type, or the empty string meaning unconfigured.
+
+    Args:
+        setting: The resolved setting, carrying its origin for the message.
+
+    Returns:
+        The key type's value, or ``""``.
+
+    Raises:
+        ConfigurationError: If the value is neither empty nor a real key type.
+
+    **Empty is accepted and every other unknown value is refused**, which is the
+    distinction the whole section turns on. An operator who has configured nothing
+    gets :attr:`~globin.domain.auth.AuthStatus.MISSING_CREDENTIAL` with a message
+    telling them what to enrol; an operator who wrote ``ecdsa`` gets told here,
+    against a document, rather than discovering at a venue that their key type does
+    not exist.
+
+    The value is compared against
+    :class:`~globin.domain.api_reality.ApiKeyType` rather than against a list
+    spelled here, so a key type the venue documents and this repository has not
+    implemented cannot be configured, and a fourth one cannot be added to this
+    module without the registry knowing about it.
+    """
+    value = setting.value
+    if not isinstance(value, str):
+        msg = f"{setting.origin}: {setting.key} is {value!r}; expected a string"
+        raise ConfigurationError(msg)
+    if not value:
+        return ""
+    names = [member.value for member in ApiKeyType]
+    if value not in names:
+        msg = (
+            f"{setting.origin}: {setting.key} is {value!r}; expected one of {names}, "
+            "or an empty string meaning no key type is configured"
+        )
+        raise ConfigurationError(msg)
+    return value
+
+
+def _window(setting: Setting) -> str:
+    """Read a validity window, checking the venue would accept it.
+
+    Args:
+        setting: The resolved setting, carrying its origin for the message.
+
+    Returns:
+        The window as the operator wrote it.
+
+    Raises:
+        ConfigurationError: If the value is not text, or names a window outside
+            what the venue documents.
+
+    **Text in and text out**, and the round trip is deliberate. The value is parsed
+    here only to be *validated*: a float would have lost the venue's documented
+    third decimal place before this function saw it, so the operator's own
+    characters are what is stored and what
+    :func:`~globin.domain.auth_timing.parse_recv_window` reads again at the point of
+    use. Validating here means a window the venue would reject fails against a
+    document rather than against a request.
+
+    **A number is refused rather than converted.** TOML has an integer type and a
+    float type, and accepting either would make ``recv_window_millis = 6000.346``
+    silently become a value nobody wrote. Refusing the type gives a message about
+    the type, which is what the operator can act on.
+    """
+    value = setting.value
+    if not isinstance(value, str):
+        msg = (
+            f"{setting.origin}: {setting.key} is {value!r}; expected a quoted string such as "
+            '"5000" or "6000.346" — a TOML number cannot hold the three decimal places the '
+            "venue documents"
+        )
+        raise ConfigurationError(msg)
+    try:
+        parse_recv_window(value)
+    except ValidationError as fault:
+        msg = f"{setting.origin}: {setting.key} is {value!r}; {fault}"
+        raise ConfigurationError(msg) from fault
+    return value
+
+
+def _timestamp_unit(setting: Setting) -> str:
+    """Read which unit a request's timestamp is expressed in.
+
+    Args:
+        setting: The resolved setting, carrying its origin for the message.
+
+    Returns:
+        The unit's value.
+
+    Raises:
+        ConfigurationError: If the value is not one the venue documents.
+
+    Two spellings and no third, because the venue documents exactly two:
+    *"the current timestamp either in milliseconds or microseconds."*
+    """
+    value = setting.value
+    names = [member.value for member in TimestampUnit]
+    if not isinstance(value, str) or value not in names:
+        msg = f"{setting.origin}: {setting.key} is {value!r}; expected one of {names}"
         raise ConfigurationError(msg)
     return value
 

@@ -803,12 +803,19 @@ CATCH_ALL_ROW: tuple[str, str] = ("Everything else", "Not started")
 ABSENT_CAPABILITIES: tuple[tuple[str, str], ...] = (
     # Phase 034 built a REST transport, so "Binance API integration" stopped being
     # true as a blanket claim: GLOBIN reaches the venue for three public, read-only
-    # requests. What is still absent is the authenticated half, and the fragment
-    # moves with it -- "auth" guards a module named for authentication appearing
-    # while the README still says none exists.
-    ("Authenticated Binance requests", "auth"),
-    ("request signing", "signing"),
-    ("credential handling", "credential"),
+    # requests. Phase 035 removed the next two rows -- "Authenticated Binance
+    # requests" and "request signing" -- because it built both, which is what this
+    # register is for: a row leaves when the capability arrives, and the README
+    # sentence naming it goes in the same commit or the other direction fails.
+    #
+    # The third row was renamed rather than removed, and the rename is the point.
+    # It read "credential handling", which stopped being true somewhere around
+    # Phase 031: GLOBIN has a store, a collection flow, a vault and now a signer,
+    # so it HANDLES credentials thoroughly. What it does not have is one. The
+    # fragment is unchanged and still guards a module named for credentials, none
+    # of which exists -- `secrets.py`, `secret_vault.py` and `secret_entry.py` all
+    # name the material rather than the credential.
+    ("an enrolled credential", "credential"),
     ("WebSocket", "websocket"),
     ("market data ingestion", "market"),
     ("order books", "order"),

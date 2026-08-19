@@ -81,3 +81,4 @@
 # network, and the only place a TLS context is built. Added in Phase 034; see
 # docs/engineering/REST_TRANSPORT.md and ADR-0089.
 /src/globin/adapters/rest_transport.py @aydhn
+/src/globin/adapters/signing.py       @aydhn

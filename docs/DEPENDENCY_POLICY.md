@@ -158,6 +158,19 @@ because that is what the project publishes, and reducing it to the chosen branch
 would make the register say something the project does not. The *choice* lives
 here, in prose, where a person made it. Neither file alone is the answer.
 
+Phase 035 brought the second, and it is deliberately a separate paragraph rather
+than an extension of the one above — the rule this section states is that each
+`OR` expression is permitted by being *named*, one at a time, never by an argument
+that an earlier decision covers it. `cryptography` publishes
+`Apache-2.0 OR BSD-3-Clause`, and its own `LICENSE` states that the software is
+dual-licensed with both `LICENSE.APACHE` and `LICENSE.BSD` shipping inside the
+distribution. **GLOBIN chooses Apache-2.0**, for the same reason as above and with
+more force: an explicit patent grant matters more for a cryptographic
+implementation than for a metadata parser. The Rust components vendored in the
+wheel carry their own notices and are covered by the same dual licence at the top
+level. The NOTICE obligation binds on redistribution, which this repository does
+not do.
+
 This is an engineering governance control. It records what a project publishes
 about itself so that decisions are reviewable. **Nothing here is a legal
 opinion**, and a licence question with real consequences belongs with someone

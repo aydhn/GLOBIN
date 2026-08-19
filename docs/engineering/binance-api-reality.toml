@@ -112,6 +112,28 @@ accessed = "2026-08-19"
 # value format. Cited by `rest-transport.toml` rather than by a row here, which is
 # why it is refreshable -- an uncited, unwatchable source is what
 # `test_every_source_is_either_cited_or_watched` refuses.
+# Added in Phase 035, and the entry with the most to answer for. `rest-api.md`
+# links to this document BY NAME -- "We support HMAC, RSA, and Ed25519 keys. For
+# more information, please see [API Key types](faqs/api_key_types.md)" -- and Phase
+# 033 did not read it, so the registry recorded three key types with no statement
+# about any of their lifecycles.
+#
+# IT IS THE ONLY DOCUMENT THAT SAYS "HMAC keys are deprecated." Neither
+# `rest-api.md` nor the CHANGELOG says it; the changelog mentions HMAC twice and
+# both times in the OPPOSITE direction, once announcing that Ed25519-only features
+# "will soon be opened up to HMAC and RSA keys". Phase 035's plan recorded that no
+# deprecation was announced, on the strength of those two documents, and was
+# corrected by following the link. See `docs/research/phase_035_sources.md` S-04.
+[[source]]
+id = "spot-api-key-types"
+title = "Binance API Key Types"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/faqs/api_key_types.md"
+authority = "primary"
+regime = "digest"
+digest = "sha256:7b6c1727a8181fb9dc260a17a3cf666b8df3a15bd15a54cd64d525b5a6bcee1d"
+notes = "The three key types, the Ed25519 recommendation, and the HMAC deprecation."
+accessed = "2026-08-19"
+
 [[source]]
 id = "spot-sbe-faq"
 title = "Binance Spot SBE FAQ"

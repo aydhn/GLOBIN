@@ -133,7 +133,7 @@ Roughly, as recorded on 2026-08-19:
 | Product-and-environment pairs | 24 |
 | Endpoints | 58, all Spot |
 | Schema versions | 11 |
-| Sources | 16, of which 1 cannot be re-checked at all |
+| Sources | 17, of which 1 cannot be re-checked at all |
 
 Ask the registry itself rather than trusting this table:
 

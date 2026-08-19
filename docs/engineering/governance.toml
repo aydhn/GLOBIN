@@ -201,6 +201,11 @@ category = "security-policy"
 reason = "The only module that reaches outward, and the only place TLS verification is configured. Added in Phase 034; see ADR-0089."
 
 [[sensitive_path]]
+path = "src/globin/adapters/signing.py"
+category = "security-policy"
+reason = "The only module that computes a signature or loads a private key, and the only permitted importer of cryptography. Added in Phase 035; see ADR-0091."
+
+[[sensitive_path]]
 path = "AGENTS.md"
 category = "governance"
 reason = "Binding instructions for automated contributors, including the hard prohibitions."
@@ -213,17 +218,19 @@ reason = "Binding instructions for automated contributors, including the hard pr
 # empty directories, because a directory created early settles a later phase's
 # design question by accident. The gate does not require these to exist; it
 # requires that if one appears, it is claimed rather than unnoticed.
+#
+# ONE HAS ARRIVED, AND EARLY. `src/globin/**/signing*.py` was declared here
+# against phase 49 and was delivered by Phase 035, which is what the eighteenth
+# and nineteenth scope amendments moved. It is now a `[[sensitive_path]]` above
+# rather than a prediction here, and the row it left is the mechanism working:
+# `test_the_extension_points_deliberately_do_not_exist` failed the moment the
+# module appeared, so the path was claimed rather than silently unowned.
 # ---------------------------------------------------------------------------
 
 [[extension_point]]
 pattern = "src/globin/**/credential*.py"
 phase = 28
 reason = "The local secret store. Specified by docs/security/SECURITY_BASELINE.md."
-
-[[extension_point]]
-pattern = "src/globin/**/signing*.py"
-phase = 49
-reason = "Request signing against the exchange. Handles key material by definition."
 
 # ---------------------------------------------------------------------------
 # Controls whose state follows from a written decision rather than from a

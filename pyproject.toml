@@ -107,7 +107,39 @@ classifiers = [
 # `start_http_server` defaults to `0.0.0.0`, which is every interface rather than
 # this machine; `globin.adapters.telemetry_prometheus` passes `127.0.0.1` as a
 # literal and exposes no setting that could widen it. See ADR-0068.
+# cryptography joins in Phase 035 and is psutil's kind rather than a fourth:
+# declared, locked, imported, and REQUIRED TO BE ABSENT WITHOUT BREAKING ANYTHING.
+# It is the seventh absent-safe component and the first that is a *runtime*
+# capability rather than a diagnostic one -- reached through
+# `globin.adapters.signing.asymmetric_signers` and nowhere else, which
+# `tests/architecture/test_signing_discipline.py` enforces.
+#
+# WHAT IT BUYS: two of the three signature algorithms Binance documents. HMAC-SHA256
+# is `hmac` and `hashlib` from the standard library and needs nothing; RSASSA-PKCS1-v1_5
+# and Ed25519 have no standard-library implementation at all, and
+# `docs/research/phase_035_sources.md` S-04 records that the venue calls Ed25519 the
+# recommended key type and HMAC deprecated. A signing layer that could offer only the
+# deprecated algorithm would be one this repository had chosen not to finish.
+#
+# WHAT IT COSTS, MEASURED RATHER THAN ESTIMATED: THREE distributions. `cffi>=2.0.0`
+# on CPython, which brings `pycparser`; `typing-extensions` is behind a
+# `python_full_version < "3.11"` marker this project cannot satisfy. Against the
+# FIFTEEN the Phase 026 telemetry adoption pulled, this is the second-cheapest
+# runtime adoption in the file after `packaging`.
+#
+# ONE WHEEL SERVES BOTH INTERPRETERS. `cryptography-50.0.0-cp311-abi3-win_amd64.whl`
+# is built against the stable ABI for CPython 3.11 and later, so CI's 3.12 leg and
+# `.venv`'s 3.14 install the same artefact. There is no per-minor wheel to go missing
+# on an interpreter bump.
+#
+# CRYPTOGRAPHY IS NOT WRITTEN BY HAND, AND THAT IS NOT A CLOSE CALL. ADR-0033's
+# mutation harness and ADR-0036's shard planner are the precedents for writing
+# something instead of taking it; neither is a signature scheme. A hand-rolled
+# RSASSA-PKCS1-v1_5 padding routine that is subtly wrong produces signatures the
+# venue rejects at best and accepts wrongly at worst, and `docs/DEPENDENCY_POLICY.md`
+# question 5 says to ask honestly and then answer honestly.
 dependencies = [
+    "cryptography>=50.0.0",
     "numpy>=2.5.2",
     "opentelemetry-api>=1.44.0",
     "opentelemetry-exporter-otlp-proto-http>=1.44.0",

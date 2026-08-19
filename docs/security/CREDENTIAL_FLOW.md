@@ -106,7 +106,7 @@ somebody to script a prompt.
 
 `--environment` is **never defaulted from `--profile`**. A profile names a
 configuration *document*; an environment names a deployment target, and what an
-environment guarantees is Phase 035's question.
+environment guarantees was Phase 035's question, and [`../engineering/ENVIRONMENT_CLASSES.md`](../engineering/ENVIRONMENT_CLASSES.md) answers it — an environment classified `internal_simulation` accepts no credential at all, which is gate 1 of the authentication admission.
 
 ---
 
@@ -256,7 +256,7 @@ answers `undeclared` and use is refused.
 
 | Question | Phase |
 |---|---|
-| Which key type is used against which exchange surface | Phase 038 |
+| Which key type is used against which exchange surface | delivered at Phase 035 — [`../engineering/REST_AUTHENTICATION.md`](../engineering/REST_AUTHENTICATION.md) |
 | Whether a venue agrees a key carries the permissions declared for it | Phase 039 |
-| What an environment is, and how production and testnet differ | Phase 035 |
+| What an environment is, and how production and testnet differ | Phase 035, delivered — [`../engineering/ENVIRONMENT_CLASSES.md`](../engineering/ENVIRONMENT_CLASSES.md) |
 | Accepting armoured key material that does not fit a single-line prompt | Unowned; see the note above |

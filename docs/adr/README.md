@@ -154,6 +154,8 @@ a future reader can judge whether the reason still holds.
 | [0087](0087-the-api-reality-registry-is-declared-with-provenance-and-drift-is-measured-in-two-regimes.md) | The API reality registry is declared with provenance, and drift is measured in two regimes | Accepted |
 | [0088](0088-phase-034-widens-to-deliver-the-rest-transport-substrate.md) | Phase 034 widens to deliver the REST transport substrate | Accepted |
 | [0089](0089-an-unknown-outcome-is-preserved-and-a-second-module-may-reach-a-socket.md) | An unknown outcome is preserved, and a second module may reach a socket | Accepted |
+| [0090](0090-phase-035-widens-to-deliver-the-rest-authentication-layer.md) | Phase 035 widens to deliver the REST authentication layer | Accepted |
+| [0091](0091-authentication-is-capability-driven-and-product-scoped.md) | Authentication is capability-driven and product-scoped, and no algorithm is a fallback | Accepted |
 
 ## Relationship to other documents
 

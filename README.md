@@ -5,13 +5,16 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 034 of 320 complete — foundation only
+## Current status: Phase 035 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
-> There is no exchange connection, no authentication, no market data, no
-> strategy, no backtesting and no machine learning in this repository. There are
-> no credentials, and no code capable of using any.
+> There is no market data, no strategy, no backtesting and no machine learning
+> in this repository, and **no credentials**. Since Phase 034 there is an exchange
+> connection, and since Phase 035 there is code that could authenticate over it —
+> which is not the same as a system that does. Nothing has a key to present, no
+> phase yet requires one to start, and the only requests any code sends are three
+> public read-only probes.
 >
 > This is deliberate. The opening phases build the engineering foundation: the
 > rules every later phase must follow, the documentation that carries them, and
@@ -28,7 +31,7 @@ capability cannot be claimed here without pointing at something real.
 |---|---|
 | Repository, branch policy, engineering contract — [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) | Implemented |
 | 320-phase roadmap, every phase named — [`ROADMAP.md`](ROADMAP.md) | Implemented |
-| Architecture decision records (89) — [`docs/adr/`](docs/adr/README.md) | Implemented |
+| Architecture decision records (91) — [`docs/adr/`](docs/adr/README.md) | Implemented |
 | Research source ledgers with primary sources — [`docs/research/`](docs/research/phase_001_sources.md) | Implemented |
 | UTC-only internal time: an injected clock, aware instants, milliseconds as a floored projection — [`TIME_POLICY.md`](docs/TIME_POLICY.md) | Implemented |
 | Exact decimal arithmetic, four rounding modes, tick and step alignment — [`PRECISION_POLICY.md`](docs/PRECISION_POLICY.md) | Implemented |
@@ -64,21 +67,36 @@ capability cannot be claimed here without pointing at something real.
 | An environment capability inventory separating native from process architecture, with a fingerprint that excludes everything volatile — [`ENVIRONMENT_CAPABILITY.md`](docs/engineering/ENVIRONMENT_CAPABILITY.md) | Implemented |
 | A capability-gated REST transport that resolves an endpoint only from the venue registry, and preserves an unknown outcome rather than calling it a failure — [`REST_TRANSPORT.md`](docs/engineering/REST_TRANSPORT.md) | Implemented |
 | A re-check cadence over the official documentation, with an accumulated change journal and a drift ledger that fails in both directions — [`DOCUMENTATION_INGESTION.md`](docs/engineering/DOCUMENTATION_INGESTION.md) | Implemented |
+| Four environment classes with distinct guarantees, including the one no venue publishes, and a credential refusal derived from them — [`ENVIRONMENT_CLASSES.md`](docs/engineering/ENVIRONMENT_CLASSES.md) | Implemented |
+| Capability-gated REST authentication over HMAC, RSA and Ed25519, signing the exact bytes that reach the wire — [`REST_AUTHENTICATION.md`](docs/engineering/REST_AUTHENTICATION.md) | Implemented |
 | Everything else | Not started |
 
 ### What does not exist
 
-Authenticated Binance requests, request signing, credential handling, WebSocket
-clients, market data ingestion, order books, an execution engine, backtesting,
-technical indicators, strategies, machine learning, reinforcement learning,
-optimisation, portfolio and risk management, the Telegram interface, the
-orchestrator, and the `start_windows_paper.bat` / `start_windows_live.bat`
+WebSocket clients, market data ingestion, order books, an execution engine,
+backtesting, technical indicators, strategies, machine learning, reinforcement
+learning, optimisation, portfolio and risk management, the Telegram interface,
+the orchestrator, and the `start_windows_paper.bat` / `start_windows_live.bat`
 launchers.
 
-Phase 034 gave GLOBIN a REST transport, so it now reaches Binance for three
-public, unauthenticated, read-only requests — connectivity, server time and
-exchange information. That is the whole of what it can send. It signs nothing,
-reads no credential, and places no order.
+And, separately from that list because it is a different kind of absence: **an
+enrolled credential**. GLOBIN has a secret store, an interactive collection flow,
+a DPAPI vault and now three signers — it handles credentials thoroughly. It holds
+none, no phase yet requires one, and every command that would use one reports a
+deterministic skip instead.
+
+Phase 034 gave GLOBIN a REST transport, so it reaches Binance for three public,
+unauthenticated, read-only requests — connectivity, server time and exchange
+information. **That is still the whole of what it sends.**
+
+Phase 035 added the layer that could sign a request, and the distinction between
+*can* and *does* is worth stating precisely rather than glossing. GLOBIN can now
+build a signed request for Spot in production, testnet or demo, over any of the
+three key types the venue documents, signing the exact bytes that would reach the
+wire. It has no key to sign with: nothing in this repository holds a credential,
+`required_credentials()` is empty so no start-up demands one, and every
+authenticated verb reports a deterministic skip when none is configured. No order
+is placed, and no authenticated request is sent by any default path.
 
 Their contracts are documented. Their implementations belong to later phases and
 have not been written.

@@ -42,6 +42,7 @@ from pathlib import Path
 from globin.adapters.watchdog import ImmediateProcessExit
 from globin.domain.configuration import (
     DiagnosticsConfig,
+    AuthConfig,
     GlobinConfig,
     LoggingConfig,
     DiagnosticsHttpConfig,
@@ -66,6 +67,7 @@ config = GlobinConfig(
     ),
     telemetry=TelemetryConfig(),
     diagnostics_http=DiagnosticsHttpConfig(),
+    auth=AuthConfig(),
 )
 
 state = build_runtime_state()

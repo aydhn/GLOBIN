@@ -1,0 +1,236 @@
+# ---------------------------------------------------------------------------
+# GLOBIN REST authentication contract.
+#
+# The declared half of `docs/engineering/REST_AUTHENTICATION.md`, and the
+# provenance record for every venue fact the signing layer encodes. Compared
+# against `src/globin/domain/auth.py` and `src/globin/domain/auth_timing.py` in
+# BOTH directions by `tests/contract/test_auth_contract.py`: a constant here the
+# code does not carry fails, and a constant in the code that is not declared here
+# fails too.
+#
+# WHY THIS FILE EXISTS, when the code already holds the values. The same reason
+# `rest-transport.toml` exists, restated for a subject where it matters more.
+# `X-MBX-APIKEY` in a Python module is a string somebody typed. `X-MBX-APIKEY`
+# here carries the document it was read from, the digest that document had when it
+# was read, and the date. For a header that carries a credential, "somebody typed
+# it" is not a provenance anybody should accept.
+#
+# THIS FILE DECLARES NO SOURCES OF ITS OWN. Every `source` below names a row in
+# `docs/engineering/binance-api-reality.toml`, which is the repository's one source
+# ledger. Phase 035 added one row to it -- `spot-api-key-types` -- because
+# `rest-api.md` links to that document by name and Phase 033 had not read it.
+#
+# WHAT IS DELIBERATELY NOT HERE. No credential, no key, no signature and no
+# example secret. No base URL or host -- those are the registry's. No per-endpoint
+# security type: `rest-transport.toml` records the three public probes and the
+# authenticated operation register is Phase 039's, which is also where
+# `required_credentials()` stops being empty.
+#
+# NOTHING WRITES THIS FILE.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+[target]
+venue = "binance-global"
+phase = 35
+observed_on = "2026-08-19"
+
+# ---------------------------------------------------------------------------
+# The request surface.
+#
+# Three spellings, each quoted in `docs/research/phase_035_sources.md`.
+# ---------------------------------------------------------------------------
+
+[surface]
+api_key_header = "X-MBX-APIKEY"
+signature_parameter = "signature"
+timestamp_parameter = "timestamp"
+recv_window_parameter = "recvWindow"
+source = "spot-rest"
+
+# THE SIGNATURE PAYLOAD RULE, QUOTED IN FULL, because everything else in this file
+# is a detail of it: "The signature payload of your request is the query string
+# concatenated without separator to the HTTP body. Any non-ASCII character must be
+# percent-encoded before signing."
+#
+# GLOBIN satisfies the second sentence by construction rather than by a step.
+# `QueryParameters.canonical()` is what goes on the wire and is already
+# percent-encoded, so the string that is signed and the string that is sent are
+# produced by one method on one frozen value. The 2025-12-17 changelog entry
+# announcing this -- effective 2026-01-15 07:00 UTC, and already live on testnet at
+# announcement -- required no change here, and a test proves that is a property
+# rather than a coincidence.
+
+signature_payload = "query_string_concatenated_to_body_without_separator"
+percent_encode_before_signing = true
+percent_encoding_announced = "2025-12-17"
+percent_encoding_effective = "2026-01-15"
+percent_encoding_rejection_code = -1022
+percent_encoding_source = "spot-changelog"
+
+# ---------------------------------------------------------------------------
+# The security types.
+#
+# FOUR ROWS AND NO FIFTH. The documentation's own table lists exactly these.
+# `MARGIN` appears in older material and in no current Spot REST table, so a row
+# for it would be inventing a classification the surface does not use.
+#
+# `signed = true` FOR EVERY ROW BUT `NONE`, which is a finding rather than a
+# transcription convenience. Quoted: "Except for `NONE`, all endpoints with a
+# security type are considered `SIGNED` requests (i.e. including a `signature`)."
+# So there is NO api-key-without-signature tier on this surface -- `USER_STREAM` is
+# signed like the other two -- and GLOBIN has no branch for one.
+# ---------------------------------------------------------------------------
+
+[[security_type]]
+name = "NONE"
+api_key = false
+signed = false
+meaning = "Public market data."
+source = "spot-rest"
+
+[[security_type]]
+name = "TRADE"
+api_key = true
+signed = true
+meaning = "Trading on the exchange, placing and canceling orders."
+source = "spot-rest"
+
+[[security_type]]
+name = "USER_DATA"
+api_key = true
+signed = true
+meaning = "Private account information, such as order status and your trading history."
+source = "spot-rest"
+
+[[security_type]]
+name = "USER_STREAM"
+api_key = true
+signed = true
+meaning = "Managing User Data Stream subscriptions."
+source = "spot-rest"
+
+# ---------------------------------------------------------------------------
+# The key types, and what each one signs with.
+#
+# `status` uses `SurfaceStatus`'s vocabulary, and `deprecated` on the HMAC row is a
+# venue statement rather than a judgement: "HMAC keys are deprecated. We recommend
+# to migrate to asymmetric API keys, such as Ed25519 or RSA." It is in
+# `faqs/api_key_types.md`, which `rest-api.md` links to by name and which neither
+# `rest-api.md` nor the changelog restates -- the changelog in fact mentions HMAC
+# twice in the OPPOSITE direction. Phase 035's plan recorded "no HMAC deprecation is
+# announced" and was corrected by reading the document the REST page points at.
+#
+# DEPRECATED IS USABLE. `CapabilityRecord.usable` counts it so, nothing in the
+# signing path special-cases it, and an HMAC credential signs exactly as it did.
+# What the status changes is what an operator is told, not what GLOBIN does.
+# ---------------------------------------------------------------------------
+
+[[key_type]]
+name = "hmac"
+algorithm = "hmac_sha256"
+encoding = "hex"
+case_sensitive = false
+status = "deprecated"
+recommended = false
+source = "spot-api-key-types"
+notes = """Signature computed with the API key's secretKey and encoded as hex. \
+The documentation states the signature value is case-insensitive while the secret \
+and the payload are case-sensitive; GLOBIN emits lowercase because hexdigest does, \
+which is a determinism choice rather than a venue requirement."""
+
+[[key_type]]
+name = "rsa"
+algorithm = "rsa_pkcs1v15_sha256"
+encoding = "base64"
+case_sensitive = true
+status = "supported"
+recommended = false
+key_format = "PKCS#8"
+signature_scheme = "PKCS#1 v1.5"
+min_bits = 2048
+max_bits = 4096
+source = "spot-rest"
+notes = """Two similarly-named things, enforced separately. PKCS#8 is the KEY \
+SERIALISATION -- "Only `PKCS#8` keys are supported" -- and PKCS#1 v1.5 is the \
+SIGNATURE SCHEME. The testnet document adds the sentence that makes the second \
+testable: "We currently do not support the PSS signature scheme." PSS appears \
+nowhere in the package, and a unit test verifies a produced signature under \
+PKCS#1 v1.5 and asserts it does NOT verify under PSS."""
+
+[[key_type]]
+name = "ed25519"
+algorithm = "ed25519"
+encoding = "base64"
+case_sensitive = true
+status = "supported"
+recommended = true
+key_format = "PKCS#8"
+signature_bytes = 64
+source = "spot-api-key-types"
+notes = """The venue's recommended key type: "It is highly recommended to use \
+Ed25519 API keys as it should provide the best performance and security out of \
+all supported key types."
+
+THE VENUE'S OWN WORKED EXAMPLES FOR THIS KEY TYPE ARE UNUSABLE, measured rather \
+than asserted. Both signatures published in `rest-api.md`'s Ed25519 section are RSA \
+output -- one decodes to 256 bytes and is byte-identical to the RSA section's, and \
+the other is 343 base64 characters, which is not a valid base64 length at all. An \
+Ed25519 signature is 64 bytes. The shell command shown is `openssl dgst -sha256 \
+-sign`, which is an RSA invocation; Ed25519 is PureEdDSA and takes no digest step. \
+So the NORMATIVE text supplies the contract -- "Sign the payload. Encode the output \
+as a base64 string." -- and the known-answer vectors come from RFC 8032 instead. \
+`signature_bytes` is asserted on every signature produced, which is the check that \
+would have caught the documentation error."""
+
+# ---------------------------------------------------------------------------
+# Timing.
+#
+# Every value quoted from the REST document's Timing security section. The
+# processing rule it publishes is RECORDED IN THE LEDGER AND NOT IMPLEMENTED: it is
+# written in terms of `serverTime`, which GLOBIN does not have, and estimating one
+# here would be building Phase 040 early.
+# ---------------------------------------------------------------------------
+
+[timing]
+recv_window_unit = "milliseconds"
+recv_window_default = "5000"
+recv_window_maximum = "60000"
+recv_window_decimals = 3
+timestamp_units = ["milliseconds", "microseconds"]
+source = "spot-rest"
+
+# THE WINDOW IS A DECIMAL, AND THAT IS WHY THESE ARE QUOTED STRINGS. "recvWindow
+# supports up to three decimal places of precision (e.g., 6000.346) so that
+# microseconds may be specified." `6000.346` is not representable as a binary
+# float, so a TOML float here would have declared a bound this file could not hold
+# -- the same reason `auth.recv_window_millis` is a quoted string in
+# `config/`, and the reason `RecvWindow` refuses a float outright.
+#
+# A LARGER WINDOW IS NOT A REMEDY FOR A CLOCK. The documentation's own emphasis is
+# "It is recommended to use a small recvWindow of 5000 or less! The max cannot go
+# beyond 60,000!" The ceiling is enforced at construction, so a configuration
+# carrying more fails before a request exists rather than being clamped.
+
+# ---------------------------------------------------------------------------
+# What this layer will not do.
+#
+# Declared so the absences are testable rather than merely stated in prose, exactly
+# as `rest-transport.toml`'s `[prohibitions]` table is. `test_auth_contract.py`
+# asserts each one against the source.
+# ---------------------------------------------------------------------------
+
+[prohibitions]
+algorithm_fallback = false
+hmac_default = false
+signature_case_normalisation = false
+signing_in_unclassified_environment = false
+signing_in_simulated_environment = false
+credential_read_for_public_request = false
+signature_in_diagnostics = false
+key_material_in_error_message = false
+pss_signature_scheme = false
+encrypted_key_passphrase_prompt = false
+server_time_synchronisation = false
+automatic_resignature_on_retry = false

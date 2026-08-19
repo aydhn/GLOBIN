@@ -131,7 +131,7 @@ An error may name the logical secret, name the backend fault, and name the comma
 that would remediate it. It may not carry the material, nor a prefix of it, nor
 anything from which it could be reconstructed.
 
-**What an environment *is* remains Phase 035's.** This fixes only that the
+**What an environment *is* was Phase 035's, and is now answered** in [`../engineering/ENVIRONMENT_CLASSES.md`](../engineering/ENVIRONMENT_CLASSES.md). This fixes only that the
 comparison happens and that a mismatch refuses.
 
 A related platform fact belongs here rather than in §7, because it is about
@@ -319,7 +319,7 @@ defect rather than a variation:
 | Which configuration sources are consulted, and in what order | 027, delivered — [`../CONFIGURATION_POLICY.md`](../CONFIGURATION_POLICY.md) |
 | Whether a venue agrees a key carries the permissions declared for it | 039 |
 | Which preflight checks run before a long-running process starts | 030, delivered — [`../engineering/PREFLIGHT_SUITE.md`](../engineering/PREFLIGHT_SUITE.md) |
-| What an environment is, and how production, testnet and demo differ | 035 |
+| What an environment is, and how production, testnet and demo differ | 035, delivered — [`../engineering/ENVIRONMENT_CLASSES.md`](../engineering/ENVIRONMENT_CLASSES.md) |
 
 Which permissions a Binance key carries is not in that table. It is a question of
 fact about a venue, governed by

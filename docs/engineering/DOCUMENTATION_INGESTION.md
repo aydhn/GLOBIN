@@ -172,9 +172,18 @@ character what the registry carries. There has been no drift to acknowledge, so 
 ledger is **empty**, and an empty ledger is not permissive: with no rows, *any*
 source-changed finding fails the gate.
 
-Sixteen sources are declared. One — the developer-documentation catalogue — cannot
-be re-checked at all, and no REST endpoint rests on it, so its cadence gates nothing
-today. It is declared so that the day one does, the ageing is already in place.
+Seventeen sources are declared. One — the developer-documentation catalogue —
+cannot be re-checked at all, and no REST endpoint rests on it, so its cadence gates
+nothing today. It is declared so that the day one does, the ageing is already in
+place.
+
+The seventeenth arrived in Phase 035 and is worth a sentence, because it is the
+case this whole cadence exists for arriving from an unexpected direction. It is not
+a source that *changed*; it is one that was never read. `rest-api.md` links to
+`faqs/api_key_types.md` by name, Phase 033 followed neither link nor
+recommendation, and that document is the only one stating that HMAC keys are
+deprecated. Ageing a source cannot find a document nobody declared — what found
+this one was a phase reading the page its own source pointed at.
 
 ---
 

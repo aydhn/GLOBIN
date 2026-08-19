@@ -23,6 +23,11 @@ import pytest
 
 from globin.adapters.configuration import TomlConfigurationSource, flatten
 from globin.domain.configuration import (
+    AUTH_ALLOW_PRODUCTION_PROBE,
+    AUTH_KEY_TYPE,
+    AUTH_PROBE_ENABLED,
+    AUTH_RECV_WINDOW_MILLIS,
+    AUTH_TIMESTAMP_UNIT,
     BUDGET_MILLIS,
     BUNDLE_ARCHIVE_BYTES,
     BUNDLE_LOG_BYTES,
@@ -242,6 +247,11 @@ def test_the_known_keys_are_exactly_what_as_config_binds() -> None:
         ENDPOINT_SNAPSHOT_ENABLED,
         ENDPOINT_METRICS_ENABLED,
         ENDPOINT_HEALTH_ENABLED,
+        AUTH_KEY_TYPE,
+        AUTH_RECV_WINDOW_MILLIS,
+        AUTH_TIMESTAMP_UNIT,
+        AUTH_PROBE_ENABLED,
+        AUTH_ALLOW_PRODUCTION_PROBE,
     }
 
 

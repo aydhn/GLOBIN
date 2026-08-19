@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-034 are complete. Phase 035 is next and has not started.**
-> Nothing beyond Phase 034 is implemented. The environment band is closed and
+> **Phases 001-035 are complete. Phase 036 is next and has not started.**
+> Nothing beyond Phase 035 is implemented. The environment band is closed and
 > frozen as `v0.2.0`; what that certifies, and the one criterion it could not,
 > are in
 > [`docs/release/ENVIRONMENT_ACCEPTANCE.md`](docs/release/ENVIRONMENT_ACCEPTANCE.md). GLOBIN does not trade and
@@ -45,7 +45,15 @@ the contract:
 > boundary is narrow enough to state exactly: three public, unauthenticated,
 > read-only requests -- connectivity, server time and exchange information -- sent
 > from one named module, over verified TLS, to an endpoint resolved solely from the
-> Phase 033 registry. It signs nothing and places no order. See
+> Phase 033 registry.
+>
+> **Since Phase 035 it can sign one**, which is not the same as doing so. GLOBIN
+> can build a signed Spot request in production, testnet or demo, over any of the
+> three key types the venue documents, signing the exact characters that would
+> reach the wire. It holds no key: nothing here carries a credential,
+> `required_credentials()` is still empty so no start-up demands one, and every
+> authenticated verb reports a deterministic skip. **No authenticated request is
+> sent by any default path, and no order is placed.** See
 > [`README.md`](README.md) and
 > [`docs/engineering/REST_TRANSPORT.md`](docs/engineering/REST_TRANSPORT.md).
 >
@@ -185,7 +193,7 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Eighteen have been made. Each cost an ADR, and each is
+> **Scope amendments.** Nineteen have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
 > unchanged by all eighteen. **Two row texts are not**: the eighteenth rewrote
@@ -593,6 +601,50 @@ the contract:
 > exception to it -- recorded as an exception rather than as precedent.
 
 
+> **Nineteenth.** Phase 035 still delivers the environment classification model its
+> title names -- four classes with seven guarantees each, including
+> `internal_simulation`, which is GLOBIN's own `paper` and which Phase 033's
+> registry structurally cannot hold: a registry of venue facts has nowhere to put an
+> environment the venue has never heard of. Alongside it, the REST authentication
+> layer: capability-gated signer selection read from the registry's own `key_types`,
+> HMAC, RSA and Ed25519 signing the exact characters that reach the wire, eight
+> fail-closed gates, and no algorithm fallback in any direction.
+>
+> **It scores two of four, and the condition it meets most strongly is the one that
+> decided it.** *Nothing deferred*: both halves ship in one commit. *The two halves
+> need each other*: `accepts_credential` is **gate 1** of the authentication
+> admission, checked before the registry, before a credential is looked up and before
+> a signer is chosen -- so a request in a simulated environment is refused with **no
+> credential having been reached for**, which a test asserts with a secret store that
+> raises if anything asks it. No existing type could say that. It fails the other two
+> against row **038** *Request Signing and Authentication*, which owns this work by
+> title and which the package names in five places.
+>
+> **Row 038 is not rewritten**, and the eighteenth amendment is why rather than an
+> oversight. That record called its own rewrite *"the first exception to it --
+> recorded as an exception rather than as precedent"*, and doing it again three
+> phases later would make the exception a habit. Row 038's title covers
+> authentication broadly and permission verification remains open under it, so a
+> rewrite would be less accurate than a displacement note.
+>
+> **The plan was corrected by a source it had not read.** It recorded that no HMAC
+> deprecation is announced -- true of the CHANGELOG, which mentions HMAC twice and
+> both times in the opposite direction, and true of `rest-api.md`, which never uses
+> the word. It is false of `faqs/api_key_types.md`, which `rest-api.md` links to by
+> name and which says *"HMAC keys are deprecated"*. That document is the
+> seventeenth source in the registry and Phase 033 had not read it.
+>
+> **And a defect was found in the official documentation, by arithmetic.** Every
+> worked Ed25519 example the REST document publishes is RSA output: one decodes to
+> 256 bytes and is byte-identical to the RSA section's, the other is 343 base64
+> characters, which is not a valid length. An Ed25519 signature is 64 bytes. The
+> normative text supplies the contract and RFC 8032 supplies the vectors.
+> [ADR-0090](docs/adr/0090-phase-035-widens-to-deliver-the-rest-authentication-layer.md)
+> states the displacement rather than arguing around it, and
+> [ADR-0091](docs/adr/0091-authentication-is-capability-driven-and-product-scoped.md)
+> carries the rule that no product's signing contract may stand in for another's.
+
+
 ---
 
 ## Phases 001-016 — Repository Foundation and Engineering Contract
@@ -657,7 +709,7 @@ the transport, authentication and rate-limit machinery on top of that reality.
 |:-----:|-------|---------|:------:|
 | 033 | Binance Product Family Inventory | Enumerate the officially documented product families and the surfaces each one exposes; and, as the seventeenth scope amendment, deliver the Binance API reality registry -- production, demo and testnet as distinct kinds, the capability matrix over them, every base URL and endpoint family in one declared document, the SBE and FIX schema lifecycle, six status words that keep *not documented* apart from *documented absent*, and a refresh that classifies drift from official machine-readable sources only. | Complete |
 | 034 | Official Documentation Ingestion and Change Tracking | Complete the ingestion process Phase 033 began -- a declared re-check cadence per source regime, an accumulated change journal across runs, and a breaking-drift acknowledgement ledger that fails in both directions; and, as the eighteenth scope amendment, deliver the REST transport substrate -- endpoint resolution driven solely by the Phase 033 registry, canonical URL and query encoding, a bounded connection lifecycle, JSON and SBE content negotiation, a five-member outcome that preserves *unknown* rather than calling it a failure, redacted diagnostics, public credential-free probes, and deterministic evidence. | Complete |
-| 035 | Environment Classification Model | Model production, testnet, demo and internal simulation as distinct classes with distinct guarantees. | Planned |
+| 035 | Environment Classification Model | Model production, testnet, demo and internal simulation as distinct classes with distinct guarantees, including the one no venue publishes; and, as the nineteenth scope amendment, deliver the REST authentication layer -- capability-gated signer selection read from the Phase 033 registry, HMAC, RSA and Ed25519 over the exact bytes that reach the wire, eight fail-closed gates with no algorithm fallback anywhere, and a credential refusal derived from the environment class rather than from a rule. | Complete |
 | 036 | Product and Environment Capability Matrix | Build the authoritative matrix of which products support which environments, driven by documented evidence. | Planned |
 | 037 | Base URL and Endpoint Registry | Centralise base URLs and endpoint definitions per product and environment with no hard-coded literals. | Planned |
 | 038 | Request Signing and Authentication | Implement the documented signing schemes and keep signing logic isolated and testable. | Planned |

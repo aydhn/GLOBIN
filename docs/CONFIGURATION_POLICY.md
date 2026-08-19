@@ -70,14 +70,38 @@ so a new setting is one line and cannot be half-added.
 | `diagnostics_http.diagnostics_snapshot_enabled` | `bool` | `false` | Whether the snapshot route answers. Off even when the surface is on. |
 | `diagnostics_http.metrics_enabled` | `bool` | `true` | Whether the scrape route answers. |
 | `diagnostics_http.health_enabled` | `bool` | `true` | Whether the three health routes answer. |
+| `auth.key_type` | `str` | `` | Which API key type is enrolled: `hmac`, `rsa` or `ed25519`. **Empty means not configured**, and there is deliberately no default — see below. |
+| `auth.recv_window_millis` | `str` | `5000` | How long a signed request stays valid, in milliseconds. **A quoted string, not a number.** Up to three decimal places, and never above 60000. |
+| `auth.timestamp_unit` | `str` | `milliseconds` | Which unit the `timestamp` parameter carries. `milliseconds` or `microseconds`. |
+| `auth.probe_enabled` | `bool` | `false` | Whether the authenticated read-only probe may run at all. |
+| `auth.allow_production_probe` | `bool` | `false` | Whether it may run against the live exchange. Separate from the switch above on purpose. |
 
-Thirty-seven settings in five sections. Of everything Phases 001-006 built, only
+Forty-two settings in six sections. Of everything Phases 001-006 built, only
 logging held anything an operator may reasonably change: the project contract and
 the roadmap are immutable identity, the error taxonomy has nothing to tune, and
 the architecture review's paths are constants rather than settings. Phase 023
 added the two rotation values when it gave GLOBIN somewhere to write, and Phase
 024 added the `diagnostics` section — the first second section this register has
 had. Phase 025 added `watchdog`, which is the third.
+
+Phase 035 added `auth`, which is the sixth, and two of its five rows deserve a
+note because they break a pattern every row above follows.
+
+**`auth.key_type` has an empty default, and that is a refusal rather than an
+oversight.** Every other setting here declares the value GLOBIN uses when nobody
+says otherwise. This one cannot: a default would name an algorithm, it would apply
+to whatever secret happened to be enrolled, and the obvious choice — HMAC — is the
+one the venue's own API Key Types document calls deprecated. Empty produces a
+refusal naming what to enrol, which is the honest answer to *nobody has configured
+this*.
+
+**`auth.recv_window_millis` is a quoted string where every other numeric setting
+is a number.** The venue documents *"up to three decimal places of precision
+(e.g., 6000.346)"*, and `6000.346` is not representable as a binary float — a TOML
+float would have changed the value before any type in this repository could refuse
+it, and a TOML integer could not express it at all. So the operator's own
+characters are stored and parsed to a `Decimal` at the point of use.
+`auth.recv_window_millis = 6000.346` is refused with a message about the type.
 
 **Phase 027 added `diagnostics_http` and removed two rows.** `telemetry.listener_enabled`
 and `telemetry.listener_port` described a scrape endpoint that nothing ever started,
@@ -286,8 +310,9 @@ is a decision rather than a regression.
 | The rules a secret is handled under | 015, delivered — [`security/SECURITY_BASELINE.md`](security/SECURITY_BASELINE.md) |
 | Where a secret is stored, and how it is supplied | 028, delivered — [`security/SECRET_STORE.md`](security/SECRET_STORE.md) |
 | How a credential is collected from an operator, and what it is permitted to do | 029, delivered — [`security/CREDENTIAL_FLOW.md`](security/CREDENTIAL_FLOW.md) |
-| Which credential a given exchange surface needs, and what the venue says it may do | 038, 039 |
-| What an environment is, and how production, testnet and demo differ | 035 |
+| Which algorithm signs a request to a given surface | delivered at 035 — [`engineering/REST_AUTHENTICATION.md`](engineering/REST_AUTHENTICATION.md) |
+| Whether a venue agrees a key carries the permissions declared for it | 039 |
+| What an environment is, and how production, testnet and demo differ | 035, delivered — [`engineering/ENVIRONMENT_CLASSES.md`](engineering/ENVIRONMENT_CLASSES.md) |
 
 Nothing in the configuration model knows about files, environment variables or
 the machine it runs on. A source is handed a path; it never searches for one,

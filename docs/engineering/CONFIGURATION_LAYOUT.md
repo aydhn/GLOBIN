@@ -78,7 +78,7 @@ boundary is held.
 
 ## A profile names a document, not an environment
 
-Phase 035 decides what an environment *is*; Phase 036 decides which product and
+Phase 035 decided what an environment *is* — see [`ENVIRONMENT_CLASSES.md`](ENVIRONMENT_CLASSES.md); Phase 036 decides which product and
 environment pairs are usable. A Phase 026 implementation that made `testnet` mean
 something would answer their question six phases early.
 
@@ -168,7 +168,7 @@ out of the layout.
 | Which documents are consulted, in what order, and whether a missing one is fatal | 027, delivered — [`../CONFIGURATION_POLICY.md`](../CONFIGURATION_POLICY.md) |
 | How a profile name reaches the process | 027, delivered — [ADR-0071](../adr/0071-configuration-precedence-is-declared-and-an-environment-variable-is-a-derived-name.md) |
 | Where a secret is stored and how it is supplied | 028, delivered — [`../security/SECRET_STORE.md`](../security/SECRET_STORE.md) |
-| What an environment is, and how production, testnet and demo differ | 035 |
+| What an environment is, and how production, testnet and demo differ | 035, delivered — [`ENVIRONMENT_CLASSES.md`](ENVIRONMENT_CLASSES.md) |
 | Which product and environment pairs are usable | 036 |
 
 ---

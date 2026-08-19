@@ -1,0 +1,235 @@
+# ---------------------------------------------------------------------------
+# What an environment IS, as opposed to what one is called.
+#
+# `globin.domain.identifiers.EnvironmentId` carries a NAME and says so: "Naming
+# an environment is not classifying one. ADR-0006 refuses to treat 'not
+# production' as a single thing, and Phase 035 models the classes and their
+# guarantees." This file is that model. `globin.adapters.environment_class` is its
+# one reader; `globin.domain.environment_class` holds the shape it reads into.
+#
+# WHY THIS IS NOT IN `binance-api-reality.toml`, which already has an
+# `[[environment]]` table. That table records what the VENUE documents about
+# environments the VENUE publishes, one row per product-and-environment pair. It
+# is correct and it cannot answer this file's question, for a reason that is
+# structural rather than a matter of where to put a field:
+#
+#   GLOBIN's default profile is `paper`, and Binance publishes no `paper`.
+#
+# `config/profiles/paper.toml` describes "simulated execution against real market
+# data" — an environment GLOBIN itself hosts, with no venue, no endpoint, no key
+# and no row the registry could hold. A registry of venue facts has nowhere to
+# put an environment the venue has never heard of, and inventing a row for one
+# would be recording a claim about Binance that Binance does not make.
+#
+# WHAT THIS BUYS THE REST OF THE PHASE. `accepts_credential` is gate 1 of the
+# authentication admission in `globin.application.auth`, checked BEFORE the
+# registry is consulted at all. An environment GLOBIN simulates has no venue to
+# authenticate to, so there is nothing a credential could mean there — and a
+# signing layer without this model has no type that can say so.
+#
+# WHY THE `[[member]]` TABLE IS LOAD-BEARING RATHER THAN A CONVENIENCE.
+# `tests/architecture/test_identifier_discipline.py` refuses a venue environment
+# NAME anywhere in the domain layer: "a register of instances belongs to the phase
+# that reads it from the venue, not to the layer that bounds its shape". The first
+# draft of `globin.domain.environment_class` carried this mapping directly and the
+# tripwire caught it. So the KINDS are an enumeration in the domain and the NAMES
+# are rows here, read by `globin.adapters.environment_class`. A venue that renamed
+# its testnet edits a row below; nothing in the package changes.
+#
+# CLASS NAMES ARE GLOBIN'S VOCABULARY, NOT THE VENUE'S, for the same reason and
+# following `ProductScope`, which spells `trading` and `supporting` rather than
+# anything the venue calls itself. The `venue_` prefix also carries meaning: it
+# separates the two classes the venue hosts from the one GLOBIN does.
+#
+# BOTH DIRECTIONS, AS EVERYWHERE ELSE HERE.
+# `tests/contract/test_environment_class_contract.py` compares this file against
+# the registry both ways: every venue-published environment named here must exist
+# there with an agreeing `carries_real_capital`, every environment there must be
+# classified here, and every `internal_simulation` member must have NO registry
+# row at all. A class that gained a venue endpoint would be a contradiction, and
+# it fails rather than being reconciled.
+#
+# NOTHING WRITES THIS FILE.
+# ---------------------------------------------------------------------------
+
+schema = 1
+
+[target]
+phase = 35
+observed_on = "2026-08-19"
+
+# ---------------------------------------------------------------------------
+# The four classes.
+#
+# ROADMAP row 035 names exactly these: "production, testnet, demo and internal
+# simulation as distinct classes with distinct guarantees". There is no fifth,
+# and `EnvironmentClass` has no member this file does not declare.
+#
+# EVERY GUARANTEE IS A CLAIM WITH A SOURCE. `source` names a row in
+# `binance-api-reality.toml`'s `[[source]]` table for the three the venue
+# publishes. `internal_simulation` names `globin-own` instead, which is not a
+# venue source and is not pretending to be: it is GLOBIN's own declaration about
+# an environment GLOBIN owns, and dressing it as a documented venue fact would be
+# the fabrication `docs/SOURCE_POLICY.md` exists to prevent.
+#
+# THE GUARANTEES, and why each is worth a field rather than an inference:
+#
+#   carries_real_capital  An order here can lose money. The one guarantee the
+#                         registry already carries, restated so the two can be
+#                         compared rather than trusted.
+#   reaches_venue         A request here leaves this machine.
+#   accepts_credential    A credential means something here. FALSE implies no
+#                         signature is ever produced, which is a refusal rather
+#                         than an absence.
+#   orders_are_binding    An accepted order is a real obligation.
+#   market_data_is_real   Prices here are the live exchange's own. NOT implied by
+#                         `carries_real_capital`, and the pair that proves it is
+#                         demo and internal simulation — see the note below.
+#   state_is_venue_owned  Balances and orders live at the venue, so GLOBIN can
+#                         ask it what happened. FALSE means an UNKNOWN outcome
+#                         has nobody to resolve it.
+#   feature_parity_with_live
+#                         Behaviour here predicts production. The ONLY guarantee
+#                         separating the two venue sandboxes, which agree on every
+#                         other field — see the second note below.
+#
+# THE ONE ASYMMETRY WORTH READING TWICE. `market_data_is_real` is TRUE for
+# production and for internal simulation, and FALSE for demo and testnet. That
+# looks like an error until both sources are read. Demo Mode's own document says
+# "Realistic market data is not equal to 'real' market data"; `paper.toml` says
+# "Simulated execution against real market data". So the simulated environment
+# has REAL prices and FAKE fills, while demo has REALISTIC prices and REAL — to
+# it — fills. Collapsing the two into "is this environment real" would lose
+# exactly the distinction a backtest's validity turns on.
+#
+# AND THE SECOND ASYMMETRY, WHICH IS WHY THERE ARE SEVEN FIELDS AND NOT SIX. The
+# testnet and demo classes agree on all six guarantees above. Without a seventh
+# they would be indistinguishable, and the roadmap row's "distinct guarantees"
+# would be untrue of two of its four classes. Demo Mode is documented as "always
+# has the same features as the live exchange"; the testnet is documented as having
+# order books independent of the live exchange, with new features appearing there
+# first. So `feature_parity_with_live` is the difference, it is read from both
+# documents rather than invented to fill a gap, and it answers a question a caller
+# actually has: does behaviour observed here predict production.
+# ---------------------------------------------------------------------------
+
+[[class]]
+name = "live_capital"
+carries_real_capital = true
+reaches_venue = true
+accepts_credential = true
+orders_are_binding = true
+market_data_is_real = true
+state_is_venue_owned = true
+feature_parity_with_live = true
+source = "spot-rest"
+semantics = """The live exchange. Real balances, real order books, and the only \
+class where an order moves capital. Every other class exists so that this one is \
+reached deliberately."""
+
+[[class]]
+name = "venue_testnet"
+carries_real_capital = false
+reaches_venue = true
+accepts_credential = true
+orders_are_binding = false
+market_data_is_real = false
+state_is_venue_owned = true
+feature_parity_with_live = false
+source = "spot-testnet"
+semantics = """Separate infrastructure with its own keys and its own order books, \
+documented as independent of the live exchange. New features may appear here \
+first, so behaviour that works here is not evidence that production accepts it — \
+which is exactly what feature_parity_with_live records, and the only guarantee \
+separating this class from the demo one. All three key types are supported."""
+
+[[class]]
+name = "venue_demo"
+carries_real_capital = false
+reaches_venue = true
+accepts_credential = true
+orders_are_binding = false
+market_data_is_real = false
+state_is_venue_owned = true
+feature_parity_with_live = true
+source = "spot-demo"
+semantics = """Virtual balances on demo-prefixed hosts, documented as ALWAYS \
+having the same features as the live exchange — which is why \
+feature_parity_with_live is true here and false for the testnet. Prices are \
+documented as similar and explicitly as "not equal to 'real' market data", which \
+is why market_data_is_real is false here and true for internal simulation."""
+
+[[class]]
+name = "internal_simulation"
+carries_real_capital = false
+reaches_venue = false
+accepts_credential = false
+orders_are_binding = false
+market_data_is_real = true
+state_is_venue_owned = false
+feature_parity_with_live = false
+source = "globin-own"
+semantics = """GLOBIN's own simulated execution against real market data. No \
+venue, no endpoint, no credential and no signature: the fills are computed here, \
+so there is nothing to authenticate to and no venue to ask what happened. This is \
+the class the default profile names, and it is deliberately the safest of the \
+four to fall back to."""
+
+# ---------------------------------------------------------------------------
+# Which name belongs to which class.
+#
+# THIS TABLE IS WHY THE FILE EXISTS. The four classes above could have lived
+# entirely in code — they are shape, and shape belongs in a type. These rows are
+# instances, and `tests/architecture/test_identifier_discipline.py` refuses those
+# in the domain layer, for a reason that is about correctness rather than tidiness:
+# which environments a venue publishes changes without GLOBIN being redeployed,
+# and a tuple compiled into the innermost layer cannot express that.
+#
+# This mapping is DECLARED rather than computed. A rule such as "a name containing
+# 'test' is a testnet" would be a naming heuristic deciding a security-relevant
+# fact, and `EnvironmentRecord` already learned that lesson the other way round:
+# its host_marker exists so a live host filed as paper is refused STRUCTURALLY,
+# not by a rule about spelling that somebody trusts.
+#
+# A NAME NOT LISTED HERE IS UNCLASSIFIED, AND UNCLASSIFIED IS A REFUSAL.
+# `EnvironmentClassification.classify` answers None, and
+# `globin.application.auth.resolve_auth` refuses with ENVIRONMENT_UNCLASSIFIED
+# rather than choosing the safest class on the operator's behalf.
+# ---------------------------------------------------------------------------
+
+[[member]]
+name = "production"
+class = "live_capital"
+
+# TWO NAMES, ONE CLASS, AND THIS ROW IS WHY THE MAPPING IS DECLARED RATHER THAN
+# DERIVED. The venue calls its live environment `production`; GLOBIN's own profile
+# for reaching it is `live`. No rule about spelling connects those two words, and a
+# classification that tried to derive one would either miss this or invent a
+# synonym table nobody reviewed.
+#
+# IT WAS FOUND BY A TEST RATHER THAN BY DESIGN. `config/profiles/live.toml` has
+# existed since Phase 026 and classified as nothing, so an operator running
+# `--profile live` would have been refused with ENVIRONMENT_UNCLASSIFIED --
+# fail-closed and therefore safe, and wrong. The contract test that compares every
+# configuration profile against this table is what surfaced it.
+[[member]]
+name = "live"
+class = "live_capital"
+
+[[member]]
+name = "testnet"
+class = "venue_testnet"
+
+[[member]]
+name = "demo"
+class = "venue_demo"
+
+[[member]]
+name = "paper"
+class = "internal_simulation"
+note = """The default profile, and the only name here that no venue publishes. \
+`config/profiles/paper.toml` is the declaration; DEFAULT_PROFILE in \
+`globin.runtime.composition` is what makes it the fallback. It has no \
+[[environment]] row in binance-api-reality.toml and must never acquire one — \
+`tests/contract/test_environment_class_contract.py` asserts that in both \
+directions."""

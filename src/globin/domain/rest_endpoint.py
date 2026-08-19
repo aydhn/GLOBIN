@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from globin.domain.api_reality import (
+    ApiKeyType,
     ApiRealitySnapshot,
     AuthMechanism,
     EndpointRecord,
@@ -167,6 +168,14 @@ class ResolvedEndpoint:
     The URL arrives from the registry at runtime; it is never a literal, which is
     what keeps ``tests/architecture/test_api_reality_discipline.py`` passing while
     this package finally makes a request.
+
+    ``key_types`` is carried forward verbatim from the registry row and is what
+    makes Phase 035's signer selection a **lookup rather than a branch**: the
+    question *which algorithms may sign a request to this endpoint* is answered by
+    a committed document rather than by a table in the authentication layer. It is
+    empty for an unauthenticated endpoint, because
+    :class:`~globin.domain.api_reality.EndpointRecord` refuses a key type on one
+    that needs no authentication.
     """
 
     family: str
@@ -180,6 +189,7 @@ class ResolvedEndpoint:
     auth: str
     carries_real_capital: bool
     source: str
+    key_types: tuple[ApiKeyType, ...] = ()
     schema_reference: SbeSchemaReference | None = None
 
     def __post_init__(self) -> None:
@@ -211,6 +221,7 @@ class ResolvedEndpoint:
             "auth": self.auth,
             "carries_real_capital": self.carries_real_capital,
             "source": self.source,
+            "key_types": [item.value for item in self.key_types],
             "schema_reference": (
                 self.schema_reference.as_record() if self.schema_reference else None
             ),
@@ -610,6 +621,7 @@ def resolve(
         auth=record.auth.value,
         carries_real_capital=recorded_environment.carries_real_capital,
         source=record.capability.source,
+        key_types=record.key_types,
         schema_reference=reference,
     )
     return EndpointResolution(
