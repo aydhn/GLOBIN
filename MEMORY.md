@@ -27,6 +27,7 @@ If you are starting a session, read this first, then [`AGENTS.md`](AGENTS.md).
 |---|---|
 | Total phases | 320, fixed, in twenty immutable bands of sixteen |
 | Completed phases | **001-032** |
+| Released versions | **`v0.1.0`** (foundation, Phases 001-016) and **`v0.2.0`** (environment, Phases 017-032). Both published and **immutable**; a published release is never repaired, so a defect in one is rolled forward to the next `PATCH`. |
 | Phase 001 | **Repository Foundation and Engineering Contract.** Validation passed and commit `c7504c4` was pushed to `origin/master`; local and remote verified identical and the tree left clean. |
 | Phase 002 | **Documentation System and Style Guide.** Established the engineering contracts under `docs/engineering/`, the documentation authority order (ADR-0011), the ADR template, and the GitHub change templates. Commit `9c46313`, pushed. |
 | Phase 003 | **Architecture Boundaries and Dependency Direction.** Five layers under `src/globin/`, the inward dependency contract in `docs/architecture/dependency-rules.toml`, C4 system context and container views, the ADR lifecycle with supersession rules, and `tests/architecture/test_architecture_contract.py` enforcing all of it. Commit `990e5f4`, pushed. |
@@ -286,6 +287,16 @@ job runs simultaneously. (ADR-0009, Phases 289-304)
 ---
 
 ## Working rules
+
+- **`gh release verify-asset` resolves the artefact path relative to the working
+  directory, not the repository root.** Run it from `.globin/release/`, or pass
+  `--repo` and a path that exists from where you are. Called from the root it
+  reports "failed to open local artifact" for every asset, which reads like a
+  publication failure and is not one.
+- **`gh release view --json isLatest` does not exist.** The field is `isImmutable`
+  for the guarantee and `gh api repos/<owner>/<repo>/releases/latest` for which
+  release is latest; `gh release edit --latest` sets it and answers only with the
+  URL.
 
 - **A number written in prose drifts unless a test holds it.** `ROADMAP.md` said
   so about its own amendment count -- "Nothing tests it, which is why it drifted"
