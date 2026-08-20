@@ -24,8 +24,10 @@ from globin.application.auth import (
     AuthPolicy,
     AuthResolution,
     SigningOutcome,
+    _documented_key_types,
     _mapping_finding,
     _recv_window_finding,
+    _wire_finding,
     credential_summary,
     resolve_auth,
     self_test,
@@ -776,3 +778,116 @@ def test_the_recv_window_check_notices_the_documented_example_being_refused(
     finding = _recv_window_finding()
     assert not finding.passed
     assert "6000.346 was refused" in finding.detail
+
+
+# ---------------------------------------------------------------------------
+# Admission refusals no other test reaches
+# ---------------------------------------------------------------------------
+
+
+def test_a_key_type_with_no_mapped_algorithm_is_refused_rather_than_substituted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The gate behind the no-fallback rule, exercised rather than assumed.
+
+    `algorithm_for` is total over `ApiKeyType` today, so this branch cannot be
+    reached by choosing an input -- which is exactly why it was never exercised. A
+    later phase adding a key type the venue documents but GLOBIN has not mapped
+    would reach it, and what must happen then is a refusal naming the key type, not
+    a signature under whatever algorithm happened to be nearest.
+    """
+
+    def refuse(key_type: ApiKeyType) -> SignatureAlgorithm:
+        msg = f"no algorithm is mapped for {key_type.value}"
+        raise ValidationError(msg)
+
+    monkeypatch.setattr("globin.application.auth.algorithm_for", refuse)
+    outcome = resolve_auth(
+        _resolution(),
+        security_type=SecurityType.USER_DATA,
+        policy=AuthPolicy(key_type=ApiKeyType.HMAC),
+        classification=_classification(),
+        credentials=_credentials(),
+        available=ALL_ALGORITHMS,
+    )
+    assert not outcome.permitted
+    assert outcome.outcome is AuthStatus.UNSUPPORTED_SIGNING_ALGORITHM
+    assert outcome.profile is None, "a refusal must carry no signing profile"
+
+
+def test_a_non_positive_recv_window_is_refused() -> None:
+    """`RecvWindow` refuses this at construction, and the gate refuses it again.
+
+    Two guards for one rule looks redundant until the policy is assembled from
+    somewhere that did not go through the value type. The gate is what a request
+    passes through, so it does not delegate the question.
+    """
+
+    class _Window:
+        """A window that never went through `RecvWindow`."""
+
+        millis = Decimal(0)
+
+    policy = AuthPolicy(key_type=ApiKeyType.HMAC)
+    object.__setattr__(policy, "recv_window", _Window())
+
+    outcome = resolve_auth(
+        _resolution(),
+        security_type=SecurityType.USER_DATA,
+        policy=policy,
+        classification=_classification(),
+        credentials=_credentials(),
+        available=ALL_ALGORITHMS,
+    )
+    assert not outcome.permitted
+    assert outcome.outcome is AuthStatus.INVALID_RECV_WINDOW
+
+
+def test_an_unresolved_endpoint_documents_no_key_types_at_all() -> None:
+    """Not "every key type" and not a default -- the empty set.
+
+    The key types come from the registry through the resolved endpoint. With no
+    endpoint there is no registry row, and answering with anything non-empty would
+    invent a capability for a surface the venue has not documented.
+    """
+    unresolved = _resolution(outcome=ResolutionStatus.SURFACE_UNDOCUMENTED)
+    assert _documented_key_types(unresolved) == frozenset()
+
+
+def test_the_wire_check_notices_when_the_signed_span_stops_matching_the_wire(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The phase's central claim, and the arm that would report it broken.
+
+    `auth.wire_equality` asserts two things at once: that the signed span is a
+    literal prefix of the query that would be transmitted, and that a non-ASCII
+    symbol was percent-encoded *before* signing. Both are properties of code
+    outside this function -- the canonical renderer and the payload builder -- so
+    the self-test is how a change to either surfaces.
+
+    Every other assertion about it checks that it passes, which it would also do
+    if these two branches were unreachable. Replacing the payload with one that
+    satisfies neither property fires both, and the detail must name both.
+    """
+
+    def unencoded(*args: object, **kwargs: object) -> SigningPayload:
+        del args, kwargs
+        return SigningPayload(query_span="symbol=UNENCODED", body_span="")
+
+    monkeypatch.setattr("globin.application.auth.signing_payload", unencoded)
+    finding = _wire_finding(StubSigner())
+    assert not finding.passed
+    assert "not a prefix of the transmitted query string" in finding.detail
+    assert "not percent-encoded before signing" in finding.detail
+
+
+def test_the_wire_check_reports_a_signer_that_refuses_rather_than_raising() -> None:
+    """A self-test that raised would take the whole report down with it.
+
+    `globin auth selftest` exists to say what is wrong. A signer that refuses --
+    which is what an absent `cryptography` produces for two of the three
+    algorithms -- must therefore become a finding rather than a traceback.
+    """
+    finding = _wire_finding(FailingSigner())
+    assert not finding.passed
+    assert "signing failed" in finding.detail

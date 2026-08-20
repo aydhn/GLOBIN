@@ -127,6 +127,24 @@ Branch rather than line, because a line-covered `if` whose false arm never runs
 reads as tested and is not. For code made largely of conditionals, the line
 percentage alone is close to meaningless.
 
+**`fail_under = 95` does not mean 95 on its own.** Two different comparisons act
+on it, and they are not the same comparison. The line a person reads is printed
+with a plain `total < fail_under`, so 94.86 % renders as *"FAIL Required test
+coverage of 95.0% not reached"*. The exit code comes from coverage.py's
+`should_fail_under`, whose last line is `round(total, precision) < fail_under` —
+and at the default `precision` of 0, `round(94.86, 0)` is 95, so the process
+exits 0. The real floor was **94.5 %**, and between there and 95 % a run printed
+FAIL and reported success.
+
+Phase 035 met it: CI's 3.14 leg measured 94.88 %, printed the failure, and the
+job passed. The shortfall surfaced two commits later in the `evidence` job, which
+applies the threshold to `coverage.json`'s `totals.percent_covered` itself rather
+than trusting the exit code. `precision = 2` in `[tool.coverage.report]` is what
+closes the gap — two decimals, because that is what the message already prints,
+so the number a person reads and the number the exit code is computed from are the
+same number. `tests/contract/test_quality_contract.py` compares the two
+comparisons across the boundary and fails if they can ever disagree again.
+
 **The floor is a regression detector, not a target.** It sits below the actual
 figure on purpose, so that ordinary refactoring does not fail the build while a
 module quietly losing its tests does. Raising the number by adding tests that

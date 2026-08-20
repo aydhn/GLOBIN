@@ -12,7 +12,14 @@ from pathlib import Path
 
 import pytest
 
-from tests.support import REPO_ROOT, markdown_prose, markdown_section, parse_roadmap
+from tests.support import (
+    REPO_ROOT,
+    markdown_prose,
+    markdown_section,
+    parse_roadmap,
+    spelled_ordinal,
+    spelled_size,
+)
 from tools.quality.commands import command_names
 
 #: Documents carrying a "what this does not cover" table of the form
@@ -1081,3 +1088,71 @@ def test_no_document_defers_a_question_to_a_phase_that_has_delivered(
             if status is not None and status != "Planned":
                 stale.append(f"{question!r} defers to phase {number}, which is {status}")
     assert not stale, f"{relative} defers to phases that have delivered: {stale}"
+
+
+def test_the_convenience_layer_counts_the_absent_safe_factories_it_names() -> None:
+    """A number in prose, compared against the thing it describes.
+
+    CLAUDE.md tells an agent not to add a second import site for an absent-safe
+    library but to add a factory instead, and states how many exist. That number
+    had gone stale once already: Phase 035 added the seventh and the sentence still
+    said six, while a paragraph further down said *seventh*, so the file
+    contradicted itself about its own subject.
+
+    `system_arms` is the authority -- one entry per factory, and
+    `tests/architecture/test_degradation_discipline.py` already holds it against
+    `degradation-contract.toml`. This closes the last hop, from the contract to the
+    prose an agent actually reads first.
+    """
+    from globin.adapters.degradation import system_arms
+
+    document = " ".join((REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8").split())
+    count = len(system_arms())
+    spelled = spelled_size(count).capitalize()
+
+    claim = f"**{spelled} libraries are now absent-safe**"
+    assert claim in document, f"CLAUDE.md must state {claim!r}; there are {count} factories"
+
+    successor = spelled_ordinal(count + 1)
+    tripwire = f"fails if an {successor} factory appears"
+    assert tripwire in document, (
+        f"CLAUDE.md must say the discipline test {tripwire!r}, so the next one to be "
+        f"added is named rather than left as whatever the sentence used to say"
+    )
+
+
+def test_every_absent_safe_factory_is_named_where_the_count_is_stated() -> None:
+    """The count and the list must not drift apart either.
+
+    A correct number beside an incomplete list is the same defect one step later:
+    an agent reads the list, does not find the library it is about to import, and
+    concludes there is no factory for it.
+    """
+    document = " ".join((REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8").split())
+    section = document[document.index("libraries are now absent-safe") :][:700]
+
+    missing = [name for name in _absent_safe_names() if f"`{name}`" not in section]
+    assert not missing, (
+        f"CLAUDE.md states the absent-safe count but does not name {missing}. "
+        f"Every factory in `system_arms` must appear beside the number."
+    )
+
+
+def _absent_safe_names() -> tuple[str, ...]:
+    """The libraries reached through an absent-safe factory, by the name prose uses.
+
+    Returns:
+        One short name per factory, in the order the contract declares them.
+
+    Taken from `degradation-contract.toml` rather than from `system_arms`, whose
+    keys are the dotted factory paths -- `globin.adapters.secrets.windows_credential_store`
+    is the factory, and `advapi32` is what a document calls the thing it stands in
+    for. The count still comes from `system_arms`, so the two cannot drift apart
+    without `test_degradation_discipline.py` failing first.
+    """
+    import tomllib
+
+    contract = REPO_ROOT / "docs" / "engineering" / "degradation-contract.toml"
+    declared = tomllib.loads(contract.read_text(encoding="utf-8"))["component"]
+    reached = {row["id"]: row for row in declared if row.get("reached_through")}
+    return tuple(identifier.rsplit(".", 1)[-1] for identifier in reached)

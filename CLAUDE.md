@@ -585,13 +585,14 @@ degrades rather than blocks**, which is what keeps CI's runner from going red fo
 ever. Exit code **24**, and it is deliberately not `10`: that means the host failed
 the declared contract, this means it satisfies it and lacks a capability.
 
-**Six libraries are now absent-safe** -- `psutil`, `opentelemetry`, `prometheus_client`,
-`advapi32`, `kernel32` and, since Phase 031, `crypt32` -- each reached through one
-factory in one adapter, each with an architecture tripwire, because the CI `quality`
-job installs none of them. Do not add a second import site for any of them; add a
-factory. Phase 031 also made *which arm each one took* something GLOBIN records
-rather than discards, and `tests/architecture/test_degradation_discipline.py` fails
-if a seventh factory appears without a row in the contract.
+**Seven libraries are now absent-safe** -- `psutil`, `opentelemetry`,
+`prometheus_client`, `advapi32`, `kernel32`, `crypt32` since Phase 031 and
+`cryptography` since Phase 035 -- each reached through one factory in one adapter,
+each with an architecture tripwire, because the CI `quality` job installs none of
+them. Do not add a second import site for any of them; add a factory. Phase 031
+also made *which arm each one took* something GLOBIN records rather than discards,
+and `tests/architecture/test_degradation_discipline.py` fails if an eighth factory
+appears without a row in the contract.
 
 **Do not widen the bind address for remote access.** The type will not let you, and the
 supported shape is a separate authenticated, TLS-capable collector that scrapes
@@ -801,8 +802,8 @@ put a key that does not fit.
 .venv\Scripts\globin.exe secrets doctor
 ```
 
-Six absent-safe factories each choose between a working implementation and a
-recording stand-in, and **which arm they took was thrown away** -- it survived
+The six absent-safe factories that existed then each chose between a working
+implementation and a recording stand-in, and **which arm they took was thrown away** -- it survived
 nowhere but an untyped dictionary inside one command, covering two of the six. A
 declared registry now carries a **necessity** per component and a posture is folded
 from what each factory actually returned. Three tiers: `required` refuses a start,

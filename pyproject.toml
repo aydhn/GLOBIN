@@ -646,6 +646,26 @@ show_missing = true
 # padding it with tests that assert nothing would make the number better and the
 # suite worse. See docs/engineering/QUALITY_GATES.md.
 fail_under = 95
+# **`precision` is what makes `fail_under` mean 95, and without it the floor is
+# 94.5.** Two different comparisons decide what a run does, and they are not the
+# same comparison. `pytest_terminal_summary` prints the verdict with a plain
+# `total < fail_under`, so 94.86% displays as `FAIL Required test coverage of
+# 95.0% not reached`. The exit code comes from `coverage.results.should_fail_under`,
+# whose last line is `round(total, precision) < fail_under` -- and at the default
+# precision of 0, `round(94.86, 0)` is 95, so the run exits 0.
+#
+# The result was a gate that printed FAIL and reported success in the same output.
+# Phase 035 hit it: CI's 3.14 leg measured 94.88%, printed the failure, and passed,
+# and the shortfall was caught two commits later by the evidence job, which applies
+# the threshold itself. Reading the number rather than the verdict was the only
+# defence, which is not a gate.
+#
+# Two decimals, because that is what the message already prints -- so the number a
+# person reads and the number the exit code is computed from are now the same
+# number. Raising it further would make the floor stricter than the figure anyone
+# is shown. `tests/contract/test_quality_contract.py` compares the two comparisons
+# across the boundary and fails if they can ever disagree again.
+precision = 2
 # `exclude_also` ADDS to coverage's own defaults; `exclude_lines` would replace
 # them, silently dropping the built-in `pragma: no cover` handling.
 exclude_also = [

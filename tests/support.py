@@ -308,6 +308,46 @@ def spelled_size(count: int) -> str:
     return spelled
 
 
+#: How this repository writes a *position* out, as against a quantity.
+#:
+#: Separate from :data:`SPELLED_SIZES` because prose uses both about the same
+#: subject and they are not interchangeable: there are *seven* absent-safe
+#: factories, and the discipline test fires when an *eighth* appears. A test that
+#: reached for the cardinal where the document correctly used the ordinal is what
+#: prompted this table.
+SPELLED_ORDINALS: dict[int, str] = {
+    1: "first",
+    2: "second",
+    3: "third",
+    4: "fourth",
+    5: "fifth",
+    6: "sixth",
+    7: "seventh",
+    8: "eighth",
+    9: "ninth",
+    10: "tenth",
+}
+
+
+def spelled_ordinal(position: int) -> str:
+    """Return how ``position`` is written out in this repository's prose.
+
+    Args:
+        position: Which one in the sequence.
+
+    Returns:
+        The English ordinal for it.
+
+    Raises:
+        AssertionError: If no spelling is recorded, for the same reason
+            :func:`spelled_size` raises -- a comparison that quietly stops
+            comparing is worse than one that fails.
+    """
+    spelled = SPELLED_ORDINALS.get(position)
+    assert spelled is not None, f"no ordinal recorded for {position}; extend SPELLED_ORDINALS"
+    return spelled
+
+
 def resolved_configuration(origin: str = "test", /, **settings: object) -> ResolvedConfig:
     """Resolve the declared defaults with one override layer on top.
 

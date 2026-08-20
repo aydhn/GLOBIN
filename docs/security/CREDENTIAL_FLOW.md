@@ -214,7 +214,10 @@ vacuously and says so in the summary.
 deliverable. The composition root feeds the registry into the store's declared
 references and into the entitlement probe, so the phase that has a real
 requirement adds one entry and start-up begins demanding it with no plumbing in
-between. Phase 038 brings the first authenticated surface.
+between. **Phase 035 was the first test of that and did not spend it**: it
+delivered the signing layer and added no entry, because a credential is required
+for a signed *request* and not for a *start*. Phase 039 verifies key permissions
+and is where the first entry belongs.
 
 Declaring one now would make `bootstrap check` refuse on every clean host,
 including the one CI builds, and the only way to satisfy it would be to

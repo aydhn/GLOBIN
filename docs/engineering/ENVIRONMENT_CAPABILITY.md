@@ -211,7 +211,7 @@ hostname, or a home directory.
 | Behaviour when the network or an optional native component is unavailable | 031, delivered — [`DEGRADED_OPERATION.md`](DEGRADED_OPERATION.md) |
 | Which products and environments the venue offers | Phase 036 |
 
-The last three are not yet built. Nothing here anticipates them.
+Only the last of those is still unbuilt, and nothing here anticipates it. The two above it were delivered by Phases 030 and 031 and the sentence was not moved with them.
 
 ---
 

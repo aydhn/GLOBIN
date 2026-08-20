@@ -110,6 +110,46 @@ can be opened and read.
   `adapters/signing.py` goes from 71% to 96% where `cryptography` is absent, and the
   six lines left are the import arm and what only exists behind it.
 
+- **The coverage floor now fails the run it says it failed.** `fail_under = 95`
+  was acted on by two different comparisons. The line a person reads is printed
+  with a plain `total < fail_under`, so 94.86% rendered as *"FAIL Required test
+  coverage of 95.0% not reached"*; the exit code came from coverage.py's
+  `should_fail_under`, which ends in `round(total, precision) < fail_under`, and at
+  the default precision of 0 `round(94.86, 0)` is 95. **The real floor was 94.5%**,
+  and between there and 95% a run printed FAIL and reported success.
+
+  This phase met it rather than reasoned about it: CI's 3.14 leg measured 94.88%,
+  printed the failure, and the job passed. The shortfall surfaced two commits later
+  in the `evidence` job, which applies the threshold to `coverage.json`'s
+  `totals.percent_covered` itself rather than trusting the exit code — so the floor
+  was enforced in CI overall, by the one job that did not rely on the gate.
+
+  `precision = 2` closes it: two decimals, because that is what the message already
+  prints, so the number a person reads and the number the exit code is computed
+  from are the same number. A contract test compares the two comparisons across the
+  boundary, with a second test that pins precision 0 as the setting the first one
+  exists to reject.
+
+- **Five places said Phase 038 would bring the first authenticated surface.**
+  Phase 035 brought it, as the nineteenth scope amendment, and ADR-0090 had already
+  recorded that the phase which makes a credential *required* is 039 — while noting
+  that the docstrings still said 038. The record spotted the drift and the sweep did
+  not follow it, so `entitlements.py`, `composition.py`, `adapters/bootstrap.py`,
+  `degradation-contract.toml` and `CREDENTIAL_FLOW.md` all still named the phase
+  whose subject this one had absorbed. Each now names 039 and states the
+  distinction the wording used to miss: **being able to sign is not the same as
+  needing a key to start**, which is exactly why `required_credentials()` survived
+  this phase empty and `advapi32` stayed observed not-applicable.
+
+- **`CLAUDE.md` said six libraries are absent-safe and seventh in the same file.**
+  The count is now seven, `cryptography` is named beside the other six, and the
+  tripwire sentence names an *eighth* rather than the seventh that has since
+  arrived. Both halves are compared against `system_arms()` and
+  `degradation-contract.toml` by test, so the count and the list can no longer
+  drift apart from each other or from the factories that exist.
+  `ENVIRONMENT_CAPABILITY.md` said three capabilities were unbuilt when Phases 030
+  and 031 had delivered two of them; only Phase 036's remains.
+
 ### The first phase that connects to the venue
 
 - **A REST transport whose endpoint comes from the registry and nowhere else.**

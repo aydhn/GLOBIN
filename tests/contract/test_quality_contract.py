@@ -436,3 +436,81 @@ def test_the_testing_strategy_documents_every_attribute_marker(repo_root: Path) 
     assert f"{spelled} **attribute** markers" in section, (
         f"TESTING_STRATEGY.md must say '{spelled} **attribute** markers'"
     )
+
+
+# ---------------------------------------------------------------------------
+# The coverage floor
+# ---------------------------------------------------------------------------
+
+
+def test_the_coverage_floor_fails_the_run_it_says_it_failed(
+    pyproject: dict[str, Any],
+) -> None:
+    """The verdict and the printed number must be computed the same way.
+
+    They are not computed the same way by default, and the difference is a gate
+    that reports success while printing FAIL. `pytest_cov` prints its line with a
+    plain ``total < fail_under``, so 94.86% renders as *"FAIL Required test
+    coverage of 95.0% not reached"*. The exit code comes from
+    :func:`coverage.results.should_fail_under`, which ends in
+    ``round(total, precision) < fail_under`` -- and at the default precision of 0,
+    ``round(94.86, 0)`` is 95, so the process exits 0.
+
+    Phase 035 hit exactly that: CI's 3.14 leg measured **94.88%**, printed the
+    failure, and the job passed. The shortfall surfaced two commits later in the
+    evidence job, which applies the threshold itself rather than trusting this one.
+
+    So the settings are checked together rather than separately. `precision` is not
+    cosmetic here; it is half of what `fail_under` means.
+    """
+    report = pyproject["tool"]["coverage"]["report"]
+    floor = float(report["fail_under"])
+    precision = int(report["precision"])
+
+    should_fail_under = pytest.importorskip(
+        "coverage.results",
+        reason="coverage arrives with pytest-cov, which the coverage gate needs anyway",
+    ).should_fail_under
+
+    disagreed = [
+        total
+        for total in _totals_around(floor)
+        if should_fail_under(total, floor, precision) != (total < floor)
+    ]
+    assert not disagreed, (
+        f"at precision={precision} the exit code and the printed verdict disagree for "
+        f"{disagreed}: the run would print FAIL and exit 0. Raise `precision` in "
+        f"[tool.coverage.report] until the rounding cannot cross the floor."
+    )
+
+
+def test_the_floor_check_would_catch_the_setting_that_broke_it() -> None:
+    """Guard the guard: the assertion above must be able to fail.
+
+    It compares two functions of `precision`, so it would pass vacuously if the
+    neighbourhood it samples never straddled the boundary. This pins the original
+    defect -- precision 0 -- and the value that fixes it.
+    """
+    should_fail_under = pytest.importorskip(
+        "coverage.results",
+        reason="coverage arrives with pytest-cov, which the coverage gate needs anyway",
+    ).should_fail_under
+    sampled = _totals_around(95.0)
+
+    assert any(should_fail_under(total, 95.0, 0) != (total < 95.0) for total in sampled), (
+        "precision 0 is the setting the guard exists to reject, and the sampled "
+        "totals no longer reach it"
+    )
+    assert all(should_fail_under(total, 95.0, 2) == (total < 95.0) for total in sampled)
+
+
+def _totals_around(floor: float) -> tuple[float, ...]:
+    """Coverage totals close enough to the floor for rounding to matter.
+
+    Returns:
+        Totals spanning one whole percent either side, in hundredths -- the
+        resolution the printed message uses.
+    """
+    start = round((floor - 1.0) * 100)
+    stop = round((floor + 1.0) * 100)
+    return tuple(step / 100 for step in range(start, stop + 1))

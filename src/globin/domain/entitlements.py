@@ -377,11 +377,13 @@ def required_credentials() -> tuple[CredentialRequirement, ...]:
         omission.
 
     A start-up needs a credential only if a component that runs at start-up will
-    use one. GLOBIN's first authenticated surface arrives in Phase 038, so today
-    the honest answer is none -- and declaring one here would make ``bootstrap
-    check`` refuse on every clean host, including the one CI builds, which could
-    only be satisfied by manufacturing a credential to meet a requirement nothing
-    has established.
+    use one. **Phase 035 built the signing layer and this set stayed empty**, which
+    is the distinction: GLOBIN can sign a request, and nothing that runs at
+    start-up sends one. Phase 039 verifies key permissions and is the first with a
+    real requirement, so today the honest answer is none -- and declaring one here
+    would make ``bootstrap check`` refuse on every clean host, including the one CI
+    builds, which could only be satisfied by manufacturing a credential to meet a
+    requirement nothing has established.
 
     **What changed in Phase 029 is that the emptiness became a derivation.** The
     composition root feeds this into ``StoreBackedSecrets.required`` and into the

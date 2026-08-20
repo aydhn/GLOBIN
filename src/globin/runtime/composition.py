@@ -962,9 +962,11 @@ def build_degradation_probe(repo_root: Path) -> ContractDegradationProbe:
 
     ``credentials_required`` is derived from
     :func:`~globin.domain.entitlements.required_references` rather than passed,
-    so that the moment Phase 038 registers a reference the ``advapi32`` row stops
+    so that the moment Phase 039 registers a reference the ``advapi32`` row stops
     being not-applicable and starts being able to refuse a start. Nothing has to
-    remember to flip a flag.
+    remember to flip a flag. Phase 035 delivered signing without registering one,
+    which is what kept a clean host bootable through a phase that added a
+    credential-shaped capability.
     """
     return ContractDegradationProbe(
         contract=repo_root / DEGRADATION_CONTRACT_PATH,

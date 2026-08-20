@@ -743,9 +743,12 @@ class StoreBackedSecrets:
     rather than a literal. The composition root now feeds
     :func:`globin.domain.entitlements.required_references` into this field, and
     that function returns nothing because GLOBIN reaches no venue and therefore
-    genuinely requires no credential at start-up. Phase 038 brings the first
-    authenticated surface; adding one entry to the registry is all it will take
-    for this check to begin demanding a credential, with no plumbing in between.
+    genuinely requires no credential at start-up. **Phase 035 delivered the signing
+    layer and left this empty**, which is the distinction the wording used to miss:
+    being able to sign is not the same as needing a key to start. Phase 039
+    verifies key permissions, and adding one entry to the registry is all it will
+    take for this check to begin demanding a credential, with no plumbing in
+    between.
 
     Declaring one now would make ``bootstrap check`` refuse on every clean host,
     including the one CI builds, and the only way to satisfy it would be to

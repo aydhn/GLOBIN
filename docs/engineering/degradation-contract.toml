@@ -110,8 +110,9 @@ absence_means = """
 There is no local secret store on this host, so no credential can be resolved.
 Declared REQUIRED, and observed NOT_APPLICABLE while `required_references()` is
 empty — which is the honest pair today: nothing yet needs a credential, so the
-question does not arise, and the moment Phase 038 registers one the same
-declaration begins to refuse a start. Declaring it required outright would refuse
+question does not arise, and the moment Phase 039 registers one the same
+declaration begins to refuse a start. Phase 035 built the signing layer and
+registered nothing, so this pair survived a phase that could have broken it. Declaring it required outright would refuse
 a start today for a capability nothing uses, which is building ahead; declaring
 it optional would leave the required tier producible by nothing at all.
 """
