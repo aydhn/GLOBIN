@@ -146,6 +146,8 @@ The default answers are "measure" and "no".
 
 AUTH_SECTION: Final[str] = "auth"
 
+CLOCK_SECTION: Final[str] = "clock"
+
 """The sixth section, added in Phase 035.
 
 **Every key in it is about a POLICY, and none is about a secret.** A credential
@@ -397,6 +399,49 @@ AUTH_TIMESTAMP_UNIT: Final[str] = f"{AUTH_SECTION}{KEY_SEPARATOR}timestamp_unit"
 AUTH_PROBE_ENABLED: Final[str] = f"{AUTH_SECTION}{KEY_SEPARATOR}probe_enabled"
 
 AUTH_ALLOW_PRODUCTION_PROBE: Final[str] = f"{AUTH_SECTION}{KEY_SEPARATOR}allow_production_probe"
+
+CLOCK_SAMPLE_COUNT: Final[str] = f"{CLOCK_SECTION}{KEY_SEPARATOR}sample_count"
+
+CLOCK_FRESHNESS_TTL_MILLIS: Final[str] = f"{CLOCK_SECTION}{KEY_SEPARATOR}freshness_ttl_millis"
+
+CLOCK_DEGRADED_GRACE_MILLIS: Final[str] = f"{CLOCK_SECTION}{KEY_SEPARATOR}degraded_grace_millis"
+
+CLOCK_MAX_ROUND_TRIP_MILLIS: Final[str] = f"{CLOCK_SECTION}{KEY_SEPARATOR}max_round_trip_millis"
+
+CLOCK_MAX_UNCERTAINTY_MILLIS: Final[str] = f"{CLOCK_SECTION}{KEY_SEPARATOR}max_uncertainty_millis"
+
+CLOCK_MAX_OFFSET_JUMP_MILLIS: Final[str] = f"{CLOCK_SECTION}{KEY_SEPARATOR}max_offset_jump_millis"
+
+CLOCK_MAX_WALL_DIVERGENCE_MILLIS: Final[str] = (
+    f"{CLOCK_SECTION}{KEY_SEPARATOR}max_wall_divergence_millis"
+)
+
+CLOCK_NETWORK_BUDGET_MILLIS: Final[str] = f"{CLOCK_SECTION}{KEY_SEPARATOR}network_budget_millis"
+
+CLOCK_REQUIRE_CALIBRATION: Final[str] = f"{CLOCK_SECTION}{KEY_SEPARATOR}require_calibration"
+
+MINIMUM_CLOCK_SAMPLES: Final[int] = 1
+"""The fewest calibration samples a window may keep."""
+
+MAXIMUM_CLOCK_SAMPLES: Final[int] = 16
+"""The most a window may keep, matching :data:`globin.domain.clock_sync.MAX_SAMPLE_COUNT`.
+
+Restated here because this module may not import the clock layer -- both are in the
+domain layer and a cycle would follow -- and compared against it by
+``tests/contract/test_clock_contract.py`` so the two cannot drift.
+"""
+
+MINIMUM_CLOCK_INTERVAL_MILLIS: Final[int] = 1
+"""The shortest interval any clock threshold may be. Zero would disable a gate."""
+
+MAXIMUM_CLOCK_INTERVAL_MILLIS: Final[int] = 86_400_000
+"""The longest, one day.
+
+A bound rather than a preference: a freshness interval of a year is not a
+configuration, it is the calibration gate being switched off by arithmetic, and
+``docs/CONFIGURATION_POLICY.md`` asks that a setting which could disable a safety
+property be bounded rather than trusted.
+"""
 
 ENDPOINT_METRICS_ENABLED: Final[str] = f"{DIAGNOSTICS_HTTP_SECTION}{KEY_SEPARATOR}metrics_enabled"
 """Whether the scrape route answers."""
@@ -901,6 +946,53 @@ class AuthConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ClockConfig:
+    """How much GLOBIN must trust a venue clock before it signs anything.
+
+    Args:
+        sample_count: How many calibration samples the window keeps.
+        freshness_ttl_millis: How long a sample stays fresh enough to sign with.
+        degraded_grace_millis: How long a sample keeps a domain describable after
+            a probe failure.
+        max_round_trip_millis: The slowest usable round trip.
+        max_uncertainty_millis: The widest admissible error bound.
+        max_offset_jump_millis: How far the estimated offset may move between
+            calibrations before it is disbelieved.
+        max_wall_divergence_millis: How far the host's two clocks may disagree
+            before a wall-clock adjustment is declared.
+        network_budget_millis: The unobservable delay a signed request is assumed
+            to meet.
+        require_calibration: Whether a signed request needs a fresh calibration.
+
+    **Every default here is the safe one, and one of them is not adjustable
+    downward in effect.** ``require_calibration`` defaults to ``True`` and turning
+    it off does not make GLOBIN sign against an unsynchronised clock -- nothing
+    consults it in :func:`globin.domain.clock_sync.admit`, which refuses on the
+    state alone. It exists so an operator can say *this host is not expected to
+    reach a venue at all*, and so a diagnostic can report that intent rather than
+    reporting an absence.
+
+    **The thresholds are milliseconds because operators write milliseconds**, and
+    the venue documents its own bounds in them. They become
+    :class:`~globin.domain.clock.Duration` values at
+    :func:`globin.adapters.clock_sync.discipline_from`, which is also where a set
+    that contradicts itself is refused -- so a configuration whose freshness
+    interval outlives its own degraded grace fails at ``config.valid`` and exit
+    ``14``, not at the first request.
+    """
+
+    sample_count: int = 5
+    freshness_ttl_millis: int = 300_000
+    degraded_grace_millis: int = 900_000
+    max_round_trip_millis: int = 2_000
+    max_uncertainty_millis: int = 250
+    max_offset_jump_millis: int = 1_000
+    max_wall_divergence_millis: int = 500
+    network_budget_millis: int = 1_000
+    require_calibration: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class GlobinConfig:
     """Everything an operator may vary, one field per subsystem that has any.
 
@@ -930,6 +1022,7 @@ class GlobinConfig:
     telemetry: TelemetryConfig
     diagnostics_http: DiagnosticsHttpConfig
     auth: AuthConfig
+    clock: ClockConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -1141,6 +1234,7 @@ def known_keys() -> tuple[str, ...]:
         + section_keys(TELEMETRY_SECTION, TelemetryConfig)
         + section_keys(DIAGNOSTICS_HTTP_SECTION, DiagnosticsHttpConfig)
         + section_keys(AUTH_SECTION, AuthConfig)
+        + section_keys(CLOCK_SECTION, ClockConfig)
     )
 
 
@@ -1205,6 +1299,7 @@ def default_layer() -> ConfigLayer:
             **section_defaults(TELEMETRY_SECTION, TelemetryConfig),
             **section_defaults(DIAGNOSTICS_HTTP_SECTION, DiagnosticsHttpConfig),
             **section_defaults(AUTH_SECTION, AuthConfig),
+            **section_defaults(CLOCK_SECTION, ClockConfig),
         },
     )
 
@@ -1226,6 +1321,7 @@ def default_config() -> GlobinConfig:
         telemetry=TelemetryConfig(),
         diagnostics_http=DiagnosticsHttpConfig(),
         auth=AuthConfig(),
+        clock=ClockConfig(),
     )
 
 
@@ -1447,6 +1543,23 @@ def as_config(resolved: ResolvedConfig) -> GlobinConfig:
             probe_enabled=_flag(resolved.setting(AUTH_PROBE_ENABLED)),
             allow_production_probe=_flag(resolved.setting(AUTH_ALLOW_PRODUCTION_PROBE)),
         ),
+        clock=ClockConfig(
+            sample_count=_bounded(
+                resolved.setting(CLOCK_SAMPLE_COUNT),
+                low=MINIMUM_CLOCK_SAMPLES,
+                high=MAXIMUM_CLOCK_SAMPLES,
+            ),
+            freshness_ttl_millis=_interval(resolved.setting(CLOCK_FRESHNESS_TTL_MILLIS)),
+            degraded_grace_millis=_interval(resolved.setting(CLOCK_DEGRADED_GRACE_MILLIS)),
+            max_round_trip_millis=_interval(resolved.setting(CLOCK_MAX_ROUND_TRIP_MILLIS)),
+            max_uncertainty_millis=_interval(resolved.setting(CLOCK_MAX_UNCERTAINTY_MILLIS)),
+            max_offset_jump_millis=_interval(resolved.setting(CLOCK_MAX_OFFSET_JUMP_MILLIS)),
+            max_wall_divergence_millis=_interval(
+                resolved.setting(CLOCK_MAX_WALL_DIVERGENCE_MILLIS)
+            ),
+            network_budget_millis=_interval(resolved.setting(CLOCK_NETWORK_BUDGET_MILLIS)),
+            require_calibration=_flag(resolved.setting(CLOCK_REQUIRE_CALIBRATION)),
+        ),
     )
 
 
@@ -1558,6 +1671,33 @@ def _loopback(setting: Setting) -> str:
         msg = f"{setting.origin}: {setting.key} is unusable: {'; '.join(problems)}"
         raise ConfigurationError(msg)
     return value
+
+
+def _interval(setting: Setting) -> int:
+    """Read a clock threshold in milliseconds, within the declared bounds.
+
+    Args:
+        setting: The resolved setting, carrying its origin for the message.
+
+    Returns:
+        The interval in milliseconds.
+
+    Raises:
+        ConfigurationError: If the value is not an integer between
+            :data:`MINIMUM_CLOCK_INTERVAL_MILLIS` and
+            :data:`MAXIMUM_CLOCK_INTERVAL_MILLIS`.
+
+    A named binder rather than eight repetitions of :func:`_bounded` with the same
+    two arguments, so the bounds are stated once and a ninth threshold cannot be
+    added with different ones by accident.
+
+    **This is the outer bound only.** Whether a *set* of thresholds is coherent --
+    a degraded grace shorter than the freshness interval, an uncertainty limit that
+    would make its own gate unreachable -- is
+    :class:`globin.domain.clock_sync.ClockDiscipline`'s judgement, and it is made
+    where the whole set is visible rather than one field at a time.
+    """
+    return _bounded(setting, low=MINIMUM_CLOCK_INTERVAL_MILLIS, high=MAXIMUM_CLOCK_INTERVAL_MILLIS)
 
 
 def _bounded(setting: Setting, *, low: int, high: int) -> int:

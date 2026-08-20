@@ -1,0 +1,218 @@
+# ---------------------------------------------------------------------------
+# GLOBIN clock discipline contract.
+#
+# The declared half of `docs/engineering/CLOCK_DISCIPLINE.md`, and the second,
+# independent statement of what the clock layer promises. Compared against
+# `src/globin/domain/clock_sync.py` in BOTH directions by
+# `tests/contract/test_clock_contract.py`: a value here the code does not carry
+# fails, and a value in the code that is not declared here fails too.
+#
+# WHY THIS FILE EXISTS AT ALL, when the code already holds the values.
+# `docs/engineering/SOURCE_OF_TRUTH.md` refuses a second copy of a rule unless a
+# test compares the copies. What the comparison buys here is the thing the code
+# alone cannot give: a threshold in a Python module is a number somebody typed,
+# and a threshold here has the reasoning beside it and a test that it is still
+# the number in force. Phase 034 established that shape in `rest-transport.toml`;
+# this is the same shape for timing.
+#
+# THIS FILE DECLARES NO VENUE FACTS OF ITS OWN. The two numbers that come from
+# Binance -- the 1000ms future tolerance and the 60000ms window ceiling -- live in
+# `rest-transport.toml` and `src/globin/domain/auth_timing.py` respectively, each
+# with its own provenance, and are referenced here rather than restated. A second
+# copy of a venue fact is exactly the drift this band exists to prevent.
+#
+# EVERY THRESHOLD BELOW IS A GLOBIN DECISION, NOT A BINANCE ONE. The venue states
+# what it will accept; how much margin GLOBIN leaves inside that is ours, and the
+# reasoning for each is in the comment above it.
+#
+# NOTHING WRITES THIS FILE.
+# ---------------------------------------------------------------------------
+
+[meta]
+schema_version = 1
+introduced_in_phase = 36
+
+# ---------------------------------------------------------------------------
+# How an offset is estimated.
+#
+# `selection` names the rule, and the rule is recomputed against the code rather
+# than believed: the contract test builds a window whose samples have known round
+# trips and asserts the chosen one is the fastest.
+#
+# WHY THE FASTEST AND NOT AN AVERAGE. Two independent reasons, both in ADR-0093.
+# The bound: a midpoint estimate is wrong by at most half the round trip, so the
+# fastest exchange is by definition the tightest estimate available and averaging
+# cannot narrow it. And the transport: `HttpRestTransport` pools connections, so
+# the FIRST exchange on a fresh pool pays a TCP and TLS handshake and its elapsed
+# time is not a round trip at all. Selecting the minimum discards that sample
+# structurally, without having to know which one was first.
+# ---------------------------------------------------------------------------
+
+[estimator]
+selection = "lowest_round_trip"
+midpoint = "wall_anchor_plus_half_monotonic_round_trip"
+uncertainty = "half_round_trip"
+tie_break = "later_sample"
+arithmetic = "integer_microseconds"
+
+# ---------------------------------------------------------------------------
+# The default thresholds, in whole milliseconds.
+#
+# Every one of these is overridable through the `clock` configuration section and
+# every one is validated by `ClockDiscipline` rather than trusted -- a set that
+# contradicts itself cannot be constructed, so an operator cannot configure a
+# gate that could never fire.
+#
+# sample_count             Five. Past a handful the estimator gains nothing,
+#                          because it selects one sample rather than combining
+#                          them, and the window is held for the life of the
+#                          process.
+#
+# freshness_ttl            Five minutes. Chosen against what actually decays,
+#                          which is confidence rather than the offset: a quartz
+#                          oscillator specified at 20 parts per million drifts
+#                          about 1.2ms per minute worst case, so five minutes
+#                          bounds accumulated drift at roughly 6ms -- comfortably
+#                          inside max_uncertainty.
+#
+# degraded_grace           Fifteen minutes, three times the freshness interval.
+#                          It never admits a signature; it is how long GLOBIN can
+#                          still say what it last knew.
+#
+# max_round_trip           Two seconds. Anything slower is a link GLOBIN should
+#                          not be signing time-sensitive requests over.
+#
+# max_uncertainty          250ms, a quarter of the venue's future tolerance.
+#                          Half of max_round_trip would be exactly 1000ms, which
+#                          is the tolerance itself and therefore no margin at all.
+#
+# max_offset_jump          One second. A venue clock does not step; a host clock
+#                          does, so a movement this large is evidence about this
+#                          machine and the estimate is disbelieved rather than
+#                          silently re-anchored.
+#
+# max_wall_divergence      500ms. Both host clocks measure the same span, so any
+#                          disagreement is the wall clock being adjusted. Not zero
+#                          because the two are read at slightly different instants.
+#
+# network_budget           One second, deliberately larger than any healthy round
+#                          trip. It stands in for the ONE interval GLOBIN cannot
+#                          observe: the venue's own queueing between its first
+#                          timing check and its second.
+# ---------------------------------------------------------------------------
+
+[defaults]
+sample_count = 5
+freshness_ttl_millis = 300000
+degraded_grace_millis = 900000
+max_round_trip_millis = 2000
+max_uncertainty_millis = 250
+max_offset_jump_millis = 1000
+max_wall_divergence_millis = 500
+network_budget_millis = 1000
+
+# ---------------------------------------------------------------------------
+# The vocabulary, declared so that adding a word is a visible edit.
+#
+# `states` is in the order the state machine reaches them, and EXACTLY ONE of
+# them admits a signature. The contract test asserts that count rather than
+# naming which, so a future state cannot quietly become a second admitting one.
+#
+# `admission` is in GATE ORDER, which is the order an operator reads a refusal
+# in: cheapest and broadest first, so the message names the outermost thing that
+# is wrong rather than an inner consequence of it.
+#
+# THERE IS NO FUTURE-SIDE ADMISSION GATE, AND THAT IS A DECISION RATHER THAN AN
+# OMISSION. The venue's `+ 1 second` allowance can only be breached by the
+# estimate being wrong, and `ClockDiscipline` refuses at construction to admit a
+# max_uncertainty that reaches it -- so a runtime check could never fire. Network
+# delay cannot breach it either: it advances the venue's clock while the request
+# is in flight, so transit is spent against recvWindow rather than against the
+# future allowance. Getting that direction backwards is the easy mistake, which
+# is why it is written down here.
+# ---------------------------------------------------------------------------
+
+[vocabulary]
+states = ["uninitialized", "synchronized", "stale", "degraded", "unsynchronized"]
+admitting_states = 1
+admission = [
+    "admitted",
+    "clock_source_unavailable",
+    "clock_not_synchronized",
+    "clock_calibration_stale",
+    "clock_jump_detected",
+    "clock_uncertainty_exceeded",
+    "recv_window_policy_violation",
+    "timing_budget_exceeded",
+]
+recovery = ["no_action", "resync_only", "resync_and_retry_once"]
+jump_directions = ["none", "forward", "backward"]
+
+# ---------------------------------------------------------------------------
+# Recovery from a venue timing rejection.
+#
+# `-1021` is declared UNAMBIGUOUS in `rest-transport.toml`, which is what makes
+# the bounded retry below reachable rather than universal: `classify()` returns a
+# confirmed failure, and only a confirmed failure may be re-sent.
+#
+# max_retries = 1 IS THE WHOLE SAFETY PROPERTY and is deliberately not
+# configurable. A retry budget an operator can raise is a retry engine, and Phase
+# 043 owns those.
+#
+# `requires_confirmed_outcome` is ADR-0089's rule restated where it applies: a
+# request whose fate is UNKNOWN is never replayed, and a timing rejection earns no
+# exception to it.
+#
+# `silence_is_not_a_declaration`: a mutating request with no idempotency metadata
+# gets resync_only. A caller that has not said a re-send is safe has not said it.
+# ---------------------------------------------------------------------------
+
+[recovery]
+code = -1021
+max_retries = 1
+requires_confirmed_outcome = true
+silence_is_not_a_declaration = true
+
+# ---------------------------------------------------------------------------
+# Published diagnostic dimensions.
+#
+# Upper bounds in milliseconds. N bounds means N+1 buckets, and the offset
+# dimension carries a sign as well -- so the round-trip dimension can contribute
+# at most 9 values and the offset dimension at most 14. Both are computable when
+# this file is written, which is what `docs/TELEMETRY_POLICY.md` requires of a
+# published dimension and what a raw nanosecond count could never satisfy.
+#
+# WHAT IS DELIBERATELY NOT PUBLISHED: the timestamp itself, the exact offset in
+# microseconds, the round trip in nanoseconds, and any request identifier. None of
+# them is secret -- a clock offset protects nothing -- and every one of them is
+# unbounded in cardinality. The signed offset in whole milliseconds IS published
+# beside the bucket, because an operator diagnosing a clock needs the number and a
+# dashboard does not.
+# ---------------------------------------------------------------------------
+
+[buckets]
+round_trip_millis = [5, 10, 25, 50, 100, 250, 500, 1000]
+offset_millis = [1, 5, 25, 100, 500, 1000]
+
+# ---------------------------------------------------------------------------
+# What this layer will not do.
+#
+# Declared so the absences are testable rather than merely stated in prose, in the
+# shape `rest-transport.toml` established. `tests/contract/test_clock_contract.py`
+# asserts each one against the source.
+#
+# `widen_window_on_uncertainty` IS THE ONE WORTH READING TWICE. The tempting
+# behaviour -- notice the clock is uncertain, raise recvWindow to compensate -- is
+# precisely the behaviour that converts a clock fault into an accepted stale
+# request. It is also useless: the venue re-checks the window immediately before
+# the matching engine, so a wider window buys no protection against the queueing
+# delay GLOBIN cannot see. GLOBIN refuses admission instead.
+# ---------------------------------------------------------------------------
+
+[prohibitions]
+widen_window_on_uncertainty = false
+persist_offset_across_restart = false
+retry_unknown_outcome = false
+calibrate_from_a_second_domain = false
+correct_the_host_clock = false
+sign_without_calibration = false

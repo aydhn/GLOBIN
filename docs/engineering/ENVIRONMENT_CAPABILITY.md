@@ -209,7 +209,7 @@ hostname, or a home directory.
 | Whether a GPU is present, and whether using it pays | [`GPU_CAPABILITY.md`](GPU_CAPABILITY.md), [`GPU_BENEFIT.md`](GPU_BENEFIT.md) |
 | The full set of preflight checks a long-running process needs | 030, delivered — [`PREFLIGHT_SUITE.md`](PREFLIGHT_SUITE.md) |
 | Behaviour when the network or an optional native component is unavailable | 031, delivered — [`DEGRADED_OPERATION.md`](DEGRADED_OPERATION.md) |
-| Which products and environments the venue offers | Phase 036 |
+| Which products and environments the venue offers | Phase 033, delivered |
 
 Only the last of those is still unbuilt, and nothing here anticipates it. The two above it were delivered by Phases 030 and 031 and the sentence was not moved with them.
 

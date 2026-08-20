@@ -190,7 +190,7 @@ would have caught the documentation error."""
 # Every value quoted from the REST document's Timing security section. The
 # processing rule it publishes is RECORDED IN THE LEDGER AND NOT IMPLEMENTED: it is
 # written in terms of `serverTime`, which GLOBIN does not have, and estimating one
-# here would be building Phase 040 early.
+# here would have been building Phase 036 early. It is built there now.
 # ---------------------------------------------------------------------------
 
 [timing]

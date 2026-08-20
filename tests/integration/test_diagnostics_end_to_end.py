@@ -34,6 +34,7 @@ from globin.adapters.diagnostics import (
 )
 from globin.domain.configuration import (
     AuthConfig,
+    ClockConfig,
     DiagnosticsConfig,
     DiagnosticsHttpConfig,
     GlobinConfig,
@@ -258,6 +259,7 @@ def test_the_file_rotates_inside_the_runtime_tree_and_stays_bounded(
         telemetry=TelemetryConfig(),
         diagnostics_http=DiagnosticsHttpConfig(),
         auth=AuthConfig(),
+        clock=ClockConfig(),
     )
     subject = build_diagnostics(
         state, correlation_id="corr-rotate", config=config, stream=io.StringIO(), hooks=registry
@@ -292,6 +294,7 @@ def test_the_severity_threshold_is_honoured_by_both_destinations(
             telemetry=TelemetryConfig(),
             diagnostics_http=DiagnosticsHttpConfig(),
             auth=AuthConfig(),
+            clock=ClockConfig(),
         ),
         stream=console,
         hooks=registry,

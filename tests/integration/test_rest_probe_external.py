@@ -104,7 +104,7 @@ def test_the_server_time_probe_returns_a_timestamp(
 ) -> None:
     """Read for its shape, and never used to set a clock.
 
-    Phase 040 owns clock synchronisation. What this asserts is that the JSON
+    Phase 036 owns clock synchronisation. What this asserts is that the JSON
     decoder handed back an object — no offset is computed and none is stored.
     """
     resolution, contract = probe_context

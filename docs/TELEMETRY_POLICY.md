@@ -171,4 +171,4 @@ belongs in the roadmap.
 | Retention, aggregation across runs, and long-term storage | 280 |
 | Dashboards, alert rules and escalation | 315 |
 | Instrumenting a Binance REST, WebSocket or FIX transport | 045 onwards |
-| Which product and environment pairs exist | 036 |
+| Which product and environment pairs exist | 033, delivered — [`engineering/BINANCE_API_REALITY.md`](engineering/BINANCE_API_REALITY.md) |

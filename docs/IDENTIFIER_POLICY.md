@@ -197,7 +197,7 @@ absence of a rule.
 | Serialization and schema evolution for persisted identifiers | 012, delivered — [`SERIALIZATION_POLICY.md`](SERIALIZATION_POLICY.md) |
 | Which product families Binance offers, and what each is called there | 033, delivered — [`engineering/binance-api-reality.toml`](engineering/binance-api-reality.toml) |
 | What an environment is, and what each class guarantees | 035, delivered — [`engineering/ENVIRONMENT_CLASSES.md`](engineering/ENVIRONMENT_CLASSES.md) |
-| Which product and environment pairs are usable | 036 |
+| Which product and environment pairs are usable | 033-034, delivered — [`engineering/BINANCE_API_REALITY.md`](engineering/BINANCE_API_REALITY.md) |
 | The venue spelling of a market, such as the concatenated form | 049 |
 | Which instruments exist, and their metadata | 049-050 |
 | How an order identifier is generated and reconciled with the venue | 081-096 |

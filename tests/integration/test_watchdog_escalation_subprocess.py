@@ -43,6 +43,7 @@ from globin.adapters.watchdog import ImmediateProcessExit
 from globin.domain.configuration import (
     DiagnosticsConfig,
     AuthConfig,
+    ClockConfig,
     GlobinConfig,
     LoggingConfig,
     DiagnosticsHttpConfig,
@@ -68,6 +69,7 @@ config = GlobinConfig(
     telemetry=TelemetryConfig(),
     diagnostics_http=DiagnosticsHttpConfig(),
     auth=AuthConfig(),
+    clock=ClockConfig(),
 )
 
 state = build_runtime_state()

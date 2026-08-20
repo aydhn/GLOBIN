@@ -72,6 +72,7 @@ means UTC, the host's zone, or the zone of whoever wrote it down.
 | `MICROSECONDS_PER_MILLISECOND` | `1000` |
 | `MICROSECONDS_PER_SECOND` | `1000000` |
 | `MICROSECONDS_PER_DAY` | `86400000000` |
+| `NANOSECONDS_PER_MICROSECOND` | `1000` |
 | `NANOSECONDS_PER_MILLISECOND` | `1000000` |
 | `MIN_EPOCH_MILLIS` | `-62135596800000` |
 | `MAX_EPOCH_MILLIS` | `253402300799999` |
@@ -124,9 +125,11 @@ silently returned a `Duration` would make the wrong measurement easy to write
 and impossible to notice — the failure would be a quietly wrong latency, not an
 exception. Elapsed time is the monotonic clock's job.
 
-A caller that genuinely wants a wall-clock difference — Phase 040, measuring
-skew against server time — subtracts one `epoch_millis` from another, which is
-explicit and visibly a wall-clock difference.
+A caller that genuinely wants a wall-clock difference subtracts one
+`epoch_millis` from another, which is explicit and visibly a wall-clock difference.
+Phase 036's jump detector is that caller, and it needs the explicit form for a
+reason worth stating: a wall clock set **backwards** produces a negative
+difference, which `Duration` refuses by design.
 
 ---
 
@@ -234,13 +237,15 @@ under the ambient decimal context and make it Phase 010's problem retroactively.
 | Where exact decimal arithmetic is mandatory, and how prices round | 010, delivered — [`PRECISION_POLICY.md`](PRECISION_POLICY.md) |
 | Canonical identifiers for runs and orders | 011, delivered — [`IDENTIFIER_POLICY.md`](IDENTIFIER_POLICY.md) |
 | How a timestamp is serialised and how that format may evolve | 012, delivered — [`SERIALIZATION_POLICY.md`](SERIALIZATION_POLICY.md) |
-| Server time synchronisation, drift measurement and the response to skew | 040 |
+| Server time synchronisation, drift measurement and the response to skew | 036, delivered — [`engineering/CLOCK_DISCIPLINE.md`](engineering/CLOCK_DISCIPLINE.md) |
 | Scheduling, intervals and anything that waits | 257-272 |
 
-Phase 040 is the important one. GLOBIN has two independent time sources — this
-host's clock and the venue's server time — and this policy governs only the
-first. Reconciling them, and deciding what to do when they disagree, is not
-decided here. Nothing reaches a venue yet.
+Phase 036 is the important one, and it is delivered. GLOBIN has two independent
+time sources — this host's clock and the venue's server time — and this policy
+governs only the first. Reconciling them is
+[`CLOCK_DISCIPLINE.md`](engineering/CLOCK_DISCIPLINE.md)'s subject: an estimate
+with a stated error bound, a five-state health machine, and a refusal to sign
+anything when the estimate is missing, old or too uncertain.
 
 ---
 

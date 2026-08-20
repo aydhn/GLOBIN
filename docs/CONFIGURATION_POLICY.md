@@ -75,8 +75,17 @@ so a new setting is one line and cannot be half-added.
 | `auth.timestamp_unit` | `str` | `milliseconds` | Which unit the `timestamp` parameter carries. `milliseconds` or `microseconds`. |
 | `auth.probe_enabled` | `bool` | `false` | Whether the authenticated read-only probe may run at all. |
 | `auth.allow_production_probe` | `bool` | `false` | Whether it may run against the live exchange. Separate from the switch above on purpose. |
+| `clock.sample_count` | `int` | `5` | How many calibration samples the window keeps per clock domain. Between 1 and 16. |
+| `clock.freshness_ttl_millis` | `int` | `300000` | How long a calibration stays fresh enough to sign with. Between 1 and 86400000. |
+| `clock.degraded_grace_millis` | `int` | `900000` | How long a surviving sample keeps a domain describable after a probe fails. Never admits a signature. |
+| `clock.max_round_trip_millis` | `int` | `2000` | The slowest round trip a usable sample may have. |
+| `clock.max_uncertainty_millis` | `int` | `250` | The widest error bound an admitted timestamp may carry. Must stay under the venue's 1000ms future tolerance. |
+| `clock.max_offset_jump_millis` | `int` | `1000` | How far the estimated offset may move between calibrations before it is disbelieved. |
+| `clock.max_wall_divergence_millis` | `int` | `500` | How far the host's wall clock may diverge from its monotonic clock before a jump is declared. |
+| `clock.network_budget_millis` | `int` | `1000` | The unobservable delay a signed request is assumed to meet, spent against `recvWindow`. |
+| `clock.require_calibration` | `bool` | `true` | Whether this host is expected to reach a venue clock at all. **Turning it off does not permit signing against an unsynchronised clock.** |
 
-Forty-two settings in six sections. Of everything Phases 001-006 built, only
+Fifty-one settings in seven sections. Of everything Phases 001-006 built, only
 logging held anything an operator may reasonably change: the project contract and
 the roadmap are immutable identity, the error taxonomy has nothing to tune, and
 the architecture review's paths are constants rather than settings. Phase 023

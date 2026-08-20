@@ -68,6 +68,7 @@ from globin.domain.secrets import (
     SecretValue,
     StoreFault,
 )
+from tests.support import signing_timing
 
 pytestmark = pytest.mark.loopback
 """Every test here opens a socket to a server it started on this machine.
@@ -314,8 +315,11 @@ def _send(
         method=HttpMethod.GET,
         path="/v3/account",
         parameters=parameters,
-        moment=_moment(),
-        policy=policy or AuthPolicy(),
+        timing=signing_timing(
+            _moment(),
+            unit=(policy or AuthPolicy()).timestamp_unit,
+            recv_window=(policy or AuthPolicy()).window,
+        ),
         store=_StubStore(),
         signer=hmac_signer(),
         correlation_id="auth-end-to-end",
@@ -463,8 +467,7 @@ def test_the_diagnostic_record_carries_neither_key_nor_signature(
         method=HttpMethod.GET,
         path="/v3/account",
         parameters=QueryParameters(items=(("symbol", "BTCUSDT"),)),
-        moment=_moment(),
-        policy=AuthPolicy(),
+        timing=signing_timing(_moment()),
         store=_StubStore(),
         signer=hmac_signer(),
         correlation_id="auth-end-to-end",

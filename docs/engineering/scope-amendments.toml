@@ -341,12 +341,13 @@ overlaps_complete = []
 # so a row survives only until its phase ships.
 # ---------------------------------------------------------------------------
 
-[[inheritance]]
-phase = 36
-title = "Product and Environment Capability Matrix"
-already_built = "the matrix itself, six status words, evidence kinds, a query that separates an absent entry from a recorded UNKNOWN, and -- since Phase 034 -- a capability gate that refuses a REST request the matrix does not support"
-absent_by_design = "nothing refuses a non-REST operation, because no other protocol has a caller"
-from_phases = [33, 34]
+# THE PHASE 036 ROW IS GONE, AND ITS ABSENCE IS THE FINDING RATHER THAN A
+# DELETION. It recorded that Phase 036 would find the capability matrix already
+# built by Phases 033 and 034 -- which turned out to be the whole of its title's
+# subject, not merely a head start. Phase 036 therefore delivered the clock
+# discipline layer instead; see the twentieth amendment above. A row here survives
+# only until its phase ships, and this one is the first whose own content became
+# the argument for rewriting the roadmap.
 
 [[inheritance]]
 phase = 37
@@ -545,3 +546,56 @@ score = 2
 displaces = [38]
 title_collisions = [38]
 overlaps_complete = []
+
+# ---------------------------------------------------------------------------
+# Twentieth. Phase 036, delivering the clock discipline layer -- and delivering
+# nothing of its own title, which no amendment before it has done.
+#
+# `halves_need_each_other` is recorded MET and the reason is unusual enough to
+# state here rather than only in the ADR: the condition is **vacuously** met,
+# because there is only one half. Row 036's own subject shipped in Phases 033 and
+# 034 -- the seventeenth took the matrix, the eighteenth took the binding refusal
+# ADR-0087 had explicitly reserved for "Phase 036 makes it binding" -- so the usual
+# resolution of delivering both halves was not available to be chosen or declined.
+#
+# It is the second amendment to rewrite a roadmap row, after the eighteenth, and
+# the first to rewrite two. ADR-0092 argues the difference in kind rather than
+# claiming the rule has moved: the nineteenth declined to rewrite row 038 because
+# that title still covered real open work, and neither row here does.
+# ---------------------------------------------------------------------------
+
+[[amendment]]
+ordinal = 20
+ordinal_word = "Twentieth"
+phase = 36
+scored = true
+record = "docs/adr/0092-phase-036-widens-to-deliver-the-clock-discipline-layer.md"
+summary = """Phase 036 delivered the multi-product clock discipline layer and \
+nothing of its own title, because its title's subject had already shipped: the \
+seventeenth amendment gave the capability matrix to Phase 033 and the eighteenth \
+gave the binding refusal to Phase 034. Row 040 loses its whole subject -- server \
+time synchronisation, drift measurement and the response to skew -- and the \
+package had named that phase for this work in eight places. Both rows are \
+rewritten, the second time an amendment has rewritten any and the first time one \
+has rewritten two: a displacement note can be honest about work that moved, and \
+cannot be honest about work that no longer exists. Row 040 takes the subject the \
+sixteenth amendment's granularity review found the programme has no rows for at \
+all, the running application's substrate."""
+nothing_displaced = "FAILED"
+nothing_deferred = "MET"
+no_phase_owns_it = "FAILED"
+halves_need_each_other = "MET"
+score = 2
+displaces = [40]
+# EMPTY, FOR THE REASON THE EIGHTEENTH GIVES ABOUT ROW 045. The collision was
+# with row 040's title *Server Time Synchronization and Drift Control*, which this
+# amendment rewrote -- so a claim recorded here would be checked against a title
+# that no longer exists and would read as a collision with the new one, which is
+# false. `no_phase_owns_it = FAILED` carries the substance; ROADMAP.md and ADR-0092
+# carry the history.
+title_collisions = []
+# Both halves of row 036's OWN subject shipped in these two phases, which is why
+# this amendment had no second half to deliver. That is the finding rather than an
+# aside: it is the first amendment in the programme whose titled work was already
+# complete before the phase began.
+overlaps_complete = [33, 34]

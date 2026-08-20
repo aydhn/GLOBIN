@@ -23,6 +23,11 @@ module. Since Phase 035 it *could* sign one, which is a different claim: it hold
 no key, `required_credentials()` is still empty, no start-up demands a credential,
 and every authenticated verb reports a deterministic skip. It places no order.
 
+Since Phase 036 it also knows **what time the venue thinks it is** -- as an
+estimate carrying its own error bound, never as a fact -- and refuses to stamp a
+signed request when that estimate is missing, stale or too uncertain. It sets no
+host clock and persists no offset.
+
 Phase 016 closed the first band and cut `v0.1.0`, the foundation baseline. What
 that certifies — and the one criterion it could not — is in
 [`docs/release/FOUNDATION_ACCEPTANCE.md`](docs/release/FOUNDATION_ACCEPTANCE.md).
@@ -84,6 +89,7 @@ that certifies — and the one criterion it could not — is in
 | What does an environment promise, and which one may never receive a credential? | [`docs/engineering/ENVIRONMENT_CLASSES.md`](docs/engineering/ENVIRONMENT_CLASSES.md), [ADR-0090](docs/adr/0090-phase-035-widens-to-deliver-the-rest-authentication-layer.md) |
 | Which algorithm signs a request, and what stops one product's contract standing in for another's? | [`docs/engineering/REST_AUTHENTICATION.md`](docs/engineering/REST_AUTHENTICATION.md), [ADR-0091](docs/adr/0091-authentication-is-capability-driven-and-product-scoped.md) |
 | How does GLOBIN send a REST request, and what does it do when it cannot tell whether one took effect? | [`docs/engineering/REST_TRANSPORT.md`](docs/engineering/REST_TRANSPORT.md), [ADR-0089](docs/adr/0089-an-unknown-outcome-is-preserved-and-a-second-module-may-reach-a-socket.md) |
+| What time does GLOBIN think the venue thinks it is, and when does it refuse to sign? | [`docs/engineering/CLOCK_DISCIPLINE.md`](docs/engineering/CLOCK_DISCIPLINE.md), [ADR-0093](docs/adr/0093-server-time-is-estimated-from-the-lowest-round-trip-and-a-window-is-never-widened.md) |
 | How often must the official documentation be re-read, and what happens when it moves? | [`docs/engineering/DOCUMENTATION_INGESTION.md`](docs/engineering/DOCUMENTATION_INGESTION.md), [ADR-0088](docs/adr/0088-phase-034-widens-to-deliver-the-rest-transport-substrate.md) |
 | What does this term mean? | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) |
 
@@ -1064,6 +1070,56 @@ Phase 039's, and it flips `advapi32` to required. **No new exit code -- 26 stays
 free.** Details:
 [`docs/engineering/REST_AUTHENTICATION.md`](docs/engineering/REST_AUTHENTICATION.md)
 and [`docs/engineering/ENVIRONMENT_CLASSES.md`](docs/engineering/ENVIRONMENT_CLASSES.md).
+
+Phase 036 gave GLOBIN a **server time**, and gave signing a reason to refuse.
+
+```bash
+.venv\Scripts\globin.exe clock domains
+```
+
+```bash
+.venv\Scripts\globin.exe clock status --json
+```
+
+```bash
+.venv\Scripts\globin.exe clock calibrate --family spot --environment testnet
+```
+
+**It delivered nothing of its own title, and that is the twentieth amendment's
+whole argument.** Row 036 read *Product and Environment Capability Matrix* and
+that subject had already shipped -- the matrix in Phase 033, its binding refusal in
+Phase 034. Rows 036 and 040 are both rewritten; see
+[ADR-0092](docs/adr/0092-phase-036-widens-to-deliver-the-clock-discipline-layer.md).
+
+**The offset is an estimate that carries its own error bound.** One exchange,
+bracketed by *monotonic* readings and anchored **once** on the wall clock, so a
+correction landing mid-flight cannot enter it. The chosen sample is the **lowest
+round trip**, never an average -- a midpoint is wrong by at most half *its own*
+trip, and `HttpRestTransport` pools connections so the first exchange on a fresh
+pool pays a TCP+TLS handshake that is not a round trip at all.
+
+**The central finding was in a document Phase 035 had already quoted.** The venue's
+timing rule evaluates the window **twice**, and the second evaluation -- immediately
+before the Matching Engine -- carries **no `+ 1 second` clause**. So network delay is
+spent against `recvWindow` and *never* against the future allowance. Getting that
+backwards is the easy mistake; bounding `max_uncertainty` below 1000 ms at
+construction makes the future half **structural**, which is why there is
+deliberately **no future-side runtime gate**.
+
+**`sign_request` no longer takes a clock.** It takes a `TimingContext` that only a
+passing seven-gate admission can build, so *one timing context per signature* is a
+property of the object graph rather than a rule. **`recvWindow` is never widened to
+fix a clock** -- GLOBIN refuses, with two different refusals because *widen your
+setting* and *no setting could work* have different remedies.
+
+**Twenty-four clock domains are declared and three resolve.** `/fapi/v1/time`,
+`/dapi/v1/time` and `/eapi/v1/time` are spelled **nowhere** in the package. **No
+host clock is ever set and no offset is persisted**, so a fresh process signs
+nothing until it has asked. `-1021` invalidates a domain, forces a recalibration
+and permits **at most one** re-send -- only on a confirmed outcome, and only for a
+request whose repetition is provably safe. **No new exit code -- 26 stays free.**
+Details:
+[`docs/engineering/CLOCK_DISCIPLINE.md`](docs/engineering/CLOCK_DISCIPLINE.md).
 
 ---
 

@@ -33,8 +33,8 @@ the contract:
 6. Each band ends with a consolidation and gate-review phase. That phase exists
    to pay down inconsistency before the next band builds on top of it.
 
-> **Phases 001-035 are complete. Phase 036 is next and has not started.**
-> Nothing beyond Phase 035 is implemented. The environment band is closed and
+> **Phases 001-036 are complete. Phase 037 is next and has not started.**
+> Nothing beyond Phase 036 is implemented. The environment band is closed and
 > frozen as `v0.2.0`; what that certifies, and the one criterion it could not,
 > are in
 > [`docs/release/ENVIRONMENT_ACCEPTANCE.md`](docs/release/ENVIRONMENT_ACCEPTANCE.md). GLOBIN does not trade and
@@ -56,6 +56,16 @@ the contract:
 > sent by any default path, and no order is placed.** See
 > [`README.md`](README.md) and
 > [`docs/engineering/REST_TRANSPORT.md`](docs/engineering/REST_TRANSPORT.md).
+>
+> **Since Phase 036 it knows what time the venue thinks it is** -- as an estimate
+> with a stated error bound, never as a fact. A signed request is stamped from the
+> host clock *plus a measured correction*, and GLOBIN refuses to sign at all when
+> that correction is missing, stale, or wider than the venue's own rule allows.
+> **Nothing sets the host clock, nothing persists an offset, and a fresh process
+> signs nothing until it has asked.** Twenty-four clock domains are declared and
+> three resolve; the other twenty-one fail closed naming the registry's own
+> recorded status, because a path is never guessed. See
+> [`docs/engineering/CLOCK_DISCIPLINE.md`](docs/engineering/CLOCK_DISCIPLINE.md).
 >
 > **Phase 028 built the secret store, and measured what Windows would not tell it.**
 > The Credential Manager, reached through `ctypes` with no new dependency: a reference
@@ -195,12 +205,15 @@ the contract:
 > records what that changes about the threat model, which is more than it changes
 > about the settings.
 
-> **Scope amendments.** Nineteen have been made. Each cost an ADR, and each is
+> **Scope amendments.** Twenty have been made. Each cost an ADR, and each is
 > recorded here so that the programme's history is visible without opening the
 > decision log. Band ranges, phase numbers and the sixteen-phase band width are
-> unchanged by all eighteen. **Two row texts are not**: the eighteenth rewrote
-> rows 034 and 045, which is the first time an amendment has done so and is
-> recorded as an exception rather than as precedent.
+> unchanged by all twenty. **Four row texts are not**: the eighteenth rewrote
+> rows 034 and 045, and the twentieth rewrote rows 036 and 040. The eighteenth
+> recorded its own rewrite as an exception rather than as precedent, and the
+> twentieth is a second departure -- argued on a difference in kind rather than a
+> weakening of the rule, and recorded as such in
+> [ADR-0092](docs/adr/0092-phase-036-widens-to-deliver-the-clock-discipline-layer.md).
 >
 > This count said *seven* while listing eight from Phase 024 until Phase 025
 > repaired it. Nothing tested it, which is why it drifted and why it was worth
@@ -647,6 +660,55 @@ the contract:
 > carries the rule that no product's signing contract may stand in for another's.
 
 
+> **Twentieth.** Phase 036 delivers the multi-product clock discipline layer -- clock
+> domains as a product, environment and protocol triple, an RTT-aware offset estimator
+> that carries its own error bound, a five-state health machine, wall-clock jump
+> detection, a trusted timestamp generator, a central `recvWindow` policy, a
+> seven-gate signing admission and a bounded `-1021` recovery seam.
+>
+> **It delivers nothing of its own title, and that is what makes it different from
+> the three before it.** Row 036 reads *Product and Environment Capability Matrix*,
+> and that subject has already shipped: the seventeenth amendment gave the matrix to
+> Phase 033, and the eighteenth gave the binding refusal to Phase 034's ten
+> resolution gates -- the work ADR-0087 had explicitly left to "Phase 036 makes it
+> binding". So the usual resolution, *deliver both halves*, was not available. There
+> was no second half left to deliver.
+>
+> **It scores two of four**, the same as the three before it. *Nothing deferred*:
+> everything ships in one commit. *The two halves need each other* is recorded as
+> **vacuously met** rather than met, because claiming that two halves need each other
+> when only one exists would be scoring a condition that was never tested. It fails
+> *nothing displaced* and *no phase owns the work* against row **040** *Server Time
+> Synchronization and Drift Control*, which owns this by title and which the package
+> named in eight places.
+>
+> **Rows 036 and 040 are both rewritten**, which is the second departure from the
+> rule the eighteenth amendment set and the nineteenth declined to break. The
+> difference is in kind: the nineteenth declined because row 038's title still
+> covered real open work, and neither row here does. **A displacement note can be
+> honest about work that moved; it cannot be honest about work that no longer
+> exists.** Row 040 takes the subject the sixteenth amendment's granularity review
+> found this programme has no rows for at all -- the running application's substrate.
+>
+> **A defect in Phase 034 was repaired in passing, and it was the useful kind.**
+> Reading `errors.md` for `-1021` -- the first phase to read that document at all --
+> found `-1006 UNEXPECTED_RESP`, documented as *"Execution status unknown"* and
+> classified by GLOBIN as a confirmed failure. That is precisely the fact ADR-0089
+> exists to preserve, and a mutating request answered `-1006` would have been
+> recorded as *did not happen* when the venue had said the opposite.
+>
+> **And the phase's central finding was in a document it had already read.** The
+> venue's timing pseudo-code evaluates the window **twice**, and the second
+> evaluation -- immediately before the Matching Engine -- carries no `+ 1 second`
+> clause. Phase 035 had quoted the whole rule and taken from it only the reason the
+> ceiling matters. Reading it for an implementation makes the asymmetry load-bearing,
+> and it is why GLOBIN refuses rather than widening a window.
+> [ADR-0092](docs/adr/0092-phase-036-widens-to-deliver-the-clock-discipline-layer.md)
+> states the displacement and the rewrite rather than arguing around them, and
+> [ADR-0093](docs/adr/0093-server-time-is-estimated-from-the-lowest-round-trip-and-a-window-is-never-widened.md)
+> carries the estimator and the refusal to widen.
+
+
 ---
 
 ## Phases 001-016 — Repository Foundation and Engineering Contract
@@ -712,11 +774,11 @@ the transport, authentication and rate-limit machinery on top of that reality.
 | 033 | Binance Product Family Inventory | Enumerate the officially documented product families and the surfaces each one exposes; and, as the seventeenth scope amendment, deliver the Binance API reality registry -- production, demo and testnet as distinct kinds, the capability matrix over them, every base URL and endpoint family in one declared document, the SBE and FIX schema lifecycle, six status words that keep *not documented* apart from *documented absent*, and a refresh that classifies drift from official machine-readable sources only. | Complete |
 | 034 | Official Documentation Ingestion and Change Tracking | Complete the ingestion process Phase 033 began -- a declared re-check cadence per source regime, an accumulated change journal across runs, and a breaking-drift acknowledgement ledger that fails in both directions; and, as the eighteenth scope amendment, deliver the REST transport substrate -- endpoint resolution driven solely by the Phase 033 registry, canonical URL and query encoding, a bounded connection lifecycle, JSON and SBE content negotiation, a five-member outcome that preserves *unknown* rather than calling it a failure, redacted diagnostics, public credential-free probes, and deterministic evidence. | Complete |
 | 035 | Environment Classification Model | Model production, testnet, demo and internal simulation as distinct classes with distinct guarantees, including the one no venue publishes; and, as the nineteenth scope amendment, deliver the REST authentication layer -- capability-gated signer selection read from the Phase 033 registry, HMAC, RSA and Ed25519 over the exact bytes that reach the wire, eight fail-closed gates with no algorithm fallback anywhere, and a credential refusal derived from the environment class rather than from a rule. | Complete |
-| 036 | Product and Environment Capability Matrix | Build the authoritative matrix of which products support which environments, driven by documented evidence. | Planned |
+| 036 | Multi-Product Clock Discipline and Signed-Request Timing Admission | Deliver the venue clock layer its own title's subject no longer needed -- the matrix shipped in Phase 033 and its binding refusal in Phase 034. Clock domains per product, environment and protocol; an RTT-aware offset estimated from the lowest round trip and carrying its own error bound; a five-state health machine; wall-clock jump detection against the monotonic clock; a trusted timestamp that only a passing admission can produce; a central `recvWindow` policy that refuses rather than widening; and a bounded, confirmed-outcome-only `-1021` recovery seam. | Complete |
 | 037 | Base URL and Endpoint Registry | Centralise base URLs and endpoint definitions per product and environment with no hard-coded literals. | Planned |
 | 038 | Request Signing and Authentication | Implement the documented signing schemes and keep signing logic isolated and testable. | Planned |
 | 039 | API Key Permission Model and Validation | Verify key permissions and refuse operations the configured key is not entitled to perform. | Planned |
-| 040 | Server Time Synchronization and Drift Control | Implement server time synchronization, drift measurement and the response to excessive clock skew. | Planned |
+| 040 | Runtime Supervision and Component Lifecycle | Give the running application the supervision layer this band has no rows for -- ordered component start-up and shutdown, dependency-aware readiness, restart policy per component and the boundary between a component failing and the process ending. Server time synchronization, drift measurement and the response to excessive clock skew were this row's original subject and shipped in Phase 036; see ADR-0092. | Planned |
 | 041 | Rate Limit Weight Registry | Record the documented request weights and order-count costs for every endpoint the system uses. | Planned |
 | 042 | Rate Limit Governor and Token Buckets | Implement proactive limiting that respects reported usage headers rather than reacting only to rejections. | Planned |
 | 043 | Retry, Backoff and Idempotency Policy | Define which failures are retryable, with what backoff, and which operations require idempotency keys. | Planned |

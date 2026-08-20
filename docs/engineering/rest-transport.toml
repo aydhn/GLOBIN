@@ -146,6 +146,36 @@ ambiguous_when_mutating = true
 reason = "Within the documented 5XX class."
 source = "spot-rest"
 
+# PHASE 036 ADDED TWO ROWS AND ONE OF THEM IS A REPAIR. `-1007` was declared here
+# from `rest-api.md`, which quotes that single code inline. The full table lives in
+# `errors.md`, which no phase had read until Phase 036 needed `-1021`; reading it
+# found `-1006`, whose own documented text ends "Execution status unknown" and which
+# GLOBIN was classifying as a confirmed failure. That is the exact fact ADR-0089
+# exists to preserve, so the row is a defect repair rather than new scope.
+
+[[exchange_code]]
+code = -1006
+name = "UNEXPECTED_RESP"
+ambiguous_when_mutating = true
+reason = """Quoted: "An unexpected response was received from the message bus. Execution status unknown." The venue is describing UNKNOWN in its own words, so this row is a transcription rather than a judgement -- the same basis as -1007."""
+source = "spot-errors"
+
+# -1021 IS DECLARED UNAMBIGUOUS, AND THAT IS THE DECISION THIS ROW EXISTS TO RECORD.
+# The venue's `Timing security` pseudo-code rejects an out-of-window request at the
+# gate, and the second evaluation happens BEFORE the request is forwarded to the
+# Matching Engine. Nothing was at stake in either branch, which is the same reading
+# that keeps 403, 418 and 429 out of the ambiguous status table. Marking it ambiguous
+# would be unsafe rather than cautious: `globin.domain.clock_sync` permits its bounded
+# one-shot recovery only on a CONFIRMED outcome, so an ambiguous -1021 would make the
+# one timing failure that is always safe to re-send permanently unretryable.
+
+[[exchange_code]]
+code = -1021
+name = "INVALID_TIMESTAMP"
+ambiguous_when_mutating = false
+reason = """Quoted, both documented messages: "Timestamp for this request is outside of the recvWindow." and "Timestamp for this request was 1000ms ahead of the server's time." Both are refusals at the timing gate before the Matching Engine, so the request provably did not take effect."""
+source = "spot-errors"
+
 [[exchange_code]]
 code = -1007
 name = "TIMEOUT"

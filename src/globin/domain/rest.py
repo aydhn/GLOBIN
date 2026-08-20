@@ -156,15 +156,35 @@ and declaration order survives, which makes the table read as the documentation
 does.
 """
 
-AMBIGUOUS_EXCHANGE_CODES: Final[tuple[int, ...]] = (-1007,)
+AMBIGUOUS_EXCHANGE_CODES: Final[tuple[int, ...]] = (-1006, -1007)
 """Venue error codes after which a side-effecting operation's fate is not known.
 
-``-1007`` is Binance's ``TIMEOUT``, documented as *"Timeout waiting for response
-from backend server. Send status unknown; execution status unknown."* The venue is
-saying in its own error text exactly what :attr:`RequestOutcome.UNKNOWN` means, so
-this is a transcription rather than a judgement.
+Both are transcriptions rather than judgements: the venue says in its own error
+text exactly what :attr:`RequestOutcome.UNKNOWN` means.
 
-Checked *before* the HTTP status, because ``-1007`` can accompany more than one
+``-1006``
+    ``UNEXPECTED_RESP``, documented as *"An unexpected response was received from
+    the message bus. Execution status unknown."*
+``-1007``
+    ``TIMEOUT``, documented as *"Timeout waiting for response from backend server.
+    Send status unknown; execution status unknown."*
+
+**``-1006`` was missing until Phase 036, and its absence was a defect rather than a
+decision.** Phase 034 declared ``-1007`` from ``rest-api.md``, which quotes that one
+code inline; the full table lives in ``errors.md``, which no phase had read until
+Phase 036 needed ``-1021`` from it. A venue code whose own text ends *"Execution
+status unknown"* and which GLOBIN classified as a confirmed failure is precisely the
+loss of the fact ADR-0089 exists to preserve. See
+``docs/research/phase_036_sources.md`` S-01.
+
+**``-1021`` is deliberately not here.** It is a timing rejection at the gate, before
+the Matching Engine, so nothing was at stake — the same reading that keeps 403, 418
+and 429 out of :data:`AMBIGUOUS_STATUSES`. Marking it ambiguous would make the one
+always-safe timing failure permanently unretryable, because
+:mod:`globin.domain.clock_sync` permits its bounded recovery only on a *confirmed*
+outcome.
+
+Checked *before* the HTTP status, because either code can accompany more than one
 status and the code is the more specific statement.
 """
 
@@ -276,7 +296,8 @@ class TimeUnitPreference(StrEnum):
     is what it *asked for*, alongside the answer.
 
     **This is not clock synchronisation.** No offset is computed, no drift is
-    measured and no clock is read. Phase 040 owns that.
+    measured and no clock is read here. Phase 036 owns that, in
+    :mod:`globin.domain.clock_sync`, and reads its clocks through ports.
     """
 
     PROVIDER_DEFAULT = "provider_default"

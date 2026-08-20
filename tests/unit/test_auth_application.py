@@ -72,6 +72,7 @@ from globin.domain.secrets import (
     StoreFault,
 )
 from globin.errors import ValidationError
+from tests.support import signing_timing
 
 # ---------------------------------------------------------------------------
 # Doubles
@@ -386,8 +387,7 @@ def test_gate_1_runs_before_anything_reads_a_credential() -> None:
             method=HttpMethod.GET,
             path="/v3/account",
             parameters=QueryParameters(),
-            moment=instant(datetime(2026, 8, 19, tzinfo=UTC)),
-            policy=AuthPolicy(),
+            timing=signing_timing(instant(datetime(2026, 8, 19, tzinfo=UTC))),
             store=store,
             signer=StubSigner(),
         )
@@ -525,8 +525,7 @@ def _sign(
         "method": HttpMethod.GET,
         "path": "/v3/account",
         "parameters": QueryParameters(items=(("omitZeroBalances", True),)),
-        "moment": instant(datetime(2017, 7, 12, 2, 41, 59, 559000, tzinfo=UTC)),
-        "policy": AuthPolicy(),
+        "timing": signing_timing(instant(datetime(2017, 7, 12, 2, 41, 59, 559000, tzinfo=UTC))),
         "store": store or StubStore({"venue_key": "an-identifier", "venue_secret": "a-secret"}),
         "signer": signer or StubSigner(),
     }
@@ -572,7 +571,12 @@ def test_the_api_key_reaches_the_header_and_not_the_query() -> None:
 
 def test_a_microsecond_policy_stamps_microseconds() -> None:
     """Both units the venue documents, chosen by configuration rather than inferred."""
-    outcome = _sign(policy=AuthPolicy(timestamp_unit=TimestampUnit.MICROSECONDS))
+    outcome = _sign(
+        timing=signing_timing(
+            instant(datetime(2017, 7, 12, 2, 41, 59, 559000, tzinfo=UTC)),
+            unit=TimestampUnit.MICROSECONDS,
+        )
+    )
     assert outcome.request is not None
     assert outcome.request.timestamp == 1499827319559000
     assert outcome.request.timestamp_unit is TimestampUnit.MICROSECONDS
@@ -580,7 +584,12 @@ def test_a_microsecond_policy_stamps_microseconds() -> None:
 
 def test_a_configured_window_reaches_the_request() -> None:
     """Including its scale, because the venue sees the rendering."""
-    outcome = _sign(policy=AuthPolicy(recv_window=RecvWindow(Decimal("6000.346"))))
+    outcome = _sign(
+        timing=signing_timing(
+            instant(datetime(2017, 7, 12, 2, 41, 59, 559000, tzinfo=UTC)),
+            recv_window=RecvWindow(Decimal("6000.346")),
+        )
+    )
     assert outcome.request is not None
     assert "recvWindow=6000.346" in outcome.request.signed_span
 

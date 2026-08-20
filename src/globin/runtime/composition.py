@@ -47,6 +47,7 @@ from globin.adapters.bootstrap import (
     write,
 )
 from globin.adapters.clock import SystemClock, SystemMonotonicClock
+from globin.adapters.clock_sync import ClockManager, RestServerTimeSource, discipline_from
 from globin.adapters.configuration import (
     CliConfigurationSource,
     EnvironmentConfigurationSource,
@@ -149,6 +150,7 @@ from globin.application.secrets import ProviderRoutedStore
 from globin.application.support import BundleBuilder, Candidate
 from globin.application.telemetry import MetricStore, metric_store
 from globin.application.watchdog import RuntimeWatchdog
+from globin.domain.api_reality import ApiRealitySnapshot
 from globin.domain.bootstrap import (
     BootstrapOutcome,
     ProjectIdentity,
@@ -174,6 +176,7 @@ from globin.domain.diagnostics import MAXIMUM_BACKUP_COUNT
 from globin.domain.entitlements import required_credentials, required_references
 from globin.domain.preflight import PreflightOutcome, PreflightSuite, build_suite
 from globin.domain.provisioning import NetworkPolicy, ProvisioningPlan
+from globin.domain.rest_contract import TransportContract
 from globin.domain.runtime_state import (
     INSTANCE_FILE,
     LIFECYCLE_FILE,
@@ -190,10 +193,11 @@ from globin.domain.support import ArtifactKind, safe_member_name
 from globin.domain.watchdog import WatchdogEpisode
 from globin.errors import ConfigurationError, InternalError
 from globin.ports.api_reality import ApiRealitySource
-from globin.ports.clock import Clock, MonotonicClock
+from globin.ports.clock import Clock, MonotonicClock, ServerTimeSource
 from globin.ports.configuration import ConfigurationSource
 from globin.ports.entitlements import GrantRegister
 from globin.ports.provisioning import CapabilityProbe, ProcessRunner
+from globin.ports.rest import RestTransport
 from globin.ports.runtime_state import ShutdownSignals
 from globin.ports.secret_entry import SecretEntry
 from globin.ports.secrets import SecretStore
@@ -523,12 +527,92 @@ def build_monotonic_clock() -> MonotonicClock:
     Returns:
         A :class:`~globin.adapters.clock.SystemMonotonicClock`.
 
-    Nothing in GLOBIN measures an elapsed interval yet. This exists because
-    ``ROADMAP.md`` gives Phase 009 "monotonic clocks" by name, and because the
-    decision worth fixing now is *which* guarantee an elapsed measurement rests
-    on — not the first call site, which arrives with the code that needs it.
+    **Phase 036 gave this its second consumer, and the first that depends on the
+    guarantee rather than merely on the resolution.** Phase 034's transport uses it
+    to time a request; :func:`globin.application.clock_sync.take_sample` uses it to
+    bound a clock offset, which means an interval that a wall clock could have
+    stepped through would produce a *wrong estimate* rather than a wrong log line.
     """
     return SystemMonotonicClock()
+
+
+def build_server_time_source(
+    transport: RestTransport,
+    snapshot: ApiRealitySnapshot,
+    contract: TransportContract,
+    *,
+    stale_sources: Sequence[str] = (),
+) -> ServerTimeSource:
+    """How GLOBIN asks a venue what time it is, as the port.
+
+    Args:
+        transport: Phase 034's REST transport. The only object here that reaches a
+            socket.
+        snapshot: Phase 033's registry, the only source of endpoints.
+        contract: The declared transport contract, the only source of paths.
+        stale_sources: Source identifiers past their re-check interval.
+
+    Returns:
+        A :class:`~globin.adapters.clock_sync.RestServerTimeSource`.
+
+    The return type is the **port**, so this function stays the only place in the
+    tree that names the concrete source — the property :func:`build_clock` has, and
+    what lets a WebSocket implementation arrive later with no caller changing.
+    """
+    return RestServerTimeSource(
+        transport=transport,
+        snapshot=snapshot,
+        contract=contract,
+        correlation=new_correlation_id,
+        stale_sources=tuple(stale_sources),
+    )
+
+
+def build_clock_manager(
+    source: ServerTimeSource,
+    *,
+    config: GlobinConfig | None = None,
+    clock: Clock | None = None,
+    monotonic: MonotonicClock | None = None,
+) -> ClockManager:
+    """The thing that holds one calibration per clock domain.
+
+    Args:
+        source: How the venue is asked.
+        config: The resolved configuration, or ``None`` for the declared defaults.
+        clock: The host's wall clock, or ``None`` to build one.
+        monotonic: The host's monotonic clock, or ``None`` to build one.
+
+    Returns:
+        The manager, holding no calibration for any domain.
+
+    Raises:
+        ValidationError: If the configured thresholds contradict each other. That
+            refusal comes from :class:`~globin.domain.clock_sync.ClockDiscipline`,
+            so an operator's configuration is judged by the same rules a default is
+            — and it happens here, at composition, rather than at the first request.
+
+    **Both clocks default to real ones and neither is read here.** Constructing an
+    adapter is not reading it, which is why
+    ``tests/architecture/test_clock_discipline.py`` permits the runtime layer to
+    build one and still finds no clock call in this module.
+    """
+    settings = (config or default_config()).clock
+    return ClockManager(
+        source=source,
+        clock=clock or build_clock(),
+        monotonic=monotonic or build_monotonic_clock(),
+        discipline=discipline_from(
+            sample_count=settings.sample_count,
+            freshness_ttl_millis=settings.freshness_ttl_millis,
+            degraded_grace_millis=settings.degraded_grace_millis,
+            max_round_trip_millis=settings.max_round_trip_millis,
+            max_uncertainty_millis=settings.max_uncertainty_millis,
+            max_offset_jump_millis=settings.max_offset_jump_millis,
+            max_wall_divergence_millis=settings.max_wall_divergence_millis,
+            network_budget_millis=settings.network_budget_millis,
+        ),
+    )
 
 
 def build_codec() -> Codec:

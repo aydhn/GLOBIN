@@ -98,6 +98,20 @@ def _contract(**overrides: object) -> TransportContract:
         "statuses": statuses,
         "exchange_codes": (
             StatusRule(
+                code=-1006,
+                meaning="UNEXPECTED_RESP",
+                ambiguous_when_mutating=True,
+                reason="y",
+                source="s",
+            ),
+            StatusRule(
+                code=-1021,
+                meaning="INVALID_TIMESTAMP",
+                ambiguous_when_mutating=False,
+                reason="y",
+                source="s",
+            ),
+            StatusRule(
                 code=-1007,
                 meaning="TIMEOUT",
                 ambiguous_when_mutating=True,

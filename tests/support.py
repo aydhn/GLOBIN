@@ -24,8 +24,11 @@ from typing import Final, NamedTuple
 
 import pytest
 
+from globin.domain.api_reality import EnvironmentName, ProductFamily, ProtocolKind
 from globin.domain.architecture import LAYER_ORDER, ArchitectureContract, Layer, LayerPolicy
+from globin.domain.auth_timing import RecvWindow, TimestampUnit, default_recv_window
 from globin.domain.clock import Duration, Instant, MonotonicReading, instant_from_epoch_millis
+from globin.domain.clock_sync import ClockDomain, TimingContext, corrected_stamp
 from globin.domain.configuration import ResolvedConfig, config_layer, default_layer, resolve
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
@@ -437,6 +440,63 @@ class ManualMonotonicClock:
         answer = self.current
         self.current = MonotonicReading(answer.nanoseconds + self.step.nanoseconds)
         return answer
+
+
+def signing_timing(
+    moment: Instant,
+    *,
+    unit: TimestampUnit = TimestampUnit.MILLISECONDS,
+    recv_window: RecvWindow | None = None,
+    offset_micros: int = 0,
+    uncertainty_micros: int = 0,
+    round_trip_micros: int = 0,
+    attempt: int = 0,
+    family: str = "spot",
+    environment: str = "testnet",
+) -> TimingContext:
+    """A timing context for a test that is not about the clock.
+
+    Args:
+        moment: The host's wall clock.
+        unit: Which unit the timestamp carries.
+        recv_window: The validity window, or ``None`` for the documented default.
+        offset_micros: How far ahead the venue is assumed to be.
+        uncertainty_micros: The error bound to record.
+        round_trip_micros: The round trip to record.
+        attempt: Which attempt this is.
+        family: Which product family the clock domain names.
+        environment: Which environment it names.
+
+    Returns:
+        The context.
+
+    **The default offset is zero, and that is what keeps Phase 035's regression
+    tests meaning what they meant.** With no correction,
+    :func:`~globin.domain.clock_sync.corrected_stamp` is exactly the projection
+    :attr:`~globin.domain.clock.Instant.epoch_millis` performs, so the published
+    signature vectors reproduce byte for byte against the same moment they always
+    did.
+
+    This deliberately bypasses :func:`~globin.domain.clock_sync.admit`. A test
+    about *signing* should not have to construct a healthy calibration to get a
+    timestamp, and a test about *admission* builds one properly — see
+    ``tests/unit/test_clock_admission.py``, which is where the rule that only an
+    admission may produce one of these is actually asserted.
+    """
+    return TimingContext(
+        domain=ClockDomain(
+            family=ProductFamily(family),
+            environment=EnvironmentName(environment),
+            protocol=ProtocolKind.REST,
+        ),
+        timestamp=corrected_stamp(moment, offset_micros, unit),
+        unit=unit,
+        recv_window=recv_window or default_recv_window(),
+        offset_micros=offset_micros,
+        uncertainty_micros=uncertainty_micros,
+        round_trip_micros=round_trip_micros,
+        attempt=attempt,
+    )
 
 
 def git_committable_files() -> tuple[str, ...]:

@@ -248,8 +248,14 @@ def test_the_adapters_satisfy_the_ports() -> None:
 
 
 def test_the_document_names_the_phases_it_defers_to(policy: str) -> None:
-    """A deferral with no owner is a gap wearing a promise."""
-    for phase in ("010", "011", "012", "040"):
+    """A deferral with no owner is a gap wearing a promise.
+
+    Phase 036 replaced 040 in this tuple when it delivered server-time
+    synchronisation. The row is still checked -- it now names the phase that *did*
+    the work rather than one that would, which is the same requirement: a reader
+    following the deferral must land somewhere real.
+    """
+    for phase in ("010", "011", "012", "036"):
         assert phase in policy, phase
 
 

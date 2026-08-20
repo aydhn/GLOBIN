@@ -22,6 +22,7 @@ from globin.domain.bootstrap import ExitCode
 from globin.domain.clock import Instant, MonotonicReading, instant_from_epoch_millis
 from globin.domain.configuration import (
     AuthConfig,
+    ClockConfig,
     DiagnosticsConfig,
     DiagnosticsHttpConfig,
     GlobinConfig,
@@ -94,6 +95,7 @@ def settings() -> GlobinConfig:
         telemetry=TelemetryConfig(),
         diagnostics_http=DiagnosticsHttpConfig(),
         auth=AuthConfig(),
+        clock=ClockConfig(),
     )
 
 

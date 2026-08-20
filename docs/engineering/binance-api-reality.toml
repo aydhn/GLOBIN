@@ -213,6 +213,23 @@ known_unparseable = true
 notes = "Does not parse: a trailing comma closes the deprecated array."
 accessed = "2026-08-19"
 
+# Added in Phase 036, and it repaired a row Phase 034 had already written. The
+# transport contract declared -1007 as ambiguous, quoted from `rest-api.md`, which
+# mentions that one code inline. THE FULL ERROR TABLE IS HERE, and no phase had read
+# it. Reading it for -1021 also found -1006 UNEXPECTED_RESP, whose documented text
+# ends "Execution status unknown" and which GLOBIN was classifying as a confirmed
+# failure -- the exact fact ADR-0089 exists to preserve. See
+# `docs/research/phase_036_sources.md` S-01.
+[[source]]
+id = "spot-errors"
+title = "Binance Spot error codes"
+location = "https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/errors.md"
+authority = "primary"
+regime = "digest"
+digest = "sha256:5e3a9a7bda255e0177f2928bcb68ea09cf5b73a45186756d008bdf7afc3f10f9"
+notes = "The full error-code table, including -1021 INVALID_TIMESTAMP and -1006."
+accessed = "2026-08-20"
+
 [[source]]
 id = "spot-enums"
 title = "Binance Spot enumerations"

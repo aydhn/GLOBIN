@@ -27,7 +27,7 @@ it — the same shape [`run_probe`](../../src/globin/application/rest.py) uses t
 hardcode `PUBLIC` and `READ_ONLY`.
 
 **It does not synchronise a clock.** The venue's own processing rule is written in
-terms of `serverTime`, which GLOBIN does not have. Phase 040 owns that, and the
+terms of `serverTime`, which GLOBIN did not have. Phase 036 owns that, and the
 seam it plugs into is [`ports/clock.py`](../../src/globin/ports/clock.py), which
 already says *"a clock that reports Binance's server time can honestly implement
 `Clock`"*.
@@ -204,7 +204,7 @@ rather than being clamped into something nobody wrote.
 
 The venue's processing rule is recorded in the source ledger and **not
 implemented**: it names `serverTime`, and estimating one here would be building
-Phase 040 early.
+Phase 036 early. It is built there now — see [`CLOCK_DISCIPLINE.md`](CLOCK_DISCIPLINE.md).
 
 ---
 

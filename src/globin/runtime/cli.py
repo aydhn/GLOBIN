@@ -47,6 +47,14 @@ from globin.adapters.bootstrap import (
     build,
     find_project_root,
 )
+from globin.adapters.clock_sync import (
+    CONTRACT_RELATIVE_PATH as CLOCK_CONTRACT_PATH,
+)
+from globin.adapters.clock_sync import (
+    ClockManager,
+    discipline_from,
+    read_clock_contract,
+)
 from globin.adapters.config_evidence import build as build_config_manifest
 from globin.adapters.config_evidence import publish_snapshot, read_snapshot
 from globin.adapters.config_evidence import write as write_config_manifest
@@ -78,6 +86,13 @@ from globin.adapters.telemetry_otel import opentelemetry_bridge
 from globin.adapters.telemetry_prometheus import prometheus_publisher
 from globin.application.auth import AuthPolicy, AuthResolution, resolve_auth
 from globin.application.auth import self_test as auth_self_test
+from globin.application.clock_sync import (
+    CalibrationOutcome,
+    DomainAvailability,
+    declared_domains,
+    status_summary,
+)
+from globin.application.clock_sync import self_test as clock_self_test
 from globin.application.provisioning import ProvisioningOutcome, ProvisioningProposal
 from globin.application.rest import (
     resolution_report,
@@ -97,6 +112,7 @@ from globin.domain.api_reality import (
     ApiRealitySnapshot,
     EnvironmentName,
     ProductFamily,
+    ProtocolKind,
     SurfaceCapability,
     SurfaceStatus,
 )
@@ -105,6 +121,19 @@ from globin.domain.auth import PHASE as AUTH_PHASE
 from globin.domain.auth import SecurityType
 from globin.domain.auth_timing import TimestampUnit, parse_recv_window
 from globin.domain.bootstrap import BootstrapOutcome, CheckStatus, ExitCode, RuntimePaths
+from globin.domain.clock_sync import (
+    INVALID_TIMESTAMP_CODE,
+    MAX_TIMING_RETRIES,
+    OFFSET_BUCKET_BOUNDS_MILLIS,
+    ROUND_TRIP_BUCKET_BOUNDS_MILLIS,
+    ClockDiscipline,
+    ClockDomain,
+    ClockStatus,
+    SyncState,
+    evaluate,
+    offset_bucket,
+    round_trip_bucket,
+)
 from globin.domain.config_evidence import (
     ConfigProvenance,
     compare,
@@ -169,6 +198,7 @@ from globin.domain.secrets import (
 )
 from globin.errors import ConfigurationError, GlobinError, InternalError, ValidationError
 from globin.ports.entitlements import GrantRegister
+from globin.ports.rest import RestTransport
 from globin.ports.secret_entry import SecretEntry
 from globin.ports.secrets import SecretStore
 from globin.project_contract import PROJECT_NAME
@@ -192,6 +222,7 @@ from globin.runtime.composition import (
     build_secret_entry,
     build_secret_providers,
     build_secret_store,
+    build_server_time_source,
     bundle_candidates,
     project_identity,
     resolve_run_profile,
@@ -385,6 +416,38 @@ SELFTEST: Final[str] = "selftest"
 
 AUTH: Final[str] = "auth"
 """The command group Phase 035 added, and the first that could present a credential."""
+
+CLOCK: Final[str] = "clock"
+"""The command group Phase 036 added: what GLOBIN believes the venue's time is."""
+
+DOMAINS: Final[str] = "domains"
+"""Every clock domain the registry declares, and whether each can be asked."""
+
+STATUS: Final[str] = "status"
+"""What is known about one clock domain, or all of them. Reaches nothing."""
+
+CALIBRATE: Final[str] = "calibrate"
+"""One public server-time exchange, turned into an offset. Reaches the venue."""
+
+CLOCK_SUBCOMMANDS: Final[tuple[str, ...]] = (DOMAINS, STATUS, CALIBRATE, SELFTEST, EVIDENCE)
+"""Every verb the clock surface answers, and no sixth.
+
+Four read and one reaches the venue. **The verb is the opt-in**, matching `rest`
+and `auth`: there is no `--network` flag to forget, because a command that only
+makes sense over a network says so in its name.
+
+There is no `set`, no `adjust` and no `correct`. GLOBIN never writes the host
+clock -- `clock-contract.toml` declares that prohibition and a contract test
+asserts it -- so a verb for it would be a verb with nothing to do.
+"""
+
+CLOCK_SURFACE_SUBCOMMANDS: Final[tuple[str, ...]] = (STATUS, CALIBRATE)
+"""The verbs that may name one domain. Unlike `rest`, both accept naming none.
+
+`status` over every declared domain is the report an operator wants first, and
+`calibrate` with no family is refused separately -- see :func:`_parse_clock`,
+where naming nothing would mean reaching every venue environment at once.
+"""
 
 CLASSES: Final[str] = "classes"
 """What each environment class guarantees."""
@@ -628,6 +691,20 @@ Commands:
                         --environment; never falls back between them.
   rest server-time      One public, read-only server-time request. REACHES
                         THE VENUE, and synchronises no clock.
+  clock domains         Every clock domain the registry declares, and whether
+                        each one can be calibrated at all. Opens nothing.
+  clock status          What GLOBIN believes about each venue clock: its state,
+                        the age of its calibration, and a bucketed round trip.
+                        Opens nothing; a fresh process reports uninitialized.
+                        Exits 3 when nothing has been established, 1 when a
+                        clock is unsynchronized.
+  clock calibrate       One public, read-only server-time exchange, turned into
+                        an offset with a stated error bound. REACHES THE VENUE.
+                        Needs --family and --environment. Sets no host clock.
+  clock selftest        The clock layer against its own rules and against the
+                        venue's published timing rule. Reaches nothing.
+                        Exits 1 on a mismatch.
+  clock evidence        Write .globin/clock/clock-manifest.json.
   diagnostics snapshot  Measure this runtime once and report its health.
   diagnostics bundle    Write a redacted support archive and print its digest.
   diagnostics memory    Snapshot with the allocator tracer on, then off again.
@@ -826,6 +903,8 @@ def parse(argv: Sequence[str]) -> Invocation:
         return _parse_rest(words[1:])
     if head == AUTH:
         return _parse_auth(words[1:])
+    if head == CLOCK:
+        return _parse_clock(words[1:])
     msg = f"unrecognised argument: {head!r}"
     raise UsageError(msg)
 
@@ -1216,6 +1295,12 @@ def main(
         except GlobinError as fault:
             print(f"globin: the authentication surface could not answer: {fault}", file=err)
             return int(ExitCode.CONFIGURATION_INVALID)
+    if invocation.command.startswith(CLOCK):
+        try:
+            return _clock(invocation, out=out, err=err, start=start)
+        except (GlobinError, OSError) as fault:
+            print(f"globin: the clock surface could not answer: {fault}", file=err)
+            return int(ExitCode.GATE_FAILED)
     if invocation.command.startswith(REST):
         try:
             return _rest(invocation, out=out, err=err, start=start)
@@ -3480,6 +3565,54 @@ def _parse_auth(rest: Sequence[str]) -> Invocation:
     )
 
 
+def _parse_clock(rest: Sequence[str]) -> Invocation:
+    """Read what follows ``clock``.
+
+    Args:
+        rest: The remaining words.
+
+    Returns:
+        The invocation.
+
+    Raises:
+        UsageError: If the subcommand is unrecognised, if ``calibrate`` names no
+            surface, or if an option appears where it means nothing.
+
+    **``calibrate`` requires both flags and ``status`` does not**, which is the one
+    asymmetry here and it is deliberate. Reading what GLOBIN already believes about
+    every domain costs nothing and is the report an operator wants first;
+    calibrating every domain would open one connection per venue environment from a
+    single unqualified word. A command that reaches a network says which network.
+    """
+    words = list(rest)
+    subcommand = STATUS
+    if words and not words[0].startswith("-"):
+        subcommand = words.pop(0)
+        if subcommand not in CLOCK_SUBCOMMANDS:
+            msg = f"unrecognised argument: {subcommand!r}"
+            raise UsageError(msg)
+    options = _rest_options(words, subcommand)
+    if subcommand == CALIBRATE:
+        if not options.family:
+            msg = f"{CLOCK} {subcommand} needs {FAMILY_FLAG}"
+            raise UsageError(msg)
+        if not options.environment:
+            msg = f"{CLOCK} {subcommand} needs {ENVIRONMENT_FLAG}"
+            raise UsageError(msg)
+    elif subcommand not in CLOCK_SURFACE_SUBCOMMANDS and (options.family or options.environment):
+        msg = (
+            f"{CLOCK} {subcommand} names no single surface, so {FAMILY_FLAG} and "
+            f"{ENVIRONMENT_FLAG} mean nothing here"
+        )
+        raise UsageError(msg)
+    return Invocation(
+        command=f"{CLOCK} {subcommand}",
+        as_json=options.as_json,
+        family=options.family,
+        environment=options.environment,
+    )
+
+
 def _parse_rest(rest: Sequence[str]) -> Invocation:
     """Read what follows ``rest``.
 
@@ -4007,6 +4140,478 @@ def _auth_evidence(
     print(f"auth: wrote {target}", file=out)
     sound = report.passed and not disagreements(declared)
     return int(ExitCode.OK if sound else ExitCode.GATE_FAILED)
+
+
+CLOCK_SCHEMA: Final[str] = "globin.clock"
+"""What the clock surface calls its own documents."""
+
+CLOCK_SCHEMA_VERSION: Final[int] = 1
+"""The version of that shape."""
+
+CLOCK_PHASE: Final[int] = 36
+"""Which phase delivered the clock discipline layer."""
+
+CLOCK_EVIDENCE_DIRECTORY: Final[str] = "clock"
+"""Where the clock manifest is written, under `.globin/`."""
+
+
+def _clock_discipline(config: GlobinConfig) -> ClockDiscipline:
+    """Turn the configured thresholds into the discipline the gates read.
+
+    Args:
+        config: The resolved configuration.
+
+    Returns:
+        The discipline.
+
+    Raises:
+        ValidationError: If the thresholds contradict each other, which
+            :class:`~globin.domain.clock_sync.ClockDiscipline` refuses. The command
+            surface reports that as ``14``, because an operator wrote it.
+    """
+    settings = config.clock
+    return discipline_from(
+        sample_count=settings.sample_count,
+        freshness_ttl_millis=settings.freshness_ttl_millis,
+        degraded_grace_millis=settings.degraded_grace_millis,
+        max_round_trip_millis=settings.max_round_trip_millis,
+        max_uncertainty_millis=settings.max_uncertainty_millis,
+        max_offset_jump_millis=settings.max_offset_jump_millis,
+        max_wall_divergence_millis=settings.max_wall_divergence_millis,
+        network_budget_millis=settings.network_budget_millis,
+    )
+
+
+def _clock(invocation: Invocation, *, out: TextIO, err: TextIO, start: Path | None) -> int:
+    """Report what GLOBIN believes about the venue's clocks, and optionally ask one.
+
+    Args:
+        invocation: What was asked for.
+        out: Where the report goes.
+        err: Where human text goes under ``--json``.
+        start: Where to begin the search for the project root.
+
+    Returns:
+        The exit code. ``3`` when nothing has been established, ``14`` when the
+        configuration will not bind, ``1`` when a clock is unsynchronized or a check
+        failed, ``0`` otherwise.
+
+    **The exit codes are the health triad every gate here already speaks**, and no
+    twenty-sixth code is added. ``0`` is synchronized, ``3`` is *nothing was
+    established* — the same answer ``drift`` gives for an unrecorded baseline and
+    the honest verdict for a fresh process that has calibrated nothing — and ``1``
+    is a measured bad state. **26 stays free.**
+    """
+    sources = build_config_sources(
+        find_project_root(Path.cwd() if start is None else start),
+        resolve_run_profile(invocation.profile or None),
+        explicit=_explicit_document(invocation),
+        overrides=parse_overrides(invocation.overrides),
+    )
+    config = as_config(resolve_settings(sources))
+    discipline = _clock_discipline(config)
+    subcommand = invocation.command.removeprefix(f"{CLOCK} ")
+
+    if subcommand == SELFTEST:
+        return _clock_selftest(discipline, out=out, as_json=invocation.as_json)
+
+    snapshot, contract, policy = _rest_sources(start)
+    if snapshot is None or contract is None or policy is None:
+        print("globin: the registry, contract or ingestion policy is absent", file=err)
+        return int(ExitCode.UNMEASURED)
+    freshness = _rest_freshness(snapshot, policy)
+    availability = declared_domains(snapshot, contract, stale_sources=freshness.stale)
+
+    if subcommand == DOMAINS:
+        return _clock_domains(availability, out=out, as_json=invocation.as_json)
+    if subcommand == EVIDENCE:
+        return _clock_evidence(discipline, availability, config, out=out, start=start)
+    if subcommand == CALIBRATE:
+        return _clock_calibrate(
+            snapshot,
+            contract,
+            discipline,
+            availability,
+            invocation,
+            freshness_stale=freshness.stale,
+            out=out,
+            err=err,
+        )
+    return _clock_status(discipline, availability, invocation, out=out, as_json=invocation.as_json)
+
+
+def _clock_manager(
+    snapshot: ApiRealitySnapshot,
+    contract: TransportContract,
+    discipline: ClockDiscipline,
+    transport: RestTransport,
+    stale: Sequence[str],
+) -> ClockManager:
+    """Build a manager over one transport.
+
+    Args:
+        snapshot: Phase 033's registry.
+        contract: The declared transport contract.
+        discipline: The thresholds.
+        transport: How a request is sent.
+        stale: Source identifiers past their re-check interval.
+
+    Returns:
+        The manager, holding no calibration.
+    """
+    return ClockManager(
+        source=build_server_time_source(transport, snapshot, contract, stale_sources=stale),
+        clock=build_clock(),
+        monotonic=build_monotonic_clock(),
+        discipline=discipline,
+    )
+
+
+def _clock_domains(
+    availability: Sequence[DomainAvailability], *, out: TextIO, as_json: bool
+) -> int:
+    """List every declared clock domain and whether it can be asked.
+
+    Args:
+        availability: One entry per declared product-and-environment pair.
+        out: Where the report goes.
+        as_json: Whether JSON was asked for.
+
+    Returns:
+        ``0`` when at least one domain can be calibrated, ``3`` otherwise.
+
+    **A registry in which nothing is reachable is ``3`` rather than ``1``.** Nothing
+    is wrong with GLOBIN in that case; nothing has been established about any venue
+    clock, which is the same distinction ``drift`` draws for a missing baseline.
+    """
+    usable = [item for item in availability if item.available]
+    document: dict[str, object] = {
+        "schema": CLOCK_SCHEMA,
+        "schema_version": CLOCK_SCHEMA_VERSION,
+        "domains": [item.as_record() for item in availability],
+        "declared": len(availability),
+        "available": len(usable),
+        "unavailable": len(availability) - len(usable),
+    }
+    lines = [
+        "clock domains",
+        "",
+        f"  declared    {len(availability)}",
+        f"  available   {len(usable)}",
+        f"  unavailable {len(availability) - len(usable)}",
+        "",
+    ]
+    for item in availability:
+        mark = "OK  " if item.available else "--  "
+        lines.append(f"  {mark}{item.domain.label}")
+        lines.append(f"        {item.detail or item.resolution}")
+    _emit(document, "\n".join(lines), out=out, as_json=as_json)
+    return int(ExitCode.OK if usable else ExitCode.UNMEASURED)
+
+
+def _clock_status(
+    discipline: ClockDiscipline,
+    availability: Sequence[DomainAvailability],
+    invocation: Invocation,
+    *,
+    out: TextIO,
+    as_json: bool,
+) -> int:
+    """Report what GLOBIN believes about each clock, having asked nothing.
+
+    Args:
+        discipline: The thresholds.
+        availability: One entry per declared domain.
+        invocation: What was asked for, which may name one surface.
+        out: Where the report goes.
+        as_json: Whether JSON was asked for.
+
+    Returns:
+        ``3`` when no domain has ever been calibrated, ``1`` when one is
+        unsynchronized, ``0`` otherwise.
+
+    **This command opens nothing, so on a fresh process every domain is
+    ``uninitialized`` and the exit code is ``3``.** That is the correct answer
+    rather than a limitation: a clock offset lives in one process's memory and
+    nothing persists it, so a separate ``globin clock status`` invocation has by
+    construction never calibrated anything. What it reports is the *policy* and the
+    *reachability*, which is what an operator can act on without touching a venue.
+    """
+    wanted = [
+        item
+        for item in availability
+        if (not invocation.family or item.domain.family.slug == invocation.family)
+        and (not invocation.environment or item.domain.environment.slug == invocation.environment)
+    ]
+    statuses = [
+        evaluate(item.domain, samples=(), age=None, discipline=discipline) for item in wanted
+    ]
+    summary = status_summary(statuses)
+    document: dict[str, object] = {
+        "schema": CLOCK_SCHEMA,
+        "schema_version": CLOCK_SCHEMA_VERSION,
+        "discipline": discipline.as_record(),
+        "availability": [item.as_record() for item in wanted],
+        **summary,
+    }
+    counts = summary["counts"]
+    lines = [
+        "clock status",
+        "",
+        f"  domains       {len(statuses)}",
+        f"  synchronized  {summary['synchronized']}",
+        f"  freshness     {discipline.freshness_ttl.milliseconds} ms",
+        f"  max rtt       {discipline.max_round_trip.milliseconds} ms",
+        f"  max drift     {discipline.max_uncertainty.milliseconds} ms uncertainty",
+        f"  net budget    {discipline.network_budget.milliseconds} ms",
+        "",
+    ]
+    for item, status in zip(wanted, statuses, strict=True):
+        reach = "reachable" if item.available else "unreachable"
+        lines.append(f"  {status.state.value:15s} {status.domain.label}  ({reach})")
+    lines += ["", "  This command opened nothing, so nothing is calibrated here."]
+    _emit(document, "\n".join(lines), out=out, as_json=as_json)
+    if isinstance(counts, dict) and counts.get(SyncState.UNSYNCHRONIZED.value):
+        return int(ExitCode.GATE_FAILED)
+    return int(ExitCode.OK if summary["synchronized"] else ExitCode.UNMEASURED)
+
+
+def _clock_calibrate(
+    snapshot: ApiRealitySnapshot,
+    contract: TransportContract,
+    discipline: ClockDiscipline,
+    availability: Sequence[DomainAvailability],
+    invocation: Invocation,
+    *,
+    freshness_stale: Sequence[str],
+    out: TextIO,
+    err: TextIO,
+) -> int:
+    """Take one calibration against a named domain, and report what it implies.
+
+    Args:
+        snapshot: Phase 033's registry.
+        contract: The declared transport contract.
+        discipline: The thresholds.
+        availability: One entry per declared domain.
+        invocation: What was asked for.
+        freshness_stale: Source identifiers past their re-check interval.
+        out: Where the report goes.
+        err: Where the notice goes.
+
+    Returns:
+        ``14`` when the domain cannot be asked, ``1`` when the calibration did not
+        leave the clock synchronized, ``0`` otherwise.
+
+    **The notice is printed before the connection is opened**, names the
+    environment, and says the request is public and read-only — the shape
+    ``rest ping`` already uses. An operator running this against production is
+    entitled to see that before it happens rather than to infer it from the verb.
+
+    **It sets no clock.** The offset lives in this process's manager and dies with
+    it; nothing writes the host clock, nothing writes a file, and the next
+    invocation starts uninitialized again.
+    """
+    domain = ClockDomain(
+        family=ProductFamily(invocation.family),
+        environment=EnvironmentName(invocation.environment),
+        protocol=ProtocolKind.REST,
+    )
+    entry = next((item for item in availability if item.domain == domain), None)
+    if entry is None or not entry.available:
+        detail = entry.detail if entry else "the registry declares no such product and environment"
+        document: dict[str, object] = {
+            "schema": CLOCK_SCHEMA,
+            "schema_version": CLOCK_SCHEMA_VERSION,
+            "domain": domain.as_record(),
+            "calibrated": False,
+            "reason": entry.resolution if entry else "domain_undeclared",
+            "detail": detail,
+        }
+        text = "\n".join(
+            [
+                "clock calibrate",
+                "",
+                f"  REFUSED  {domain.label}",
+                f"           {detail}",
+                "",
+                "  Nothing was sent.",
+            ]
+        )
+        _emit(document, text, out=out, as_json=invocation.as_json)
+        return int(ExitCode.CONFIGURATION_INVALID)
+    print(
+        f"globin: sending a public, read-only, unauthenticated server-time request to "
+        f"{domain.environment.slug} for {domain.family.slug} (no credential, sets no clock)",
+        file=err,
+    )
+    with HttpRestTransport(
+        environment=domain.environment.slug, clock=build_monotonic_clock()
+    ) as transport:
+        manager = _clock_manager(snapshot, contract, discipline, transport, freshness_stale)
+        outcomes = manager.calibrate_window(domain)
+        status = manager.status(domain)
+    document = {
+        "schema": CLOCK_SCHEMA,
+        "schema_version": CLOCK_SCHEMA_VERSION,
+        "domain": domain.as_record(),
+        "calibrated": status.synchronized,
+        "exchanges": len(outcomes),
+        "succeeded": len([item for item in outcomes if not item.failed]),
+        "outcomes": [item.as_record() for item in outcomes],
+        "status": status.as_record(),
+    }
+    _emit(document, _clock_calibration_text(outcomes, status), out=out, as_json=invocation.as_json)
+    return int(ExitCode.OK if status.synchronized else ExitCode.GATE_FAILED)
+
+
+def _clock_calibration_text(outcomes: Sequence[CalibrationOutcome], status: ClockStatus) -> str:
+    """One calibration window, for a person.
+
+    Args:
+        outcomes: What each exchange produced, in order.
+        status: What the window left the domain in.
+
+    Returns:
+        The report. Every unbounded quantity is bucketed except the signed offset in
+        whole milliseconds, which is the one number an operator diagnosing a clock
+        actually needs.
+
+    **Every exchange is listed, failures included.** The estimate comes from the
+    fastest of them, so an operator reading only the chosen sample would have no way
+    to see that four of five timed out — which is the difference between a healthy
+    link and one that happened to answer once.
+    """
+    taken = [item for item in outcomes if item.sample is not None]
+    lines = [
+        "clock calibrate",
+        "",
+        f"  domain       {status.domain.label}",
+        f"  exchanges    {len(taken)} of {len(outcomes)} answered",
+    ]
+    for index, item in enumerate(outcomes, start=1):
+        sample = item.sample
+        if sample is None:
+            lines.append(f"    {index}. FAILED  {item.detail}")
+        else:
+            lines.append(
+                f"    {index}. {sample.round_trip.milliseconds:>5} ms round trip, "
+                f"offset {sample.offset_micros // 1000:+} ms"
+            )
+    chosen = status.sample
+    if chosen is None:
+        lines += ["", "  no usable reading"]
+    else:
+        lines += [
+            "",
+            f"  offset       {chosen.offset_micros // 1000} ms "
+            f"({offset_bucket(chosen.offset_micros)})",
+            f"  round trip   {chosen.round_trip.milliseconds} ms "
+            f"({round_trip_bucket(chosen.round_trip.microseconds)})",
+            f"  uncertainty  +/- {chosen.uncertainty_micros // 1000} ms",
+            f"  unit         {chosen.reported_unit.value}",
+        ]
+    lines += ["", f"  state        {status.state.value}"]
+    if status.detail:
+        lines.append(f"               {status.detail}")
+    if any(item.offset_jumped for item in outcomes):
+        lines += ["", "  THE OFFSET MOVED FURTHER THAN A VENUE CLOCK PLAUSIBLY COULD."]
+    lines += ["", "  No host clock was set. Nothing was written."]
+    return "\n".join(lines)
+
+
+def _clock_selftest(discipline: ClockDiscipline, *, out: TextIO, as_json: bool) -> int:
+    """Check the clock layer against its own rules and the venue's, offline.
+
+    Args:
+        discipline: The thresholds to check against.
+        out: Where the report goes.
+        as_json: Whether JSON was asked for.
+
+    Returns:
+        ``0`` when every check passed, ``1`` otherwise.
+    """
+    report = clock_self_test(discipline)
+    lines = ["clock self-test", ""]
+    lines += [
+        f"  {'PASS' if item.passed else 'FAIL'}  {item.check}\n        {item.detail}"
+        for item in report.findings
+    ]
+    lines += ["", f"  {len(report.findings) - len(report.failures)}/{len(report.findings)} passed"]
+    _emit(report.as_record(), "\n".join(lines), out=out, as_json=as_json)
+    return int(ExitCode.OK if report.passed else ExitCode.GATE_FAILED)
+
+
+def _clock_evidence(
+    discipline: ClockDiscipline,
+    availability: Sequence[DomainAvailability],
+    config: GlobinConfig,
+    *,
+    out: TextIO,
+    start: Path | None,
+) -> int:
+    """Write the Phase 036 evidence manifest.
+
+    Args:
+        discipline: The thresholds in force.
+        availability: One entry per declared clock domain.
+        config: The resolved configuration.
+        out: Where the path is printed.
+        start: Where to begin the search for the project root.
+
+    Returns:
+        ``0`` when the self-test passed, ``1`` otherwise.
+
+    **No calibration result is included and none is invented.** A manifest written
+    on a machine that calibrated nothing records ``unmeasured`` for that half, which
+    is the answer ``rest evidence`` gives for an unrun probe and ``drift`` gives for
+    an unrecorded baseline: nothing was established, which is not the same as
+    nothing being wrong.
+
+    **There is no secret to redact here, and that is structural.** The clock layer
+    holds no credential, reads no store and produces no signature; every field below
+    is GLOBIN's own vocabulary, a bounded bucket or a threshold an operator wrote.
+    """
+    base = (start or Path.cwd()).resolve()
+    root = find_project_root(base) or base
+    report = clock_self_test(discipline)
+    contract = read_clock_contract(root / CLOCK_CONTRACT_PATH)
+    document: dict[str, object] = {
+        "schema": CLOCK_SCHEMA,
+        "schema_version": CLOCK_SCHEMA_VERSION,
+        "phase": CLOCK_PHASE,
+        "contract": contract.as_record() if contract else "absent",
+        "discipline": discipline.as_record(),
+        "configured": {
+            "sample_count": config.clock.sample_count,
+            "require_calibration": config.clock.require_calibration,
+        },
+        "domains": [item.as_record() for item in availability],
+        "estimator": {
+            "selection": "lowest_round_trip",
+            "midpoint": "wall_anchor_plus_half_monotonic_round_trip",
+            "uncertainty": "half_round_trip",
+            "arithmetic": "integer_microseconds",
+        },
+        "recovery": {
+            "code": INVALID_TIMESTAMP_CODE,
+            "max_retries": MAX_TIMING_RETRIES,
+            "requires_confirmed_outcome": True,
+        },
+        "buckets": {
+            "round_trip_millis": list(ROUND_TRIP_BUCKET_BOUNDS_MILLIS),
+            "offset_millis": list(OFFSET_BUCKET_BOUNDS_MILLIS),
+        },
+        "calibration_results": "unmeasured",
+        "reached_network": False,
+        "self_test": report.as_record(),
+    }
+    directory = root / ".globin" / CLOCK_EVIDENCE_DIRECTORY
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / "clock-manifest.json"
+    target.write_text(render_json_document(document) + "\n", encoding="utf-8", newline="\n")
+    print(f"clock: wrote {target}", file=out)
+    return int(ExitCode.OK if report.passed else ExitCode.GATE_FAILED)
 
 
 def _rest_sources(

@@ -1,12 +1,14 @@
 """GLOBIN — engineering foundation for a local autonomous Binance Global system.
 
-**Maturity: Phase 35 of 320. This package does not trade.**
+**Maturity: Phase 36 of 320. This package does not trade.**
 
-There is no networking, no authentication, no market-data ingestion, no
-strategy, no backtesting and no machine learning in this package. The phases
-completed so far establish the repository, the engineering contract and the
-verification backbone that every later phase is built on. Anything that talks
-to an exchange belongs to Phase 33 and beyond (see ``ROADMAP.md``).
+There is no market-data ingestion, no strategy, no backtesting and no machine
+learning in this package, and no credential is held. What exists at the exchange
+boundary is narrow and worth stating exactly: three public, unauthenticated,
+read-only requests from one named module; a signing layer that can build a signed
+request without holding a key; and, since Phase 36, a clock layer that estimates
+the venue's server time with a stated error bound and refuses to stamp a signed
+request when that estimate is missing, stale or too uncertain.
 
 What this package *does* provide is the project's binding rules in executable
 form, so that automated checks can enforce them:

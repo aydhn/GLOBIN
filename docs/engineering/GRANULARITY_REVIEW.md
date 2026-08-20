@@ -66,8 +66,9 @@ different band.
 | 17 | 033 | [ADR-0086](../adr/0086-phase-033-widens-to-deliver-the-binance-api-reality-registry.md) | 2/4 |
 | 18 | 034 | [ADR-0088](../adr/0088-phase-034-widens-to-deliver-the-rest-transport-substrate.md) | 2/4 |
 | 19 | 035 | [ADR-0090](../adr/0090-phase-035-widens-to-deliver-the-rest-authentication-layer.md) | 2/4 |
+| 20 | 036 | [ADR-0092](../adr/0092-phase-036-widens-to-deliver-the-clock-discipline-layer.md) | 2/4 |
 
-Mean 1.73 of four.
+Mean 1.76 of four, across seventeen scored amendments.
 
 ---
 
@@ -77,23 +78,33 @@ This is the review's central result, and it is arithmetic rather than argument.
 
 | Condition | Met |
 |---|:---:|
-| `nothing_displaced` | 1/16 |
-| `nothing_deferred` | 16/16 |
-| `no_phase_owns_it` | 1/16 |
-| `halves_need_each_other` | 10/16 |
+| `nothing_displaced` | 1/17 |
+| `nothing_deferred` | 17/17 |
+| `no_phase_owns_it` | 1/17 |
+| `halves_need_each_other` | 11/17 |
 
 **One condition has never once failed.** Every amendment delivered its titled
-scope in full. Nothing was ever traded away to make room, in sixteen
+scope in full. Nothing was ever traded away to make room, in seventeen
 consecutive applications of a test whose job is to discriminate.
 
 **Two conditions have failed all but once**, and the once is the same phase for
 both — Phase 030, the only amendment to score four.
 
-So across fifteen amendments the test has one condition that always passes, two
+So across seventeen amendments the test has one condition that always passes, two
 that almost always fail, and one that genuinely varies. Its effective resolution
 is close to a single bit. That is why a four and a one arrived in consecutive
 phases (030 and 031) without anything having changed about how carefully the work
 was scoped: the score is nearly determined before the amendment is written.
+
+**The twentieth amendment found a fourth way the test carries no information, and
+it is the sharpest one.** Phase 036 delivered nothing of its own title, because its
+title's subject had shipped in Phases 033 and 034 before the phase began. The
+condition *the two halves need each other* was therefore not failed and not met —
+there was only one half, and the ledger records it `MET` while ADR-0092 states the
+truth, that it is **vacuously** met. A test that scores a condition it never
+evaluated is worse than one that scores it badly. The counts above include that
+row, so this table now contains one number the test did not earn. Phase 048
+inherits it.
 
 [ADR-0082](../adr/0082-phase-031-widens-to-deliver-the-user-scoped-secret-vault.md)
 predicted this outcome and named the signal — that Phase 032 would find it could

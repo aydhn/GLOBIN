@@ -8,18 +8,19 @@ its own docstring says why nothing new is needed here —
     *"A clock that reports Binance's server time can honestly implement*
     :class:`~globin.ports.clock.Clock`\\ *."*
 
-So Phase 040's synchronised clock is injected where the host clock is injected
-today, with no signature in this phase changing. Inventing a second
-``TimestampProvider`` protocol beside it would create two ports for one question
-and give the later phase two places to plug into.
+That prediction was half right. **Phase 036 did not implement :class:`Clock`**,
+and the reason is worth keeping: a venue's server time is not something GLOBIN
+*has*, it is something GLOBIN **estimates**, and an estimate carries an error bound
+that a ``Clock`` returning a bare :class:`~globin.domain.clock.Instant` would throw
+away at the boundary. What arrived instead is
+:class:`globin.domain.clock_sync.TimingContext` — a timestamp plus its provenance,
+constructible only by a passing timing admission.
 
-**What this phase deliberately does not do**, restated because a reader looking
-for it should find the refusal rather than an absence: no server time is sampled,
-no offset is estimated, no round trip is corrected for and no drift is measured.
-The venue's own processing rule is quoted in
-``docs/research/phase_035_sources.md`` S-02 and is **recorded rather than
-implemented**, because it is written in terms of ``serverTime`` and GLOBIN does not
-have one.
+**The venue's processing rule is now implemented**, in
+:func:`globin.domain.clock_sync.admit`. It is quoted in
+``docs/research/phase_036_sources.md`` S-02, and the half of it Phase 035 did not
+need turns out to be the load-bearing half: the window is evaluated **twice**, and
+the second evaluation carries no future tolerance at all.
 
 **:class:`RecvWindow` carries a** :class:`~decimal.Decimal`, which is the whole
 reason it is a type. The venue documents *"up to three decimal places of

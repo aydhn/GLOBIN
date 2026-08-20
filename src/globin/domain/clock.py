@@ -88,6 +88,16 @@ them, and the standard library says plainly to prefer it "to avoid the precision
 loss caused by the float type".
 """
 
+NANOSECONDS_PER_MICROSECOND: Final[int] = 1_000
+"""How many nanoseconds make a microsecond.
+
+Added in Phase 036, which measures a round trip in nanoseconds and estimates a
+clock offset in microseconds -- the unit :attr:`Instant.epoch_micros` already
+speaks. Named rather than written inline because it is the second *lossy* step in
+this module: :meth:`Duration.microseconds` floors, and a division spelled at three
+call sites is three places for a factor of a thousand to be typed wrongly.
+"""
+
 MIN_EPOCH_MILLIS: Final[int] = -62135596800000
 """The earliest instant :class:`~datetime.datetime` can represent, in epoch milliseconds.
 
@@ -254,6 +264,22 @@ class Duration:
             the same as flooring, and this type admits no negative value.
         """
         return self.nanoseconds // NANOSECONDS_PER_MILLISECOND
+
+    @property
+    def microseconds(self) -> int:
+        """This length as whole microseconds, floored.
+
+        Returns:
+            The count, rounded towards zero — which for a non-negative value is
+            the same as flooring, and this type admits no negative value.
+
+        Added in Phase 036. A round trip is read from the monotonic clock in
+        nanoseconds and a clock offset is estimated in microseconds, because that
+        is the unit :attr:`Instant.epoch_micros` reports exactly. Halving a round
+        trip therefore happens in microseconds and the flooring happens **here**,
+        once, rather than at each of the three sites that need it.
+        """
+        return self.nanoseconds // NANOSECONDS_PER_MICROSECOND
 
 
 @dataclass(frozen=True, slots=True, order=True)

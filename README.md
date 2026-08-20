@@ -5,7 +5,7 @@ Binance Global, built over a fixed programme of 320 phases.
 
 ---
 
-## Current status: Phase 035 of 320 complete — foundation only
+## Current status: Phase 036 of 320 complete — foundation only
 
 > **GLOBIN does not trade. Live trading is not implemented.**
 >
@@ -15,6 +15,11 @@ Binance Global, built over a fixed programme of 320 phases.
 > which is not the same as a system that does. Nothing has a key to present, no
 > phase yet requires one to start, and the only requests any code sends are three
 > public read-only probes.
+>
+> Since Phase 036 it also knows what time the venue thinks it is, as an estimate
+> carrying its own error bound — and **refuses to sign anything** when that
+> estimate is missing, stale or too uncertain. It sets no clock and stores no
+> offset.
 >
 > This is deliberate. The opening phases build the engineering foundation: the
 > rules every later phase must follow, the documentation that carries them, and
@@ -31,7 +36,7 @@ capability cannot be claimed here without pointing at something real.
 |---|---|
 | Repository, branch policy, engineering contract — [`ENGINEERING_CONTRACT.md`](docs/engineering/ENGINEERING_CONTRACT.md) | Implemented |
 | 320-phase roadmap, every phase named — [`ROADMAP.md`](ROADMAP.md) | Implemented |
-| Architecture decision records (91) — [`docs/adr/`](docs/adr/README.md) | Implemented |
+| Architecture decision records (93) — [`docs/adr/`](docs/adr/README.md) | Implemented |
 | Research source ledgers with primary sources — [`docs/research/`](docs/research/phase_001_sources.md) | Implemented |
 | UTC-only internal time: an injected clock, aware instants, milliseconds as a floored projection — [`TIME_POLICY.md`](docs/TIME_POLICY.md) | Implemented |
 | Exact decimal arithmetic, four rounding modes, tick and step alignment — [`PRECISION_POLICY.md`](docs/PRECISION_POLICY.md) | Implemented |

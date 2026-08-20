@@ -133,7 +133,7 @@ Roughly, as recorded on 2026-08-19:
 | Product-and-environment pairs | 24 |
 | Endpoints | 58, all Spot |
 | Schema versions | 11 |
-| Sources | 17, of which 1 cannot be re-checked at all |
+| Sources | 18, of which 1 cannot be re-checked at all |
 
 Ask the registry itself rather than trusting this table:
 
@@ -325,7 +325,8 @@ Two classifications worth knowing:
 - **No per-operation endpoints.** Base URLs and endpoint families only — paths,
   methods, security types and weights are Phase 037 and Phase 041.
 - **No refusal at runtime.** The query surface can *express* an unmapped
-  combination; nothing consults it yet, because there are no operations. Phase 036.
+  combination; nothing consulted it when this phase shipped, because there were no
+  operations. Phase 034 gave it a caller: `resolve()` runs ten gates and refuses.
 - **No internal simulation.** ADR-0006 names four environment classes and Binance
   documents three. The fourth is Phase 035's, and the registry deliberately cannot
   express it — a member no official source could populate has no place in the one

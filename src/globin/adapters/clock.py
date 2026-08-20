@@ -32,8 +32,11 @@ class SystemClock:
     :class:`~globin.domain.clock.Instant` defines no subtraction and why
     :class:`SystemMonotonicClock` exists.
 
-    Reconciling this clock against the venue's server time, and deciding what to
-    do when they disagree, is **Phase 040**.
+    **Phase 036 reconciled it against the venue's.** This clock is still the only
+    thing that answers *what moment is this*; what changed is that nothing signs a
+    request with its answer unadjusted. :mod:`globin.domain.clock_sync` measures the
+    difference against a venue clock, carries the error bound with it, and refuses
+    to stamp anything when the measurement is missing, old or too uncertain.
     """
 
     def now(self) -> Instant:

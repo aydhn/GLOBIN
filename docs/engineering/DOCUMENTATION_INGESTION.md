@@ -172,7 +172,7 @@ character what the registry carries. There has been no drift to acknowledge, so 
 ledger is **empty**, and an empty ledger is not permissive: with no rows, *any*
 source-changed finding fails the gate.
 
-Seventeen sources are declared. One — the developer-documentation catalogue —
+Eighteen sources are declared. One — the developer-documentation catalogue —
 cannot be re-checked at all, and no REST endpoint rests on it, so its cadence gates
 nothing today. It is declared so that the day one does, the ageing is already in
 place.

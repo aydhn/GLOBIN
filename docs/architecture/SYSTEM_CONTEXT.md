@@ -112,7 +112,7 @@ clock is reached only through [`globin.ports.clock`](../../src/globin/ports/cloc
 and the instants it produces are UTC by construction
 ([`TIME_POLICY.md`](../TIME_POLICY.md)). The venue's server time is a second and
 independent source; reconciling the two, and deciding what to do when they
-disagree, is **Phase 040**. Nothing reaches a venue yet.
+disagree, is **Phase 036** — delivered, in `CLOCK_DISCIPLINE.md`.
 
 ### Windows host services
 

@@ -139,7 +139,7 @@ the future is written down rather than built:
 
 Deliberately absent, and named so nobody adds them for completeness: any socket,
 DNS or ICMP probe; captive-portal detection; timeout and retry policy (Phase 043);
-per-venue reachability (Phase 036); server-time drift (Phase 040).
+per-venue reachability (Phase 036); server-time drift (Phase 036, delivered).
 
 ---
 

@@ -156,6 +156,8 @@ a future reader can judge whether the reason still holds.
 | [0089](0089-an-unknown-outcome-is-preserved-and-a-second-module-may-reach-a-socket.md) | An unknown outcome is preserved, and a second module may reach a socket | Accepted |
 | [0090](0090-phase-035-widens-to-deliver-the-rest-authentication-layer.md) | Phase 035 widens to deliver the REST authentication layer | Accepted |
 | [0091](0091-authentication-is-capability-driven-and-product-scoped.md) | Authentication is capability-driven and product-scoped, and no algorithm is a fallback | Accepted |
+| [0092](0092-phase-036-widens-to-deliver-the-clock-discipline-layer.md) | Phase 036 delivers the clock discipline layer, and rows 036 and 040 are rewritten | Accepted |
+| [0093](0093-server-time-is-estimated-from-the-lowest-round-trip-and-a-window-is-never-widened.md) | Server time is estimated from the lowest round trip, and a window is never widened to fix a clock | Accepted |
 
 ## Relationship to other documents
 

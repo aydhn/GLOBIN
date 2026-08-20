@@ -69,9 +69,8 @@ from globin.domain.auth_timing import (
     RecvWindow,
     TimestampUnit,
     default_recv_window,
-    stamp,
 )
-from globin.domain.clock import Instant
+from globin.domain.clock_sync import TimingContext
 from globin.domain.environment_class import (
     EnvironmentClass,
     EnvironmentClassification,
@@ -512,8 +511,7 @@ def sign_request(
     method: HttpMethod,
     path: str,
     parameters: QueryParameters,
-    moment: Instant,
-    policy: AuthPolicy,
+    timing: TimingContext,
     store: SecretStore,
     signer: RequestSigner,
     body: RequestBody | None = None,
@@ -528,9 +526,9 @@ def sign_request(
         method: Which verb.
         path: The path, relative to the endpoint's recorded prefix.
         parameters: What the caller asked for, without timing or signature.
-        moment: When the request is being made, from a
-            :class:`~globin.ports.clock.Clock`.
-        policy: What the operator configured.
+        timing: The timing context a **passing** timing admission produced. It
+            carries the timestamp, its unit and the validity window, already
+            decided.
         store: Where the credential's material is resolved from.
         signer: The signer for the resolved algorithm.
         body: The request body, if any.
@@ -553,6 +551,23 @@ def sign_request(
     **Material lives for exactly two statements.** It is resolved immediately
     before the signer is called and nothing holds it afterwards; no local outlives
     the call and no field on any returned type could accept one.
+
+    **Phase 036 replaced this function's clock with a value, and that is the whole
+    of "one timing context per signature operation".** It used to take a
+    :class:`~globin.domain.clock.Instant` and stamp it here; it now takes a
+    :class:`~globin.domain.clock_sync.TimingContext`, which is an integer plus its
+    provenance and which only a passing
+    :func:`globin.domain.clock_sync.admit` can construct. Two things follow, neither
+    of which is a rule anybody has to keep:
+
+    * there is no object in scope during canonicalisation that could produce a
+      *second* timestamp, so the value signed and the value sent cannot diverge;
+    * a request cannot be signed against an unsynchronised clock, because the type
+      that authorises the stamp is the type the admission gate declines to build.
+
+    The window arrives the same way, so an operator's ``recvWindow`` is decided once
+    — against the measured uncertainty — rather than being re-read here from a
+    policy that never saw the clock.
     """
     if not authorisation.permitted or authorisation.profile is None:
         msg = (
@@ -566,8 +581,8 @@ def sign_request(
         raise ValidationError(msg)
     profile = authorisation.profile
 
-    window = policy.window
-    timestamp = stamp(moment, policy.timestamp_unit)
+    window = timing.recv_window
+    timestamp = timing.timestamp
     try:
         timed = timed_parameters(parameters, timestamp=timestamp, recv_window=window)
         payload = signing_payload(timed, body, profile)
@@ -610,7 +625,7 @@ def sign_request(
             signed_span=payload.query_span,
             profile=profile,
             timestamp=timestamp,
-            timestamp_unit=policy.timestamp_unit,
+            timestamp_unit=timing.unit,
             recv_window=window,
         ),
     )

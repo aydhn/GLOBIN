@@ -27,12 +27,14 @@ import pytest
 
 from globin.domain.configuration import (
     AUTH_SECTION,
+    CLOCK_SECTION,
     DIAGNOSTICS_HTTP_SECTION,
     DIAGNOSTICS_SECTION,
     LOGGING_SECTION,
     TELEMETRY_SECTION,
     WATCHDOG_SECTION,
     AuthConfig,
+    ClockConfig,
     DiagnosticsConfig,
     DiagnosticsHttpConfig,
     LoggingConfig,
@@ -156,6 +158,7 @@ def test_every_documented_type_is_the_type_the_default_actually_has(
         **section_defaults(TELEMETRY_SECTION, TelemetryConfig),
         **section_defaults(DIAGNOSTICS_HTTP_SECTION, DiagnosticsHttpConfig),
         **section_defaults(AUTH_SECTION, AuthConfig),
+        **section_defaults(CLOCK_SECTION, ClockConfig),
     }
     for key, declared, _default in rows:
         assert type(defaults[key]).__name__ == declared, key

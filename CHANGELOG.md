@@ -19,6 +19,75 @@ can be opened and read.
 
 ## [Unreleased]
 
+### The first phase that knows what time the venue thinks it is
+
+- **Server time is estimated, never assumed, and the estimate carries its own error
+  bound.** A calibration is one public `GET /api/v3/time` exchange bracketed by
+  monotonic readings and anchored once on the wall clock; the offset is the venue's
+  answer minus the midpoint of that interval, and the uncertainty is half the round
+  trip. The naive `serverTime - now` alternative attributes the whole round trip to
+  the offset — on a 400 ms link that is a host with a perfect clock correcting
+  itself into being 200 ms wrong, and a test asserts exactly that counterfactual.
+  [`CLOCK_DISCIPLINE.md`](docs/engineering/CLOCK_DISCIPLINE.md)
+
+- **The offset comes from the fastest sample in the window, not an average**, and
+  the second reason is specific to this repository. A midpoint estimate is wrong by
+  at most half *its own* round trip, so the minimum is the tightest bound available.
+  And `HttpRestTransport` pools connections, so the **first** exchange on a fresh
+  pool pays a TCP and TLS handshake and its elapsed time is not a round trip at all
+  — an averaging estimator folds that handshake into the offset, while selecting the
+  minimum discards it structurally.
+
+- **A signed request cannot be stamped from an unsynchronised clock**, and that is
+  a property of the object graph rather than a rule. `sign_request` no longer takes
+  a clock; it takes a `TimingContext`, which only a passing seven-gate admission can
+  construct. So there is no object in scope during canonicalisation that could
+  produce a second timestamp, and a refusal carries nothing to stamp with.
+
+- **`recvWindow` is never widened to compensate for a clock.** GLOBIN refuses
+  admission instead, and the reason is in the venue's own pseudo-code: the window is
+  evaluated **twice**, and the second evaluation — immediately before the Matching
+  Engine — carries no `+ 1 second` clause, so a wider window buys no protection
+  against a queueing delay GLOBIN cannot measure. Two refusals rather than one,
+  because *widen your setting* and *no setting could work* are different remedies.
+
+- **Wall-clock jumps are detected against the monotonic clock**, at status time
+  rather than at calibration time — which is the case that matters, because a time
+  service corrects the host while GLOBIN sits idle. Both directions; the backward
+  one needs an explicit epoch subtraction, because `Duration` refuses a negative
+  count by design.
+
+- **`-1021` gets a bounded recovery seam, not a retry engine.** The domain is
+  invalidated, a fresh calibration is required, and **at most one** re-send follows
+  — only for a confirmed failure, and only for a read-only or explicitly idempotent
+  request. An unknown outcome is never replayed, and silence is not a declaration.
+  Phase 043 owns the executor; this phase only decides.
+
+- **Twenty-four clock domains are declared and three resolve.** The other
+  twenty-one fail closed naming the registry's own recorded status. `/fapi/v1/time`,
+  `/dapi/v1/time` and `/eapi/v1/time` are spelled **nowhere** in the package,
+  because the derivatives documentation is client-rendered and `SOURCE_POLICY.md`
+  forbids both scraping it and accepting a summary of it.
+
+- **A Phase 034 defect was repaired in passing.** Reading `errors.md` for `-1021` —
+  the first phase to read that document at all — found `-1006 UNEXPECTED_RESP`,
+  documented as *"Execution status unknown"* and classified by GLOBIN as a confirmed
+  failure. That is precisely the fact ADR-0089 exists to preserve, and a mutating
+  request answered `-1006` would have been recorded as *did not happen* when the
+  venue had said the opposite.
+
+- **No new runtime dependency, no new absent-safe factory, and no new exit code.**
+  `globin clock` speaks the health triad every gate here already uses — `0`
+  synchronized, `3` nothing established, `1` unsynchronized. **26 stays free.**
+
+- **Rows 036 and 040 were rewritten**, the second amendment to rewrite any roadmap
+  row and the first to rewrite two. Row 036's own subject had already shipped in
+  Phases 033 and 034, so there was no second half to deliver; row 040's subject
+  ships here. A displacement note can be honest about work that moved and cannot be
+  honest about work that no longer exists.
+  [ADR-0092](docs/adr/0092-phase-036-widens-to-deliver-the-clock-discipline-layer.md),
+  [ADR-0093](docs/adr/0093-server-time-is-estimated-from-the-lowest-round-trip-and-a-window-is-never-widened.md)
+
 ### The first phase that can sign a request
 
 - **Capability-gated authentication over HMAC, RSA and Ed25519.** Which algorithm
