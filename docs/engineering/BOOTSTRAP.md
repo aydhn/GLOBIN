@@ -202,7 +202,7 @@ the phase that owns it:
 |---|---|
 | Which configuration files exist, and what profiles they describe | 026, delivered — [`CONFIGURATION_LAYOUT.md`](CONFIGURATION_LAYOUT.md) |
 | Which sources are consulted, and in what order | 027, delivered — [`CONFIGURATION_EVIDENCE.md`](CONFIGURATION_EVIDENCE.md) |
-| Declaring which credentials a start-up requires | Phase 038 |
+| Declaring which credentials a start-up requires | Phase 039 |
 | The wider health-check suite a long-running process needs | 030, delivered — [`PREFLIGHT_SUITE.md`](PREFLIGHT_SUITE.md) |
 
 `secrets.required` **is** registered and passes today, because GLOBIN holds no

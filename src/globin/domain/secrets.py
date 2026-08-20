@@ -40,7 +40,7 @@ into a named reason. S-11 records why the limit is not academic: an RSA-4096
 private key in PEM form is 3324 bytes and does not fit.
 
 What this module does not decide: which secrets GLOBIN requires (Phase 029),
-which key type is used (Phases 029 and 038), and what an environment *is*
+which key type is used (Phases 029 and 035), and what an environment *is*
 (Phase 035). It bounds shapes; it registers no instances.
 """
 
@@ -812,8 +812,10 @@ class EntryProblem(StrEnum):
     publishable -- and everything finer is a description of the secret.
 
     Five members, and no minimum length among them. Any floor would be invented:
-    what a real key looks like is a fact about a key type, and choosing one is
-    Phase 038's. Non-empty is the only honest lower bound.
+    what a real key looks like is a fact about a key type. Phase 035 recorded what
+    each of the three is and which algorithm may sign with it, and invented no
+    length either, because the venue documents none. Non-empty is the only honest
+    lower bound.
     """
 
     EMPTY = "empty"
@@ -832,8 +834,8 @@ class EntryProblem(StrEnum):
     CONTROL_CHARACTER = "control_character"
     """A C0 control character or DEL appears in the material.
 
-    Either a paste accident or a terminal artefact -- and, the day Phase 038
-    signs a request with this, a request-splitting hazard.
+    Either a paste accident or a terminal artefact -- and, now that Phase 035 signs
+    requests, a request-splitting hazard.
     """
 
     TOO_LARGE = "too_large"
@@ -899,8 +901,9 @@ def entry_problems(material: str) -> tuple[EntryProblem, ...]:
     Structural only. **No exchange-specific format rule is applied**, and none
     is invented: what a Binance API key looks like is recorded in
     ``phase_020_sources.md`` S-15 and S-16 as venue documentation this phase
-    deliberately does not choose from. Which key type is used against which
-    surface is Phase 038's, and its permission model Phase 039's.
+    deliberately does not choose from. Which key type may be used against which
+    surface is Phase 035's -- read from the registry's ``key_types`` column rather
+    than decided here -- and the venue's own permission model is Phase 039's.
 
     The invariant tying this to the type it guards: the result is empty exactly
     when :class:`SecretValue` would construct without raising. A property test

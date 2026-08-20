@@ -14,7 +14,9 @@ you what time it is at all: its reference point is undefined.
 A single port carrying both methods would force every consumer to depend on
 both, and — the reason that actually matters — would make a future server-time
 clock lie. ``docs/architecture/SYSTEM_CONTEXT.md`` already names two independent
-time sources, the host's and the venue's, and Phase 038 owns reconciling them.
+time sources, the host's and the venue's, and Phase 040 owns reconciling them --
+row 040 is *Server Time Synchronization and Drift Control*, which is the phase that
+measures skew and decides what to do about it.
 A clock that reports Binance's server time can honestly implement :class:`Clock`.
 It has no monotonic reading to offer, and a combined port would oblige it to
 invent one.

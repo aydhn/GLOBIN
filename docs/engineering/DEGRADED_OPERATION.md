@@ -83,8 +83,10 @@ Declaring it optional would leave the `required` tier as a member nothing could
 produce, which is vocabulary rather than a capability.
 
 So it is declared `required` and **observed** `not_applicable` while
-`required_references()` is empty: the question does not arise. The moment Phase 038
-registers a reference, the same declaration begins refusing a start. Nothing has to
+`required_references()` is empty: the question does not arise. The moment Phase 039
+registers a reference, the same declaration begins refusing a start. Phase 035 built
+the signing layer and registered nothing, so this pair survived a phase that could
+have broken it. Nothing has to
 remember to change a flag — the survey derives it from the registry.
 
 ---

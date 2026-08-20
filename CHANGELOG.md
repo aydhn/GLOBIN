@@ -130,16 +130,36 @@ can be opened and read.
   boundary, with a second test that pins precision 0 as the setting the first one
   exists to reject.
 
-- **Five places said Phase 038 would bring the first authenticated surface.**
-  Phase 035 brought it, as the nineteenth scope amendment, and ADR-0090 had already
-  recorded that the phase which makes a credential *required* is 039 — while noting
-  that the docstrings still said 038. The record spotted the drift and the sweep did
-  not follow it, so `entitlements.py`, `composition.py`, `adapters/bootstrap.py`,
-  `degradation-contract.toml` and `CREDENTIAL_FLOW.md` all still named the phase
-  whose subject this one had absorbed. Each now names 039 and states the
-  distinction the wording used to miss: **being able to sign is not the same as
-  needing a key to start**, which is exactly why `required_credentials()` survived
-  this phase empty and `advapi32` stayed observed not-applicable.
+- **Twenty places still named Phase 038 for work this phase did.** ADR-0090 counted
+  five and the closing sweep followed none of them; a full search found twenty,
+  across nine source modules and eight documents. They divide cleanly, and the
+  division is the point:
+
+  *Who signs* is Phase 035, and it is built — `rest.py` said the signer "will be"
+  computing over the query string it renders, `secrets.py` said "the day Phase 038
+  signs a request with this", `application/rest.py` said its vectors were for a
+  signer that did not exist. Each now reads in the past tense, and two say more than
+  they did: the uppercase percent-escape and the preserved parameter order are no
+  longer merely *load-bearing for a future signer* but things that would break a
+  signature today.
+
+  *Who requires a credential at start-up* is Phase 039, not 038 — ADR-0090 said so
+  and the code did not follow. `entitlements.py`, `composition.py`,
+  `adapters/bootstrap.py`, `degradation-contract.toml`, `DEGRADED_OPERATION.md`,
+  `CREDENTIAL_FLOW.md`, `SECRET_VAULT.md`, `BOOTSTRAP.md`, `ENVIRONMENT_ACCEPTANCE.md`,
+  `CLAUDE.md` and `ROADMAP.md` now name it, each stating the distinction the wording
+  missed: **being able to sign is not the same as needing a key to start**, which is
+  exactly why `required_credentials()` survived this phase empty and `advapi32`
+  stayed observed not-applicable.
+
+  One site predated even that and called the transport Phase 038's; it was Phase
+  034's. And `ports/clock.py` gave Phase 038 the reconciliation of host and venue
+  time, which is row 040's subject.
+
+  **`docs/research/phase_033_sources.md` says Phase 038 and is deliberately left
+  alone.** `DOCUMENTATION_STANDARD.md` declares research ledgers append-only per
+  phase and never rewritten, and what it recorded was true when it was written. The
+  ADRs keep their wording for the same reason.
 
 - **`CLAUDE.md` said six libraries are absent-safe and seventh in the same file.**
   The count is now seven, `cryptography` is named beside the other six, and the

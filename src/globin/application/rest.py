@@ -123,8 +123,8 @@ ENCODING_VECTORS: tuple[tuple[str, tuple[tuple[str, object], ...], str], ...] = 
 )
 """Fixed inputs and the exact strings they must render to.
 
-Vectors rather than properties, because these are the cases Phase 038's signer will
-be computing a signature over. A property test lives beside them in
+Vectors rather than properties, because these are the cases Phase 035's signer
+computes a signature over. A property test lives beside them in
 ``tests/property`` and asserts the invariants; these assert the *values*, which is
 what stops a well-intentioned change to the safe set going unnoticed.
 """

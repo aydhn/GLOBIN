@@ -139,13 +139,14 @@ and nothing more. The second entry's shape is never disclosed.
 |---|---|
 | Empty | There is nothing to store |
 | Leading or trailing whitespace | **Refused, not stripped.** A paste from a browser routinely carries a newline, and silently removing it produces a credential wrong in a way nothing downstream can see |
-| Control characters | A paste accident or a terminal artefact — and, once Phase 038 signs a request with it, a request-splitting hazard |
+| Control characters | A paste accident or a terminal artefact — and, now that Phase 035 signs requests, a request-splitting hazard |
 | Over 2560 bytes | The measured platform ceiling. Over it, Windows answers with an **undocumented** `RPC_X_BAD_STUB_DATA` that names neither the size nor the limit |
 | A PEM key over the ceiling | Reported by name, so the message says what it is rather than leaving the platform fault to be decoded |
 
 **There is no minimum length**, and that is deliberate: any number would be
-invented. What a real key looks like is a fact about a key type, and choosing one
-is Phase 038's.
+invented. What a real key looks like is a fact about a key type — Phase 035 recorded
+what each of the three is and which algorithm may sign with it, and still invented
+no length, because the venue documents none.
 
 **A PEM key cannot be collected here at all.** A real PEM document is multi-line,
 so it trips the control-character rule whatever its size. That is a genuine limit
@@ -160,8 +161,9 @@ publishable; an offset or a substring is not.
 ## Permission verification, and what it cannot be
 
 `ROADMAP.md` row 029 asks for "permission verification before use". GLOBIN reaches
-no venue — transport is Phase 038, the exchange's permission model Phase 039 — so
-this cannot mean asking the issuer. What it means is:
+no venue — transport was Phase 034 and signing Phase 035, both since delivered,
+while the exchange's permission model is Phase 039 — so this could not mean asking
+the issuer, and still cannot: GLOBIN sends no authenticated request by default. What it means is:
 
 > GLOBIN refuses to resolve a credential for an operation whose demanded grants
 > are not a subset of the grants declared for it, and **never claims the

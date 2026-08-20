@@ -3,8 +3,9 @@
 `ROADMAP.md` row 029 asks for "permission verification before use". This module
 is that verification, and the first thing to say about it is what it cannot be.
 
-**GLOBIN reaches no venue.** Transport arrives in Phase 038 and the venue's own
-permission model in Phase 039, so nothing here can ask an exchange whether a key
+**GLOBIN asks no venue about a key.** Transport arrived in Phase 034 and signing
+in Phase 035, but the venue's own permission model is Phase 039's, so nothing here
+can ask an exchange whether a key
 carries the grants somebody claims. What *is* decidable locally is containment:
 
     GLOBIN refuses to resolve a credential for an operation whose demanded
@@ -78,8 +79,10 @@ class VerificationState(StrEnum):
     **Phase 034 gave GLOBIN a transport and changed nothing here**, which is worth
     saying because it looks as though it should have. That transport sends three
     public, unauthenticated requests; asking what a *credential* may do needs a
-    signed request, and signing is Phase 038's. Reaching the venue and being able
-    to ask it about a key are different capabilities.
+    signed request sent to the venue. Phase 035 built the signing, and sending one
+    still needs an enrolled credential and an explicitly enabled probe. Reaching the
+    venue and being able to ask it about a key remain different capabilities, and
+    the second is Phase 039's.
     """
 
     DECLARED = "declared"

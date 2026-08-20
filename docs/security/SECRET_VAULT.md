@@ -138,8 +138,9 @@ GLOBIN claims bounded lifetime and no persistence, never erasure.
 
 **Storing a key type is not authenticating with it.** That the vault can hold
 Ed25519, RSA or HMAC material does **not** mean GLOBIN can sign a request, reach a
-venue or place an order. Signing is Phase 038; the product surfaces are Phases
-033 onwards. This document is about storage and nothing else.
+venue or place an order. Signing arrived in Phase 035 and still requires an
+enrolled credential and an explicitly enabled probe; the product surfaces are
+Phases 033 onwards. This document is about storage and nothing else.
 
 ---
 
@@ -152,9 +153,9 @@ venue or place an order. Signing is Phase 038; the product surfaces are Phases
 | How a credential is collected and rotated | [`CREDENTIAL_FLOW.md`](CREDENTIAL_FLOW.md) |
 | Where a secret may live at all | [`SECURITY_BASELINE.md`](SECURITY_BASELINE.md) §2 |
 | What the runtime tree holds | [`../engineering/RUNTIME_FILESYSTEM.md`](../engineering/RUNTIME_FILESYSTEM.md) |
-| Which credentials GLOBIN requires | Phase 038 |
+| Which credentials GLOBIN requires | Phase 039 |
 | Which grants a key was issued with | Phase 039 |
-| Signing a request | Phase 038 |
+| Signing a request | Phase 035, delivered — [`../engineering/REST_AUTHENTICATION.md`](../engineering/REST_AUTHENTICATION.md) |
 | Operator-controlled credential recovery and onboarding | Phase 292 |
 
 ---

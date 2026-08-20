@@ -631,7 +631,8 @@ touching the store** on a refusal. Exit code **25**, and deliberately not `15`: 
 means store a credential, the other means change a key's permissions at the venue.
 
 **`required` is still empty, and now empty by derivation** -- the registry exists and
-Phase 038 fills it. Details:
+Phase 039 fills it. Phase 035 built the signing layer and added no entry, because a
+credential is required for a signed *request* and not for a *start*. Details:
 [`docs/security/CREDENTIAL_FLOW.md`](docs/security/CREDENTIAL_FLOW.md).
 
 Phase 030 turned the eighteen-check registry into a **suite**, and made configuration

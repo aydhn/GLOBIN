@@ -302,7 +302,7 @@ watchdog and telemetry that are all absent-safe; configuration that explains
 which source set each value; and two secret mechanisms disjoint by arithmetic.
 
 **What Phase 033 must not assume.** That any credential exists. That
-`required_references()` is non-empty — it is empty by derivation, and Phase 038
+`required_references()` is non-empty — it is empty by derivation, and Phase 039
 fills it. That a permission has ever been *confirmed*: `VerificationState` has no
 member for it, deliberately, because no venue has been reached. That the network
 is reachable — the degradation contract declares that row rather than probing it,

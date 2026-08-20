@@ -26,10 +26,11 @@ both directions.
 **Percent-encoding is written out rather than borrowed.** ``urllib`` is declared
 I/O-capable in ``docs/architecture/dependency-rules.toml``, so a domain module may
 not import it, and :func:`percent_encode` is the consequence. That turned out to be
-the better shape anyway: Phase 038's signer computes a signature over the exact
-query string this module renders, so the safe set has to be a stated constant this
-repository owns rather than a standard-library default that may be widened in a
-future release.
+the better shape anyway, and Phase 035 is where it paid: its signer computes a
+signature over the exact query string this module renders, so the signed span is a
+literal prefix of what is transmitted. The safe set therefore has to be a stated
+constant this repository owns rather than a standard-library default that may be
+widened in a future release -- a widening would change what is signed.
 
 What this module does not know: any venue host (they live in Phase 033's registry
 and ``tests/architecture/test_api_reality_discipline.py`` fails if one appears
@@ -225,8 +226,10 @@ class RequestSecurityIntent(StrEnum):
     a resolution requiring more is refused with nothing having been read from the
     secret store.
 
-    Phase 038 implements what the two authenticated members mean on the wire.
-    Nothing here signs anything.
+    Phase 035 implemented what the two authenticated members mean on the wire, in
+    ``globin.application.auth``. Nothing *here* signs anything, and that is the
+    separation rather than a gap: this module renders a request, and an already
+    signed one arrives at the transport indistinguishable from any other.
     """
 
     PUBLIC = "public"
@@ -236,7 +239,11 @@ class RequestSecurityIntent(StrEnum):
     """A key is presented and the request is not signed."""
 
     SIGNED = "signed"
-    """A key is presented and the request carries a signature. Phase 038 builds it."""
+    """A key is presented and the request carries a signature.
+
+    Phase 035 built what that means on the wire, in ``globin.application.auth``.
+    This member states the requirement; it does not satisfy it.
+    """
 
 
 class ResponseEncoding(StrEnum):
@@ -581,7 +588,9 @@ def percent_encode(text: str) -> str:
 
     Uppercase hex because RFC 3986 says producers should normalise to it; a
     signature computed over a lowercase escape would not match one computed over an
-    uppercase escape, so this is load-bearing for Phase 038 rather than tidy.
+    uppercase escape, so this is load-bearing for Phase 035's signer rather than
+    tidy -- and since that signer exists, changing the case here would break a
+    signature rather than merely look different.
     """
     parts: list[str] = []
     for byte in text.encode("utf-8"):
@@ -650,8 +659,9 @@ class QueryParameters:
         ValidationError: On more than :data:`MAX_QUERY_PARAMETERS` entries, on an
             empty key, or on a value outside :data:`QueryValue`.
 
-    **Order is preserved and never sorted.** Phase 038 signs the query string as
-    sent, and a signer that re-orders would produce a signature over a string the
+    **Order is preserved and never sorted.** Phase 035's signer signs the query
+    string as sent, and a signer that re-ordered would produce a signature over a
+    string the
     venue never received. Callers that want alphabetical order build it that way.
 
     **Duplicate keys are kept, not collapsed.** A documented Spot request repeats a
@@ -855,8 +865,8 @@ class RestRequest:
     resolution says where; keeping them apart is what allows
     ``tests/architecture/test_api_reality_discipline.py`` to assert that no venue
     host is spelled anywhere in the package. :meth:`canonical_target` renders
-    everything below the host, which is also exactly the span Phase 038's signer
-    needs.
+    everything below the host, which is also exactly the span Phase 035's signer
+    needs, and does use.
 
     ``headers`` carries only *safe* headers. Authorization material is added by the
     transport from a credential the caller never handles, which is why there is no
@@ -938,7 +948,7 @@ class RestRequest:
 
         Returns:
             ``/path`` or ``/path?query``. Stable for one request across any number
-            of calls, which is the property Phase 038's signer depends on.
+            of calls, which is the property Phase 035's signer depends on.
         """
         target = join_path(prefix, self.path)
         query = self.parameters.canonical()

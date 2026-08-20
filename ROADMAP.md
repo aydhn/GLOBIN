@@ -79,7 +79,9 @@ the contract:
 > capability is a recorded state rather than a pass is enforced by there being
 > nothing to write. A demanded `transfer` is `WITHHELD` **whatever the
 > declaration says**. `required` is still empty, and now empty by *derivation* --
-> the registry exists, and Phase 038 fills it.
+> the registry exists, and Phase 039 fills it -- Phase 035 delivered signing and
+> added no entry, because a credential is required for a signed *request* and not
+> for a *start*.
 >
 > **Alongside it, and as the thirteenth scope amendment, the dependency
 > attestation.** Until now a running GLOBIN read every distribution's metadata
